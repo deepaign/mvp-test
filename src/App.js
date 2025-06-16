@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from './supabase'
+import Homepage from './components/Homepage/Homepage'
 import LoginPage from './components/Auth/LoginPage'
 import RoleSelection from './components/Auth/RoleSelection'
 import PoliticianRegister from './components/Auth/PoliticianRegister'
@@ -8,12 +9,13 @@ import PoliticianDashboard from './components/Dashboard/PoliticianDashboard'
 import StaffDashboard from './components/Dashboard/StaffDashboard'
 import Loading from './components/Common/Loading'
 import './App.css'
+import './components/Homepage/Homepage.css'
 
 function App() {
   const [user, setUser] = useState(null)
   const [member, setMember] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [currentStep, setCurrentStep] = useState('login')
+  const [currentStep, setCurrentStep] = useState('homepage') // 預設顯示首頁
   const [debugInfo, setDebugInfo] = useState([])
 
   const addDebugInfo = (message) => {
@@ -47,8 +49,8 @@ function App() {
           // 然後檢查用戶註冊狀態
           await checkUserRegistration(data.session.user)
         } else {
-          addDebugInfo('沒有現有 session')
-          setCurrentStep('login')
+          addDebugInfo('沒有現有 session，顯示首頁')
+          setCurrentStep('homepage')
         }
         
       } catch (error) {
@@ -72,7 +74,7 @@ function App() {
         } else {
           setUser(null)
           setMember(null)
-          setCurrentStep('login')
+          setCurrentStep('homepage') // 登出後回到首頁
         }
         setLoading(false)
       }
@@ -144,6 +146,11 @@ function App() {
     }
   }
 
+  const handleLoginClick = () => {
+    addDebugInfo('用戶點擊後台管理按鈕')
+    setCurrentStep('login')
+  }
+
   const handleRoleSelection = (role) => {
     addDebugInfo(`選擇身份: ${role}`)
     setCurrentStep(`${role}Register`)
@@ -162,6 +169,10 @@ function App() {
     } catch (error) {
       addDebugInfo(`登出失敗: ${error.message}`)
     }
+  }
+
+  const handleBackToHome = () => {
+    setCurrentStep('homepage')
   }
 
   // 如果在載入中且有除錯資訊，顯示除錯介面
@@ -218,32 +229,125 @@ function App() {
   }
 
   const renderCurrentStep = () => {
+    // 需要顯示導航欄的頁面
+    const pagesWithNavbar = ['homepage', 'login', 'roleSelection', 'politicianRegister', 'staffRegister'];
+    const showNavbar = pagesWithNavbar.includes(currentStep);
+
+    // 導航欄組件
+    const renderNavbar = () => (
+      <header className="navbar">
+        <div className="logo" onClick={handleBackToHome}>
+          <span>Polify</span>
+        </div>
+        <nav className="nav-links">
+          <a 
+            href="#" 
+            className={currentStep === 'homepage' ? 'active' : ''}
+            onClick={(e) => { e.preventDefault(); handleBackToHome(); }}
+          >
+            首頁
+          </a>
+          <a href="#" onClick={(e) => { e.preventDefault(); }}>
+            政績展示
+          </a>
+          <a href="#" onClick={(e) => { e.preventDefault(); }}>
+            選民資料分析
+          </a>
+          <a 
+            href="#" 
+            className={['login', 'roleSelection', 'politicianRegister', 'staffRegister'].includes(currentStep) ? 'active' : ''}
+            onClick={(e) => { e.preventDefault(); handleLoginClick(); }}
+          >
+            後台管理
+          </a>
+        </nav>
+      </header>
+    );
+
     switch (currentStep) {
+      case 'homepage':
+        return (
+          <div className="app-container">
+            {renderNavbar()}
+            <Homepage onLoginClick={handleLoginClick} />
+            
+            {/* 頁腳 */}
+            <footer>
+              <div className="footer-content">
+                <div className="footer-section">
+                  <h3>關於我們</h3>
+                  <p>Polify 力求提供優質的交流平台，讓政治人物與民眾共同打造更美好的社區環境。</p>
+                </div>
+                
+                <div className="footer-section">
+                  <h3>聯絡資訊</h3>
+                  <p>地址：台北市大安區羅斯福路四段1號</p>
+                  <p>電話：(02) 2345-6789</p>
+                  <p>Email：deepaign.tw@gmail.com</p>
+                </div>
+                
+                <div className="footer-section">
+                  <h3>服務時間</h3>
+                  <p>週一至週五：9:00 - 18:00</p>
+                  <p>週六：9:00 - 12:00（僅電話服務）</p>
+                  <p>Line 機器人：24小時服務</p>
+                </div>
+              </div>
+              
+              <div className="copyright">
+                © 2025 Polify. All rights reserved.
+              </div>
+            </footer>
+          </div>
+        )
+      
       case 'login':
-        return <LoginPage />
+        return (
+          <div className="app-container">
+            {renderNavbar()}
+            <div className="auth-page-container">
+              <LoginPage />
+            </div>
+          </div>
+        )
       
       case 'roleSelection':
         return (
-          <RoleSelection 
-            user={user}
-            onRoleSelect={handleRoleSelection}
-          />
+          <div className="app-container">
+            {renderNavbar()}
+            <div className="auth-page-container">
+              <RoleSelection 
+                user={user}
+                onRoleSelect={handleRoleSelection}
+              />
+            </div>
+          </div>
         )
       
       case 'politicianRegister':
         return (
-          <PoliticianRegister
-            user={user}
-            onRegistrationComplete={handleRegistrationComplete}
-          />
+          <div className="app-container">
+            {renderNavbar()}
+            <div className="auth-page-container">
+              <PoliticianRegister
+                user={user}
+                onRegistrationComplete={handleRegistrationComplete}
+              />
+            </div>
+          </div>
         )
       
       case 'staffRegister':
         return (
-          <StaffRegister
-            user={user}
-            onRegistrationComplete={handleRegistrationComplete}
-          />
+          <div className="app-container">
+            {renderNavbar()}
+            <div className="auth-page-container">
+              <StaffRegister
+                user={user}
+                onRegistrationComplete={handleRegistrationComplete}
+              />
+            </div>
+          </div>
         )
       
       case 'dashboard':
@@ -262,7 +366,12 @@ function App() {
         )
       
       default:
-        return <LoginPage />
+        return (
+          <div className="app-container">
+            {renderNavbar()}
+            <Homepage onLoginClick={handleLoginClick} />
+          </div>
+        )
     }
   }
 
