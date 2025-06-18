@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { supabase } from './supabase'
 import Homepage from './components/Homepage/Homepage'
 import LoginPage from './components/Auth/LoginPage'
@@ -15,100 +15,75 @@ function App() {
   const [user, setUser] = useState(null)
   const [member, setMember] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [currentStep, setCurrentStep] = useState('homepage') // 預設顯示首頁
+  const [currentStep, setCurrentStep] = useState(null)
   const [debugInfo, setDebugInfo] = useState([])
+  
+  // 使用 useRef 來追蹤狀態，避免重複檢查
+  const hasInitialized = useRef(false)
+  const hasCheckedRegistration = useRef(false)
+  const isProcessingAuth = useRef(false)
+
+  // 定義哪些頁面需要全螢幕模式（無捲動）
+  const fullscreenPages = ['homepage', 'login', 'roleSelection']
+  // 註冊頁面改為可捲動，不包含在 fullscreenPages 中
+  const isFullscreenPage = fullscreenPages.includes(currentStep)
+
+  // 根據當前頁面動態控制 body 的捲動
+  useEffect(() => {
+    if (isFullscreenPage) {
+      // 全螢幕頁面 - 禁用捲動
+      document.body.style.overflow = 'hidden'
+      document.documentElement.style.overflow = 'hidden'
+    } else {
+      // 內容頁面 - 允許捲動
+      document.body.style.overflow = 'auto'
+      document.documentElement.style.overflow = 'auto'
+    }
+
+    // 清理函數在組件卸載時恢復捲動
+    return () => {
+      document.body.style.overflow = 'auto'
+      document.documentElement.style.overflow = 'auto'
+    }
+  }, [isFullscreenPage])
 
   const addDebugInfo = (message) => {
     console.log(message)
     setDebugInfo(prev => [...prev, `${new Date().toLocaleTimeString()}: ${message}`])
   }
 
-  useEffect(() => {
-    addDebugInfo('App useEffect 開始')
-
-    const checkAuthState = async () => {
-      try {
-        addDebugInfo('測試 Supabase 連接...')
-        
-        const { data, error } = await supabase.auth.getSession()
-        addDebugInfo(`getSession 結果: ${error ? `錯誤: ${error.message}` : '成功'}`)
-        
-        if (error) {
-          addDebugInfo(`Supabase 錯誤: ${error.message}`)
-          setLoading(false)
-          return
-        }
-
-        if (data?.session?.user) {
-          addDebugInfo(`發現用戶: ${data.session.user.email}`)
-          setUser(data.session.user)
-          
-          // 先測試資料庫基本連接
-          await testDatabaseConnection()
-          
-          // 然後檢查用戶註冊狀態
-          await checkUserRegistration(data.session.user)
-        } else {
-          addDebugInfo('沒有現有 session，顯示首頁')
-          setCurrentStep('homepage')
-        }
-        
-      } catch (error) {
-        addDebugInfo(`檢查認證狀態錯誤: ${error.message}`)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    checkAuthState()
-
-    // 設定認證狀態監聽器
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        addDebugInfo(`Auth 狀態變化: ${event} ${session?.user?.email || 'no user'}`)
-        
-        if (session?.user) {
-          setUser(session.user)
-          await testDatabaseConnection()
-          await checkUserRegistration(session.user)
-        } else {
-          setUser(null)
-          setMember(null)
-          setCurrentStep('homepage') // 登出後回到首頁
-        }
-        setLoading(false)
-      }
-    )
-
-    return () => subscription.unsubscribe()
-  }, [])
-
-  // 測試資料庫基本連接
+  // 測試資料庫基本連接（添加超時機制）
   const testDatabaseConnection = async () => {
     try {
       addDebugInfo('測試資料庫連接...')
       
-      // 先測試最基本的查詢
-      const { data, error, count } = await supabase
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('資料庫連接超時')), 10000)
+      )
+      
+      const queryPromise = supabase
         .from('Member')
         .select('*', { count: 'exact', head: true })
+      
+      const { data, error, count } = await Promise.race([queryPromise, timeoutPromise])
       
       if (error) {
         addDebugInfo(`資料庫錯誤: ${error.message}`)
         addDebugInfo(`錯誤代碼: ${error.code}`)
         addDebugInfo(`錯誤詳情: ${error.details}`)
         
-        // 檢查是否是表格不存在的問題
         if (error.code === '42P01') {
           addDebugInfo('❌ Member 表格不存在！')
         } else if (error.code === '42501') {
           addDebugInfo('❌ 權限不足，可能是 RLS 政策問題')
         }
+        throw error
       } else {
         addDebugInfo(`✅ 資料庫連接成功，Member 表有 ${count || 0} 筆記錄`)
       }
     } catch (error) {
       addDebugInfo(`資料庫測試異常: ${error.message}`)
+      throw error
     }
   }
 
@@ -116,39 +91,189 @@ function App() {
     try {
       addDebugInfo(`檢查用戶註冊狀態: ${authUser.id}`)
       
-      // 使用 Supabase 推薦的查詢方式
-      const { data, error } = await supabase
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('用戶查詢超時')), 10000)
+      )
+      
+      const queryPromise = supabase
         .from('Member')
         .select('*')
         .eq('auth_user_id', authUser.id)
-        .maybeSingle() // 使用 maybeSingle 而不是 single，避免 "multiple rows" 錯誤
+        .maybeSingle()
+
+      const { data, error } = await Promise.race([queryPromise, timeoutPromise])
 
       addDebugInfo(`查詢結果: ${error ? `錯誤: ${error.message}` : `找到數據: ${!!data}`}`)
 
       if (error) {
         addDebugInfo(`查詢 Member 表錯誤: ${error.message}`)
-        // 如果資料庫有問題，仍然讓用戶進行註冊流程
-        setCurrentStep('roleSelection')
-        return
+        return { registered: false, member: null }
       }
 
       if (data) {
         addDebugInfo(`找到現有用戶: ${data.name}`)
-        setMember(data)
-        setCurrentStep('dashboard')
+        return { registered: true, member: data }
       } else {
-        addDebugInfo('新用戶，導向註冊流程')
-        setCurrentStep('roleSelection')
+        addDebugInfo('新用戶，需要註冊')
+        return { registered: false, member: null }
       }
     } catch (error) {
       addDebugInfo(`檢查註冊狀態異常: ${error.message}`)
-      setCurrentStep('roleSelection')
+      return { registered: false, member: null }
     }
   }
 
-  const handleLoginClick = () => {
-    addDebugInfo('用戶點擊後台管理按鈕')
-    setCurrentStep('login')
+  useEffect(() => {
+    // 防止重複初始化
+    if (hasInitialized.current) {
+      addDebugInfo('已初始化，跳過重複檢查')
+      return
+    }
+
+    addDebugInfo('App useEffect 開始')
+
+    const initializeApp = async () => {
+      try {
+        addDebugInfo('初始化應用程式...')
+        hasInitialized.current = true
+        
+        // 檢查 URL 參數以判斷是否為 OAuth 重定向
+        const urlParams = new URLSearchParams(window.location.search)
+        const isOAuthRedirect = urlParams.has('code') || window.location.hash.includes('access_token')
+        
+        if (isOAuthRedirect) {
+          addDebugInfo('檢測到 OAuth 重定向，保持載入狀態')
+          return
+        }
+
+        // 檢查現有 session
+        const { data, error } = await supabase.auth.getSession()
+        
+        if (error) {
+          addDebugInfo(`Supabase 錯誤: ${error.message}`)
+          setCurrentStep('homepage')
+          setLoading(false)
+          return
+        }
+
+        if (data?.session?.user) {
+          addDebugInfo(`發現已登入用戶: ${data.session.user.email}`)
+          setUser(data.session.user)
+          setCurrentStep('homepage') // 先顯示首頁，避免直接跳到註冊流程
+        } else {
+          addDebugInfo('沒有現有 session，顯示首頁')
+          setCurrentStep('homepage')
+        }
+        
+        setLoading(false)
+        
+      } catch (error) {
+        addDebugInfo(`初始化錯誤: ${error.message}`)
+        setCurrentStep('homepage')
+        setLoading(false)
+      }
+    }
+
+    initializeApp()
+  }, []) // 移除依賴，確保只執行一次
+
+  useEffect(() => {
+    // 設定認證狀態監聽器
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        addDebugInfo(`Auth 狀態變化: ${event} ${session?.user?.email || 'no user'}`)
+        
+        // 防止重複處理相同事件
+        if (isProcessingAuth.current) {
+          addDebugInfo('正在處理認證事件，跳過')
+          return
+        }
+        
+        if (event === 'SIGNED_IN' && session?.user) {
+          isProcessingAuth.current = true
+          addDebugInfo('處理登入事件...')
+          setUser(session.user)
+          
+          // 只有在用戶主動登入時才進行註冊檢查
+          // 不要在每次 session 恢復時都檢查
+          if (!hasCheckedRegistration.current) {
+            setLoading(true)
+            
+            try {
+              await testDatabaseConnection()
+              const { registered, member: memberData } = await checkUserRegistration(session.user)
+              
+              if (registered && memberData) {
+                setMember(memberData)
+                setCurrentStep('dashboard')
+              } else {
+                setCurrentStep('roleSelection')
+              }
+              hasCheckedRegistration.current = true
+            } catch (error) {
+              addDebugInfo(`登入處理錯誤: ${error.message}`)
+              setCurrentStep('roleSelection')
+            } finally {
+              setLoading(false)
+              isProcessingAuth.current = false
+            }
+          } else {
+            isProcessingAuth.current = false
+          }
+          
+        } else if (event === 'SIGNED_OUT') {
+          addDebugInfo('處理登出事件')
+          setUser(null)
+          setMember(null)
+          setCurrentStep('homepage')
+          setLoading(false)
+          hasCheckedRegistration.current = false
+          isProcessingAuth.current = false
+        }
+      }
+    )
+
+    return () => subscription.unsubscribe()
+  }, [])
+
+  const handleLoginClick = async () => {
+    addDebugInfo('用戶點擊登入按鈕')
+    
+    if (user) {
+      addDebugInfo('用戶已登入 Google，檢查註冊狀態...')
+      
+      // 如果已經檢查過註冊狀態，直接導航
+      if (hasCheckedRegistration.current) {
+        if (member) {
+          setCurrentStep('dashboard')
+        } else {
+          setCurrentStep('roleSelection')
+        }
+        return
+      }
+      
+      setLoading(true)
+      
+      try {
+        await testDatabaseConnection()
+        const { registered, member: memberData } = await checkUserRegistration(user)
+        
+        if (registered && memberData) {
+          setMember(memberData)
+          setCurrentStep('dashboard')
+        } else {
+          setCurrentStep('roleSelection')
+        }
+        hasCheckedRegistration.current = true
+      } catch (error) {
+        addDebugInfo(`資料庫查詢失敗，導向註冊流程: ${error.message}`)
+        setCurrentStep('roleSelection')
+      } finally {
+        setLoading(false)
+      }
+    } else {
+      setCurrentStep('login')
+    }
   }
 
   const handleRoleSelection = (role) => {
@@ -159,12 +284,15 @@ function App() {
   const handleRegistrationComplete = async (memberData) => {
     addDebugInfo(`註冊完成: ${memberData.name}`)
     setMember(memberData)
+    hasCheckedRegistration.current = true
     setCurrentStep('dashboard')
   }
 
   const handleLogout = async () => {
     try {
       addDebugInfo('執行登出')
+      hasCheckedRegistration.current = false
+      hasInitialized.current = false
       await supabase.auth.signOut()
     } catch (error) {
       addDebugInfo(`登出失敗: ${error.message}`)
@@ -172,203 +300,97 @@ function App() {
   }
 
   const handleBackToHome = () => {
+    addDebugInfo('返回首頁')
     setCurrentStep('homepage')
   }
 
-  // 如果在載入中且有除錯資訊，顯示除錯介面
-  if (loading && debugInfo.length > 0) {
-    return (
-      <div style={{
-        padding: '20px',
-        fontFamily: 'monospace',
-        background: '#1a1a1a',
-        color: '#00ff00',
-        minHeight: '100vh'
-      }}>
-        <h2 style={{ color: '#fff', marginBottom: '20px' }}>🔍 Polify 除錯模式</h2>
-        <div style={{ 
-          background: '#2a2a2a', 
-          padding: '15px', 
-          borderRadius: '8px',
-          marginBottom: '20px'
-        }}>
-          {debugInfo.map((info, index) => (
-            <div key={index} style={{ marginBottom: '8px', fontSize: '14px' }}>
-              {info}
-            </div>
-          ))}
-        </div>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '10px',
-          color: '#fff'
-        }}>
-          <div style={{
-            width: '20px',
-            height: '20px',
-            border: '2px solid #00ff00',
-            borderTop: '2px solid transparent',
-            borderRadius: '50%',
-            animation: 'spin 1s linear infinite'
-          }}></div>
-          <span>載入中...</span>
-        </div>
-        <style jsx>{`
-          @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-          }
-        `}</style>
-      </div>
-    )
+  const handleBackToLogin = () => {
+    addDebugInfo('返回登入頁面')
+    setCurrentStep('login')
   }
 
+  const handleBackToRoleSelection = () => {
+    addDebugInfo('返回身份選擇頁面')
+    setCurrentStep('roleSelection')
+  }
+
+  // 如果在載入中，顯示載入畫面
   if (loading) {
     return <Loading />
   }
 
+  // 如果 currentStep 還沒設定，顯示載入畫面
+  if (!currentStep) {
+    return <Loading />
+  }
+
   const renderCurrentStep = () => {
-    // 需要顯示導航欄的頁面
-    const pagesWithNavbar = ['homepage', 'login', 'roleSelection', 'politicianRegister', 'staffRegister'];
-    const showNavbar = pagesWithNavbar.includes(currentStep);
-
-    // 導航欄組件
-    const renderNavbar = () => (
-      <header className="navbar">
-        <div className="logo" onClick={handleBackToHome}>
-          <span>Polify</span>
-        </div>
-        <nav className="nav-links">
-          <a 
-            href="#" 
-            className={currentStep === 'homepage' ? 'active' : ''}
-            onClick={(e) => { e.preventDefault(); handleBackToHome(); }}
-          >
-            首頁
-          </a>
-          <a href="#" onClick={(e) => { e.preventDefault(); }}>
-            政績展示
-          </a>
-          <a href="#" onClick={(e) => { e.preventDefault(); }}>
-            選民資料分析
-          </a>
-          <a 
-            href="#" 
-            className={['login', 'roleSelection', 'politicianRegister', 'staffRegister'].includes(currentStep) ? 'active' : ''}
-            onClick={(e) => { e.preventDefault(); handleLoginClick(); }}
-          >
-            後台管理
-          </a>
-        </nav>
-      </header>
-    );
-
     switch (currentStep) {
       case 'homepage':
         return (
-          <div className="app-container">
-            {renderNavbar()}
+          <div className="auth-page">
             <Homepage onLoginClick={handleLoginClick} />
-            
-            {/* 頁腳 */}
-            <footer>
-              <div className="footer-content">
-                <div className="footer-section">
-                  <h3>關於我們</h3>
-                  <p>Polify 力求提供優質的交流平台，讓政治人物與民眾共同打造更美好的社區環境。</p>
-                </div>
-                
-                <div className="footer-section">
-                  <h3>聯絡資訊</h3>
-                  <p>地址：台北市大安區羅斯福路四段1號</p>
-                  <p>電話：(02) 2345-6789</p>
-                  <p>Email：deepaign.tw@gmail.com</p>
-                </div>
-                
-                <div className="footer-section">
-                  <h3>服務時間</h3>
-                  <p>週一至週五：9:00 - 18:00</p>
-                  <p>週六：9:00 - 12:00（僅電話服務）</p>
-                  <p>Line 機器人：24小時服務</p>
-                </div>
-              </div>
-              
-              <div className="copyright">
-                © 2025 Polify. All rights reserved.
-              </div>
-            </footer>
           </div>
         )
       
       case 'login':
         return (
-          <div className="app-container">
-            {renderNavbar()}
-            <div className="auth-page-container">
-              <LoginPage />
-            </div>
+          <div className="auth-page">
+            <LoginPage onBackToHome={handleBackToHome} />
           </div>
         )
       
       case 'roleSelection':
         return (
-          <div className="app-container">
-            {renderNavbar()}
-            <div className="auth-page-container">
-              <RoleSelection 
-                user={user}
-                onRoleSelect={handleRoleSelection}
-              />
-            </div>
+          <div className="auth-page">
+            <RoleSelection 
+              user={user}
+              onRoleSelect={handleRoleSelection}
+              onBackToLogin={handleBackToLogin}
+            />
           </div>
         )
       
       case 'politicianRegister':
         return (
-          <div className="app-container">
-            {renderNavbar()}
-            <div className="auth-page-container">
-              <PoliticianRegister
-                user={user}
-                onRegistrationComplete={handleRegistrationComplete}
-              />
-            </div>
-          </div>
+          <PoliticianRegister
+            user={user}
+            onRegistrationComplete={handleRegistrationComplete}
+            onBackToRoleSelection={handleBackToRoleSelection}
+          />
         )
       
       case 'staffRegister':
         return (
-          <div className="app-container">
-            {renderNavbar()}
-            <div className="auth-page-container">
-              <StaffRegister
-                user={user}
-                onRegistrationComplete={handleRegistrationComplete}
-              />
-            </div>
-          </div>
+          <StaffRegister
+            user={user}
+            onRegistrationComplete={handleRegistrationComplete}
+            onBackToRoleSelection={handleBackToRoleSelection}
+          />
         )
       
       case 'dashboard':
         if (!member) return <Loading />
         
-        return member.role === 'politician' ? (
-          <PoliticianDashboard 
-            member={member} 
-            onLogout={handleLogout}
-          />
-        ) : (
-          <StaffDashboard 
-            member={member} 
-            onLogout={handleLogout}
-          />
+        return (
+          <div className="content-page">
+            {member.role === 'politician' ? (
+              <PoliticianDashboard 
+                member={member} 
+                onLogout={handleLogout}
+              />
+            ) : (
+              <StaffDashboard 
+                member={member} 
+                onLogout={handleLogout}
+              />
+            )}
+          </div>
         )
       
       default:
         return (
-          <div className="app-container">
-            {renderNavbar()}
+          <div className="auth-page">
             <Homepage onLoginClick={handleLoginClick} />
           </div>
         )
@@ -376,7 +398,7 @@ function App() {
   }
 
   return (
-    <div className="app">
+    <div className={`app ${isFullscreenPage ? 'fullscreen-mode' : ''}`}>
       {renderCurrentStep()}
     </div>
   )

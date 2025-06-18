@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { supabase } from '../../supabase'
 import { validatePoliticianForm } from '../../services/validation'
 
-function PoliticianRegister({ user, onRegistrationComplete }) {
+function PoliticianRegister({ user, onRegistrationComplete, onBackToRoleSelection }) {
   const [formData, setFormData] = useState({
     name: user?.user_metadata?.full_name || '',
     email: user?.email || '',
@@ -106,214 +106,284 @@ function PoliticianRegister({ user, onRegistrationComplete }) {
 
   return (
     <div style={{ 
-      display: 'flex', 
-      justifyContent: 'center', 
-      alignItems: 'center', 
       minHeight: '100vh',
       background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      padding: '20px'
+      padding: '20px',
+      boxSizing: 'border-box',
+      overflow: 'auto' // 允許捲動
     }}>
       <div style={{
-        background: 'white',
-        borderRadius: '12px',
-        boxShadow: '0 20px 40px rgba(0,0,0,0.1)',
-        padding: '40px',
-        width: '100%',
-        maxWidth: '600px'
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'flex-start', // 改為 flex-start 避免垂直置中
+        minHeight: '100vh',
+        paddingTop: '20px',
+        paddingBottom: '20px'
       }}>
-        <div style={{ textAlign: 'center', marginBottom: '30px' }}>
-          <h1 style={{ fontSize: '2rem', color: '#333', marginBottom: '10px' }}>政治人物註冊</h1>
-          <p style={{ color: '#666' }}>請填寫以下資訊完成註冊</p>
-        </div>
-
-        <form onSubmit={handleSubmit}>
-          {errors.submit && (
-            <div style={{
-              background: '#fee',
-              border: '1px solid #fcc',
-              color: '#e74c3c',
-              padding: '12px 16px',
-              borderRadius: '6px',
-              marginBottom: '20px',
-              fontSize: '0.875rem'
-            }}>
-              {errors.submit}
-            </div>
-          )}
-
-          <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', marginBottom: '6px', fontWeight: '500', color: '#333', fontSize: '0.875rem' }}>
-              姓名 *
-            </label>
-            <input
-              type="text"
-              name="name"
-              value={formData.name}
-              onChange={handleInputChange}
-              style={{
-                width: '100%',
-                padding: '12px 16px',
-                border: `2px solid ${errors.name ? '#e74c3c' : '#e1e5e9'}`,
-                borderRadius: '8px',
-                fontSize: '1rem'
-              }}
-            />
-            {errors.name && <span style={{ color: '#e74c3c', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>{errors.name}</span>}
-          </div>
-
-          <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', marginBottom: '6px', fontWeight: '500', color: '#333', fontSize: '0.875rem' }}>
-              Email *
-            </label>
-            <input
-              type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleInputChange}
-              style={{
-                width: '100%',
-                padding: '12px 16px',
-                border: `2px solid ${errors.email ? '#e74c3c' : '#e1e5e9'}`,
-                borderRadius: '8px',
-                fontSize: '1rem'
-              }}
-            />
-            {errors.email && <span style={{ color: '#e74c3c', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>{errors.email}</span>}
-          </div>
-
-          <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', marginBottom: '6px', fontWeight: '500', color: '#333', fontSize: '0.875rem' }}>
-              電話號碼 *
-            </label>
-            <input
-              type="tel"
-              name="phone"
-              value={formData.phone}
-              onChange={handleInputChange}
-              placeholder="09xxxxxxxx"
-              style={{
-                width: '100%',
-                padding: '12px 16px',
-                border: `2px solid ${errors.phone ? '#e74c3c' : '#e1e5e9'}`,
-                borderRadius: '8px',
-                fontSize: '1rem'
-              }}
-            />
-            {errors.phone && <span style={{ color: '#e74c3c', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>{errors.phone}</span>}
-          </div>
-
-          <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', marginBottom: '6px', fontWeight: '500', color: '#333', fontSize: '0.875rem' }}>
-              職位 *
-            </label>
-            <select
-              name="position"
-              value={formData.position}
-              onChange={handleInputChange}
-              style={{
-                width: '100%',
-                padding: '12px 16px',
-                border: `2px solid ${errors.position ? '#e74c3c' : '#e1e5e9'}`,
-                borderRadius: '8px',
-                fontSize: '1rem'
-              }}
-            >
-              <option value="">請選擇職位</option>
-              {positions.map(pos => (
-                <option key={pos.value} value={pos.value}>
-                  {pos.label}
-                </option>
-              ))}
-            </select>
-            {errors.position && <span style={{ color: '#e74c3c', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>{errors.position}</span>}
-          </div>
-
-          <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', marginBottom: '6px', fontWeight: '500', color: '#333', fontSize: '0.875rem' }}>
-              服務縣市 *
-            </label>
-            <select
-              name="county"
-              value={formData.county}
-              onChange={handleInputChange}
-              style={{
-                width: '100%',
-                padding: '12px 16px',
-                border: `2px solid ${errors.county ? '#e74c3c' : '#e1e5e9'}`,
-                borderRadius: '8px',
-                fontSize: '1rem'
-              }}
-            >
-              <option value="">請選擇縣市</option>
-              {counties.map(county => (
-                <option key={county} value={county}>
-                  {county}
-                </option>
-              ))}
-            </select>
-            {errors.county && <span style={{ color: '#e74c3c', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>{errors.county}</span>}
-          </div>
-
-          <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', marginBottom: '6px', fontWeight: '500', color: '#333', fontSize: '0.875rem' }}>
-              服務區域
-            </label>
-            <input
-              type="text"
-              name="district"
-              value={formData.district}
-              onChange={handleInputChange}
-              placeholder="如：第一選區、中正區等"
-              style={{
-                width: '100%',
-                padding: '12px 16px',
-                border: '2px solid #e1e5e9',
-                borderRadius: '8px',
-                fontSize: '1rem'
-              }}
-            />
-          </div>
-
-          <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', marginBottom: '6px', fontWeight: '500', color: '#333', fontSize: '0.875rem' }}>
-              辦公室地址
-            </label>
-            <textarea
-              name="office_address"
-              value={formData.office_address}
-              onChange={handleInputChange}
-              placeholder="選填"
-              rows="2"
-              style={{
-                width: '100%',
-                padding: '12px 16px',
-                border: '2px solid #e1e5e9',
-                borderRadius: '8px',
-                fontSize: '1rem'
-              }}
-            />
-          </div>
-
-          <button 
-            type="submit" 
+        <div style={{
+          background: 'white',
+          borderRadius: '12px',
+          boxShadow: '0 20px 40px rgba(0,0,0,0.1)',
+          padding: '40px',
+          width: '100%',
+          maxWidth: '600px',
+          position: 'relative',
+          margin: 'auto' // 自動置中
+        }}>
+          {/* 上一頁按鈕 */}
+          <button
+            onClick={onBackToRoleSelection}
             disabled={loading}
             style={{
-              width: '100%',
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              color: 'white',
-              border: 'none',
+              position: 'absolute',
+              top: '20px',
+              left: '20px',
+              background: 'transparent',
+              border: '2px solid #ddd',
               borderRadius: '8px',
-              padding: '16px',
-              fontSize: '1rem',
-              fontWeight: '600',
+              padding: '8px 12px',
+              fontSize: '14px',
+              color: '#666',
               cursor: loading ? 'not-allowed' : 'pointer',
-              marginTop: '10px',
-              opacity: loading ? 0.6 : 1
+              transition: 'all 0.3s ease',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              opacity: loading ? 0.5 : 1
+            }}
+            onMouseEnter={(e) => {
+              if (!loading) {
+                e.target.style.borderColor = '#667eea'
+                e.target.style.color = '#667eea'
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!loading) {
+                e.target.style.borderColor = '#ddd'
+                e.target.style.color = '#666'
+              }
             }}
           >
-            {loading ? '註冊中...' : '完成註冊'}
+            <span style={{ fontSize: '16px' }}>←</span>
+            上一頁
           </button>
-        </form>
+
+          <div style={{ textAlign: 'center', marginBottom: '30px' }}>
+            <h1 style={{ fontSize: '2rem', color: '#333', marginBottom: '10px' }}>政治人物註冊</h1>
+            <p style={{ color: '#666' }}>請填寫以下資訊完成註冊</p>
+          </div>
+
+          <form onSubmit={handleSubmit}>
+            {errors.submit && (
+              <div style={{
+                background: '#fee',
+                border: '1px solid #fcc',
+                color: '#e74c3c',
+                padding: '12px 16px',
+                borderRadius: '6px',
+                marginBottom: '20px',
+                fontSize: '0.875rem'
+              }}>
+                {errors.submit}
+              </div>
+            )}
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', fontWeight: '500', color: '#333', fontSize: '0.875rem' }}>
+                姓名 *
+              </label>
+              <input
+                type="text"
+                name="name"
+                value={formData.name}
+                onChange={handleInputChange}
+                disabled={loading}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  border: `2px solid ${errors.name ? '#e74c3c' : '#e1e5e9'}`,
+                  borderRadius: '8px',
+                  fontSize: '1rem',
+                  opacity: loading ? 0.7 : 1,
+                  boxSizing: 'border-box'
+                }}
+              />
+              {errors.name && <span style={{ color: '#e74c3c', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>{errors.name}</span>}
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', fontWeight: '500', color: '#333', fontSize: '0.875rem' }}>
+                Email *
+              </label>
+              <input
+                type="email"
+                name="email"
+                value={formData.email}
+                onChange={handleInputChange}
+                disabled={loading}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  border: `2px solid ${errors.email ? '#e74c3c' : '#e1e5e9'}`,
+                  borderRadius: '8px',
+                  fontSize: '1rem',
+                  opacity: loading ? 0.7 : 1,
+                  boxSizing: 'border-box'
+                }}
+              />
+              {errors.email && <span style={{ color: '#e74c3c', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>{errors.email}</span>}
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', fontWeight: '500', color: '#333', fontSize: '0.875rem' }}>
+                電話號碼 *
+              </label>
+              <input
+                type="tel"
+                name="phone"
+                value={formData.phone}
+                onChange={handleInputChange}
+                placeholder="09xxxxxxxx"
+                disabled={loading}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  border: `2px solid ${errors.phone ? '#e74c3c' : '#e1e5e9'}`,
+                  borderRadius: '8px',
+                  fontSize: '1rem',
+                  opacity: loading ? 0.7 : 1,
+                  boxSizing: 'border-box'
+                }}
+              />
+              {errors.phone && <span style={{ color: '#e74c3c', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>{errors.phone}</span>}
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', fontWeight: '500', color: '#333', fontSize: '0.875rem' }}>
+                職位 *
+              </label>
+              <select
+                name="position"
+                value={formData.position}
+                onChange={handleInputChange}
+                disabled={loading}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  border: `2px solid ${errors.position ? '#e74c3c' : '#e1e5e9'}`,
+                  borderRadius: '8px',
+                  fontSize: '1rem',
+                  opacity: loading ? 0.7 : 1,
+                  boxSizing: 'border-box'
+                }}
+              >
+                <option value="">請選擇職位</option>
+                {positions.map(pos => (
+                  <option key={pos.value} value={pos.value}>
+                    {pos.label}
+                  </option>
+                ))}
+              </select>
+              {errors.position && <span style={{ color: '#e74c3c', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>{errors.position}</span>}
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', fontWeight: '500', color: '#333', fontSize: '0.875rem' }}>
+                服務縣市 *
+              </label>
+              <select
+                name="county"
+                value={formData.county}
+                onChange={handleInputChange}
+                disabled={loading}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  border: `2px solid ${errors.county ? '#e74c3c' : '#e1e5e9'}`,
+                  borderRadius: '8px',
+                  fontSize: '1rem',
+                  opacity: loading ? 0.7 : 1,
+                  boxSizing: 'border-box'
+                }}
+              >
+                <option value="">請選擇縣市</option>
+                {counties.map(county => (
+                  <option key={county} value={county}>
+                    {county}
+                  </option>
+                ))}
+              </select>
+              {errors.county && <span style={{ color: '#e74c3c', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>{errors.county}</span>}
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', fontWeight: '500', color: '#333', fontSize: '0.875rem' }}>
+                服務區域
+              </label>
+              <input
+                type="text"
+                name="district"
+                value={formData.district}
+                onChange={handleInputChange}
+                placeholder="如：第一選區、中正區等"
+                disabled={loading}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  border: '2px solid #e1e5e9',
+                  borderRadius: '8px',
+                  fontSize: '1rem',
+                  opacity: loading ? 0.7 : 1,
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', fontWeight: '500', color: '#333', fontSize: '0.875rem' }}>
+                辦公室地址
+              </label>
+              <textarea
+                name="office_address"
+                value={formData.office_address}
+                onChange={handleInputChange}
+                placeholder="選填"
+                rows="3"
+                disabled={loading}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  border: '2px solid #e1e5e9',
+                  borderRadius: '8px',
+                  fontSize: '1rem',
+                  opacity: loading ? 0.7 : 1,
+                  boxSizing: 'border-box',
+                  resize: 'vertical'
+                }}
+              />
+            </div>
+
+            <button 
+              type="submit" 
+              disabled={loading}
+              style={{
+                width: '100%',
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '16px',
+                fontSize: '1rem',
+                fontWeight: '600',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                marginTop: '10px',
+                opacity: loading ? 0.6 : 1
+              }}
+            >
+              {loading ? '註冊中...' : '完成註冊'}
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   )

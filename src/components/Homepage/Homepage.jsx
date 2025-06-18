@@ -1,11 +1,8 @@
 import React, { useEffect } from 'react';
 import './Homepage.css';
 
-// 引入三框對話模式展示組件
-import ThreeChatBoxes from './ThreeChatBoxes';
-
 function Homepage({ onLoginClick }) {
-  // 添加動畫效果與滾動檢測
+  // 添加動畫效果
   useEffect(() => {
     // 創建並添加 canvas 元素到動畫容器
     const animationContainer = document.getElementById('animation-container');
@@ -18,7 +15,7 @@ function Homepage({ onLoginClick }) {
         
         const ctx = canvas.getContext('2d');
         canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight * 0.9; // 設置為視窗高度的 90%
+        canvas.height = window.innerHeight; // 佔滿整個視窗
         ctx.lineWidth = 0.3;
         ctx.strokeStyle = 'rgba(150, 150, 150, 0.8)';
 
@@ -104,23 +101,23 @@ function Homepage({ onLoginClick }) {
           
           // 白色文字在漸層背景上更清楚
           ctx.fillStyle = "rgba(255, 255, 255, " + textOpacity + ")";
-          ctx.fillText("POLIFY", canvas.width/2, canvas.height/2 - 40);
+          ctx.fillText("POLIFY", canvas.width/2, canvas.height/2 - 60);
           
           // 發光效果
           ctx.strokeStyle = "rgba(255, 255, 255, " + textOpacity * 0.8 + ")";
           ctx.lineWidth = 2;
-          ctx.strokeText("POLIFY", canvas.width/2, canvas.height/2 - 40);
+          ctx.strokeText("POLIFY", canvas.width/2, canvas.height/2 - 60);
           
           // 第一行副標題
           ctx.shadowBlur = 0;
           ctx.font = "bold 24px 'Arial', sans-serif";
           ctx.fillStyle = "rgba(255, 255, 255, " + (textOpacity * 0.9) + ")";
-          ctx.fillText("歡迎使用智能選服幕僚系統", canvas.width/2, canvas.height/2 + 20);
+          ctx.fillText("歡迎使用智能選服幕僚系統", canvas.width/2, canvas.height/2 - 10);
           
           // 第二行副標題
           ctx.font = "normal 18px 'Arial', sans-serif";
           ctx.fillStyle = "rgba(255, 255, 255, " + (textOpacity * 0.8) + ")";
-          ctx.fillText("連結民眾與政治人物，提供即時服務與政績展示", canvas.width/2, canvas.height/2 + 50);
+          ctx.fillText("連結民眾與政治人物，提供即時服務與政績展示", canvas.width/2, canvas.height/2 + 20);
           
           ctx.restore();
         }
@@ -202,7 +199,7 @@ function Homepage({ onLoginClick }) {
         // 響應式調整
         window.addEventListener('resize', function() {
           canvas.width = window.innerWidth;
-          canvas.height = window.innerHeight * 0.9;
+          canvas.height = window.innerHeight;
           dots.array = [];
           createDots();
         });
@@ -212,126 +209,15 @@ function Homepage({ onLoginClick }) {
         requestAnimationFrame(animateDots);
       }
     }
-
-    // 滾動動畫效果
-    const scrollEffect = () => {
-      const sections = document.querySelectorAll('.fade-in-section');
-      
-      sections.forEach(section => {
-        // 獲取元素相對於視窗的位置
-        const sectionTop = section.getBoundingClientRect().top;
-        const windowHeight = window.innerHeight;
-        
-        // 當元素進入視窗的 80% 位置時顯示
-        if (sectionTop < windowHeight * 0.8) {
-          section.classList.add('is-visible');
-        }
-      });
-    };
-    
-    // 頁面加載時先執行一次，處理已在視窗內的元素
-    scrollEffect();
-    
-    // 添加滾動事件監聽器
-    window.addEventListener('scroll', scrollEffect);
-    
-    // 添加滾動提示點擊事件，點擊後滾動到內容區域
-    const scrollIndicator = document.querySelector('.scroll-indicator');
-    if (scrollIndicator) {
-      scrollIndicator.addEventListener('click', () => {
-        const contentSection = document.querySelector('.card-container');
-        if (contentSection) {
-          contentSection.scrollIntoView({ behavior: 'smooth' });
-        }
-      });
-    }
-    
-    // 在組件卸載時清理事件監聽器
-    return () => {
-      window.removeEventListener('scroll', scrollEffect);
-    };
-  }, []); // 只在組件掛載時執行一次
+  }, []);
 
   return (
-    <main>
-      {/* 動畫區域 */}
-      <div id="animation-container" className="animation-container">
-        {/* 下滾提示 */}
-        <div className="scroll-indicator">▼</div>
-      </div>
-      
-      {/* 卡片區塊 - 添加淡入效果 */}
-      <div className="card-container fade-in-section">
-        {/* 左側卡片：Line 官方帳號 */}
-        <div className="card">
-          <h2>加入我們的 Line 官方帳號</h2>
-          <p>請掃下方 QR Code，立即加入我們的 Line 官方帳號，隨時掌握最新資訊，並可直接透過 Line 提出您的需求與建議。</p>
-          
-          <div className="qr-code">
-            {/* 這裡放置 QR Code 圖片 */}
-            <div className="qr-placeholder">
-              <div className="qr-top-left"></div>
-              <div className="qr-top-right"></div>
-              <div className="qr-center"></div>
-              <div className="qr-bottom-left"></div>
-              <div className="qr-dots"></div>
-            </div>
-          </div>
-          
-          <button className="green-button" onClick={() => alert('即將開啟最新動態頁面')}>
-            <span className="icon-chat"></span>
-            查看最新動態
-          </button>
-        </div>
-
-        {/* 右側卡片：系統功能介紹 */}
-        <div className="card">
-          <h2>系統功能介紹</h2>
-          
-          <div className="feature-list">
-            <div className="feature-item">
-              <span className="icon-check"></span>
-              <div className="feature-content">
-                <h3>民眾陳情服務</h3>
-                <p>透過 Line 受理民眾陳情，快速提交您的陳情需求，系統自動分類並追蹤處理進度。</p>
-              </div>
-            </div>
-            
-            <div className="feature-item">
-              <span className="icon-check"></span>
-              <div className="feature-content">
-                <h3>法律諮詢</h3>
-                <p>提供基本法律諮詢服務，解答民眾常見法律問題，必要時將介專業律師協助。</p>
-              </div>
-            </div>
-            
-            <div className="feature-item">
-              <span className="icon-check"></span>
-              <div className="feature-content">
-                <h3>政績展示</h3>
-                <p>查看最新政績與活動資訊，了解我們為您服務所做的努力與成果。</p>
-              </div>
-            </div>
-            
-            <div className="feature-item">
-              <span className="icon-check"></span>
-              <div className="feature-content">
-                <h3>進度追蹤</h3>
-                <p>隨時查詢您提交的陳情案件處理進度，系統會主動通知最新狀態更新。</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Line 機器人功能展示區塊 - 添加三框對話模式 */}
-      <section className="chatbot-demo fade-in-section">
-        <h2>Line 機器人功能展示</h2>
-        
-        {/* 使用三框對話模式展示組件 */}
-        <ThreeChatBoxes />
-      </section>
-    </main>
+    <div id="animation-container" className="fullscreen-animation-container">
+      {/* 登入按鈕 */}
+      <button className="login-overlay-btn" onClick={onLoginClick}>
+        登入系統
+      </button>
+    </div>
   );
 }
 
