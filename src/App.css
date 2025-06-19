@@ -17,6 +17,33 @@ body {
   min-height: 100vh;
 }
 
+/* 全頁面模式 - 用於登入流程等不需要捲動的頁面 */
+.app.fullscreen-mode {
+  height: 100vh;
+  overflow: hidden;
+}
+
+.app.fullscreen-mode body {
+  overflow: hidden;
+}
+
+/* 認證頁面專用樣式 */
+.auth-page {
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1000;
+}
+
+/* Dashboard 和其他內容頁面可以正常捲動 */
+.content-page {
+  min-height: 100vh;
+  /* 允許正常捲動 */
+}
+
 /* 全域按鈕樣式 */
 button {
   font-family: inherit;
