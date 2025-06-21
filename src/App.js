@@ -1,19 +1,30 @@
+// App.js 主要修改點
+
 import React, { useState, useEffect, useRef } from 'react'
 import { supabase } from './supabase'
 import Homepage from './components/Homepage/Homepage'
 import LoginPage from './components/Auth/LoginPage'
-import RoleSelection from './components/Auth/RoleSelection'
-import PoliticianRegister from './components/Auth/PoliticianRegister'
-import StaffRegister from './components/Auth/StaffRegister'
-import PoliticianDashboard from './components/Dashboard/PoliticianDashboard'
+// 移除不需要的舊組件
+// import RoleSelection from './components/Auth/RoleSelection'
+// import PoliticianRegister from './components/Auth/PoliticianRegister'
+// import StaffRegister from './components/Auth/StaffRegister'
+// import PoliticianDashboard from './components/Dashboard/PoliticianDashboard'
+
+// 新增團隊相關組件
+import JoinTeamSelection from './components/Team/JoinTeamSelection'
+import RegistrationCodeInput from './components/Team/RegistrationCodeInput'
+import StaffInviteInput from './components/Team/StaffInviteInput'
+import TeamManagement from './components/Team/TeamManagement'
 import StaffDashboard from './components/Dashboard/StaffDashboard'
 import Loading from './components/Common/Loading'
+import { TeamService } from './services/teamService'
 import './App.css'
 import './components/Homepage/Homepage.css'
-// test
+
 function App() {
   const [user, setUser] = useState(null)
   const [member, setMember] = useState(null)
+  const [team, setTeam] = useState(null) // 新增：團隊資料
   const [loading, setLoading] = useState(true)
   const [currentStep, setCurrentStep] = useState(null)
   const [debugInfo, setDebugInfo] = useState([])
@@ -24,23 +35,19 @@ function App() {
   const isProcessingAuth = useRef(false)
 
   // 定義哪些頁面需要全螢幕模式（無捲動）
-  const fullscreenPages = ['homepage', 'login', 'roleSelection']
-  // 註冊頁面改為可捲動，不包含在 fullscreenPages 中
+  const fullscreenPages = ['homepage', 'login', 'joinTeamSelection', 'registrationCode', 'inviteCode']
   const isFullscreenPage = fullscreenPages.includes(currentStep)
 
   // 根據當前頁面動態控制 body 的捲動
   useEffect(() => {
     if (isFullscreenPage) {
-      // 全螢幕頁面 - 禁用捲動
       document.body.style.overflow = 'hidden'
       document.documentElement.style.overflow = 'hidden'
     } else {
-      // 內容頁面 - 允許捲動
       document.body.style.overflow = 'auto'
       document.documentElement.style.overflow = 'auto'
     }
 
-    // 清理函數在組件卸載時恢復捲動
     return () => {
       document.body.style.overflow = 'auto'
       document.documentElement.style.overflow = 'auto'
@@ -52,74 +59,27 @@ function App() {
     setDebugInfo(prev => [...prev, `${new Date().toLocaleTimeString()}: ${message}`])
   }
 
-  // 測試資料庫基本連接（添加超時機制）
-  const testDatabaseConnection = async () => {
+  // 修改：檢查用戶是否已有團隊（而不是檢查註冊狀態）
+  const checkUserTeam = async (authUser) => {
     try {
-      addDebugInfo('測試資料庫連接...')
+      addDebugInfo(`檢查用戶團隊狀態: ${authUser.id}`)
       
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('資料庫連接超時')), 10000)
-      )
+      const teamCheck = await TeamService.checkUserTeam(authUser.id)
       
-      const queryPromise = supabase
-        .from('Member')
-        .select('*', { count: 'exact', head: true })
-      
-      const { data, error, count } = await Promise.race([queryPromise, timeoutPromise])
-      
-      if (error) {
-        addDebugInfo(`資料庫錯誤: ${error.message}`)
-        addDebugInfo(`錯誤代碼: ${error.code}`)
-        addDebugInfo(`錯誤詳情: ${error.details}`)
-        
-        if (error.code === '42P01') {
-          addDebugInfo('❌ Member 表格不存在！')
-        } else if (error.code === '42501') {
-          addDebugInfo('❌ 權限不足，可能是 RLS 政策問題')
+      if (teamCheck.hasTeam) {
+        addDebugInfo(`找到現有團隊: ${teamCheck.team.name}`)
+        return { 
+          hasTeam: true, 
+          member: teamCheck.member,
+          team: teamCheck.team 
         }
-        throw error
       } else {
-        addDebugInfo(`✅ 資料庫連接成功，Member 表有 ${count || 0} 筆記錄`)
+        addDebugInfo('用戶尚未加入任何團隊')
+        return { hasTeam: false, member: null, team: null }
       }
     } catch (error) {
-      addDebugInfo(`資料庫測試異常: ${error.message}`)
-      throw error
-    }
-  }
-
-  const checkUserRegistration = async (authUser) => {
-    try {
-      addDebugInfo(`檢查用戶註冊狀態: ${authUser.id}`)
-      
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('用戶查詢超時')), 10000)
-      )
-      
-      const queryPromise = supabase
-        .from('Member')
-        .select('*')
-        .eq('auth_user_id', authUser.id)
-        .maybeSingle()
-
-      const { data, error } = await Promise.race([queryPromise, timeoutPromise])
-
-      addDebugInfo(`查詢結果: ${error ? `錯誤: ${error.message}` : `找到數據: ${!!data}`}`)
-
-      if (error) {
-        addDebugInfo(`查詢 Member 表錯誤: ${error.message}`)
-        return { registered: false, member: null }
-      }
-
-      if (data) {
-        addDebugInfo(`找到現有用戶: ${data.name}`)
-        return { registered: true, member: data }
-      } else {
-        addDebugInfo('新用戶，需要註冊')
-        return { registered: false, member: null }
-      }
-    } catch (error) {
-      addDebugInfo(`檢查註冊狀態異常: ${error.message}`)
-      return { registered: false, member: null }
+      addDebugInfo(`檢查團隊狀態異常: ${error.message}`)
+      return { hasTeam: false, member: null, team: null }
     }
   }
 
@@ -159,7 +119,7 @@ function App() {
         if (data?.session?.user) {
           addDebugInfo(`發現已登入用戶: ${data.session.user.email}`)
           setUser(data.session.user)
-          setCurrentStep('homepage') // 先顯示首頁，避免直接跳到註冊流程
+          setCurrentStep('homepage')
         } else {
           addDebugInfo('沒有現有 session，顯示首頁')
           setCurrentStep('homepage')
@@ -175,7 +135,7 @@ function App() {
     }
 
     initializeApp()
-  }, []) // 移除依賴，確保只執行一次
+  }, [])
 
   useEffect(() => {
     // 設定認證狀態監聽器
@@ -194,25 +154,23 @@ function App() {
           addDebugInfo('處理登入事件...')
           setUser(session.user)
           
-          // 只有在用戶主動登入時才進行註冊檢查
-          // 不要在每次 session 恢復時都檢查
           if (!hasCheckedRegistration.current) {
             setLoading(true)
             
             try {
-              await testDatabaseConnection()
-              const { registered, member: memberData } = await checkUserRegistration(session.user)
+              const { hasTeam, member: memberData, team: teamData } = await checkUserTeam(session.user)
               
-              if (registered && memberData) {
+              if (hasTeam && memberData && teamData) {
                 setMember(memberData)
+                setTeam(teamData)
                 setCurrentStep('dashboard')
               } else {
-                setCurrentStep('roleSelection')
+                setCurrentStep('joinTeamSelection') // 新的步驟
               }
               hasCheckedRegistration.current = true
             } catch (error) {
               addDebugInfo(`登入處理錯誤: ${error.message}`)
-              setCurrentStep('roleSelection')
+              setCurrentStep('joinTeamSelection')
             } finally {
               setLoading(false)
               isProcessingAuth.current = false
@@ -225,6 +183,7 @@ function App() {
           addDebugInfo('處理登出事件')
           setUser(null)
           setMember(null)
+          setTeam(null) // 清空團隊資料
           setCurrentStep('homepage')
           setLoading(false)
           hasCheckedRegistration.current = false
@@ -240,14 +199,13 @@ function App() {
     addDebugInfo('用戶點擊登入按鈕')
     
     if (user) {
-      addDebugInfo('用戶已登入 Google，檢查註冊狀態...')
+      addDebugInfo('用戶已登入 Google，檢查團隊狀態...')
       
-      // 如果已經檢查過註冊狀態，直接導航
       if (hasCheckedRegistration.current) {
-        if (member) {
+        if (member && team) {
           setCurrentStep('dashboard')
         } else {
-          setCurrentStep('roleSelection')
+          setCurrentStep('joinTeamSelection')
         }
         return
       }
@@ -255,19 +213,19 @@ function App() {
       setLoading(true)
       
       try {
-        await testDatabaseConnection()
-        const { registered, member: memberData } = await checkUserRegistration(user)
+        const { hasTeam, member: memberData, team: teamData } = await checkUserTeam(user)
         
-        if (registered && memberData) {
+        if (hasTeam && memberData && teamData) {
           setMember(memberData)
+          setTeam(teamData)
           setCurrentStep('dashboard')
         } else {
-          setCurrentStep('roleSelection')
+          setCurrentStep('joinTeamSelection')
         }
         hasCheckedRegistration.current = true
       } catch (error) {
-        addDebugInfo(`資料庫查詢失敗，導向註冊流程: ${error.message}`)
-        setCurrentStep('roleSelection')
+        addDebugInfo(`團隊查詢失敗，導向選擇頁面: ${error.message}`)
+        setCurrentStep('joinTeamSelection')
       } finally {
         setLoading(false)
       }
@@ -276,14 +234,21 @@ function App() {
     }
   }
 
-  const handleRoleSelection = (role) => {
-    addDebugInfo(`選擇身份: ${role}`)
-    setCurrentStep(`${role}Register`)
+  // 新增：處理加入方式選擇
+  const handleSelectJoinMethod = (method) => {
+    addDebugInfo(`選擇加入方式: ${method}`)
+    if (method === 'registrationCode') {
+      setCurrentStep('registrationCode')
+    } else if (method === 'inviteCode') {
+      setCurrentStep('inviteCode')
+    }
   }
 
-  const handleRegistrationComplete = async (memberData) => {
-    addDebugInfo(`註冊完成: ${memberData.name}`)
+  // 新增：處理團隊加入成功
+  const handleTeamJoined = async (memberData, teamData) => {
+    addDebugInfo(`團隊加入成功: ${teamData.name}`)
     setMember(memberData)
+    setTeam(teamData)
     hasCheckedRegistration.current = true
     setCurrentStep('dashboard')
   }
@@ -293,6 +258,7 @@ function App() {
       addDebugInfo('執行登出')
       hasCheckedRegistration.current = false
       hasInitialized.current = false
+      setTeam(null) // 清空團隊資料
       await supabase.auth.signOut()
     } catch (error) {
       addDebugInfo(`登出失敗: ${error.message}`)
@@ -309,9 +275,10 @@ function App() {
     setCurrentStep('login')
   }
 
-  const handleBackToRoleSelection = () => {
-    addDebugInfo('返回身份選擇頁面')
-    setCurrentStep('roleSelection')
+  // 新增：返回加入方式選擇
+  const handleBackToJoinSelection = () => {
+    addDebugInfo('返回加入方式選擇頁面')
+    setCurrentStep('joinTeamSelection')
   }
 
   // 如果在載入中，顯示載入畫面
@@ -340,48 +307,53 @@ function App() {
           </div>
         )
       
-      case 'roleSelection':
+      case 'joinTeamSelection':
         return (
           <div className="auth-page">
-            <RoleSelection 
+            <JoinTeamSelection 
               user={user}
-              onRoleSelect={handleRoleSelection}
-              onBackToLogin={handleBackToLogin}
+              onSelectJoinMethod={handleSelectJoinMethod}
             />
           </div>
         )
       
-      case 'politicianRegister':
+      case 'registrationCode':
         return (
-          <PoliticianRegister
-            user={user}
-            onRegistrationComplete={handleRegistrationComplete}
-            onBackToRoleSelection={handleBackToRoleSelection}
-          />
+          <div className="auth-page">
+            <RegistrationCodeInput 
+              user={user}
+              onTeamJoined={handleTeamJoined}
+              onBack={handleBackToJoinSelection}
+            />
+          </div>
         )
       
-      case 'staffRegister':
+      case 'inviteCode':
         return (
-          <StaffRegister
-            user={user}
-            onRegistrationComplete={handleRegistrationComplete}
-            onBackToRoleSelection={handleBackToRoleSelection}
-          />
+          <div className="auth-page">
+            <StaffInviteInput 
+              user={user}
+              onTeamJoined={handleTeamJoined}
+              onBack={handleBackToJoinSelection}
+            />
+          </div>
         )
       
       case 'dashboard':
-        if (!member) return <Loading />
+        if (!member || !team) return <Loading />
         
         return (
           <div className="content-page">
-            {member.role === 'politician' ? (
-              <PoliticianDashboard 
+            {member.role === 'politician' && member.is_leader ? (
+              <TeamManagement 
                 member={member} 
+                team={team}
                 onLogout={handleLogout}
               />
             ) : (
               <StaffDashboard 
                 member={member} 
+                team={team}
                 onLogout={handleLogout}
               />
             )}
