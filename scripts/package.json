@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.10",
+    "dotenv": "^16.5.0",
     "readline-sync": "^1.4.10"
   }
 }

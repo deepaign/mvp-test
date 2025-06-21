@@ -1,6 +1,24 @@
 #!/usr/bin/env node
+import dotenv from 'dotenv'
 import { createClient } from '@supabase/supabase-js'
 import readlineSync from 'readline-sync'
+
+// 設定編碼
+process.stdout.setDefaultEncoding('utf8')
+process.stdin.setDefaultEncoding('utf8')
+
+// 如果是 Windows，設定控制台編碼
+if (process.platform === 'win32') {
+  try {
+    const { execSync } = await import('child_process')
+    execSync('chcp 65001', { stdio: 'ignore' })
+  } catch (err) {
+    // 忽略錯誤
+  }
+}
+
+// 載入專案根目錄的 .env 檔案
+dotenv.config({ path: '../.env' })
 
 // 從環境變數讀取 Supabase 配置
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || process.env.SUPABASE_URL
@@ -37,13 +55,25 @@ const positionOptions = [
   { key: 'other', label: '其他' }
 ]
 
-// 縣市選項
-const countyOptions = [
-  '台北市', '新北市', '桃園市', '台中市', '台南市', '高雄市',
-  '基隆市', '新竹市', '嘉義市', '新竹縣', '苗栗縣', '彰化縣',
-  '南投縣', '雲林縣', '嘉義縣', '屏東縣', '宜蘭縣', '花蓮縣',
-  '台東縣', '澎湖縣', '金門縣', '連江縣'
-]
+// 從資料庫動態獲取縣市列表
+async function getCountyOptions() {
+  try {
+    const { data: counties, error } = await supabase
+      .from('County')
+      .select('id, name')
+      .order('name')
+
+    if (error) {
+      console.error('❌ 獲取縣市列表失敗:', error.message)
+      return null
+    }
+
+    return counties
+  } catch (error) {
+    console.error('❌ 查詢縣市失敗:', error.message)
+    return null
+  }
+}
 
 async function createTeam() {
   console.log('\n🏛️  Polify 團隊建立工具')
@@ -72,18 +102,27 @@ async function createTeam() {
     }
     const position = positionOptions[positionIndex]
 
-    // 選擇縣市
+    // 動態獲取並選擇縣市
+    console.log('\n⏳ 正在載入縣市列表...')
+    const countyOptions = await getCountyOptions()
+    
+    if (!countyOptions) {
+      console.error('❌ 無法載入縣市列表')
+      return
+    }
+
     console.log('\n請選擇服務縣市：')
     countyOptions.forEach((county, index) => {
-      console.log(`${index + 1}. ${county}`)
+      console.log(`${index + 1}. ${county.name}`)
     })
+    
     const countyIndex = readlineSync.questionInt('\n請輸入數字 (1-' + countyOptions.length + '): ') - 1
     
     if (countyIndex < 0 || countyIndex >= countyOptions.length) {
       console.error('❌ 無效的縣市選擇')
       return
     }
-    const county = countyOptions[countyIndex]
+    const selectedCounty = countyOptions[countyIndex]
 
     // 其他資訊
     const district = readlineSync.question('服務選區/地區 (選填): ').trim()
@@ -100,7 +139,7 @@ async function createTeam() {
     console.log(`團隊名稱: ${teamName}`)
     console.log(`政治人物: ${politicianName}`)
     console.log(`職位: ${position.label}`)
-    console.log(`服務縣市: ${county}`)
+    console.log(`服務縣市: ${selectedCounty.name}`)
     console.log(`服務地區: ${district || '未指定'}`)
     console.log(`辦公室電話: ${phone || '未提供'}`)
     console.log(`辦公室Email: ${email || '未提供'}`)
@@ -118,12 +157,28 @@ async function createTeam() {
     // 建立團隊
     console.log('\n⏳ 正在建立團隊...')
     
+    // 處理 district 資訊 - 如果有輸入地區名稱，嘗試查詢對應的 District ID
+    let districtId = null
+    if (district) {
+      const { data: districtData, error: districtError } = await supabase
+        .from('District')
+        .select('id')
+        .eq('name', district)
+        .eq('county_id', selectedCounty.id)
+        .single()
+
+      if (!districtError && districtData) {
+        districtId = districtData.id
+      }
+      // 如果找不到對應的區域，保持 districtId 為 null（不影響建立流程）
+    }
+
     const teamData = {
       name: teamName,
       politician_name: politicianName,
       position: position.key,
-      county: county,
-      district: district || null,
+      county: selectedCounty.id,  // 使用縣市的 UUID
+      district: districtId,       // 使用區域的 UUID 或 null
       phone: phone || null,
       email: email || null,
       address: address || null,
@@ -135,11 +190,16 @@ async function createTeam() {
     const { data, error } = await supabase
       .from('Group')
       .insert(teamData)
-      .select()
+      .select(`
+        *,
+        county_info:County(name),
+        district_info:District(name)
+      `)
       .single()
 
     if (error) {
       console.error('❌ 建立團隊失敗:', error.message)
+      console.error('錯誤詳情:', error)
       return
     }
 
@@ -147,6 +207,11 @@ async function createTeam() {
     console.log('=====================================')
     console.log(`🆔 團隊ID: ${data.id}`)
     console.log(`🏷️  團隊名稱: ${data.name}`)
+    console.log(`👤 政治人物: ${data.politician_name}`)
+    console.log(`📍 服務縣市: ${data.county_info?.name || '未知'}`)
+    if (data.district_info?.name) {
+      console.log(`📍 服務地區: ${data.district_info.name}`)
+    }
     console.log(`🔑 註冊碼: ${data.registration_code}`)
     console.log('=====================================')
     console.log('\n📋 請將註冊碼提供給政治人物：')
@@ -161,6 +226,7 @@ async function createTeam() {
 
   } catch (error) {
     console.error('❌ 發生錯誤:', error.message)
+    console.error('完整錯誤:', error)
   }
 }
 
@@ -168,9 +234,17 @@ async function createTeam() {
 async function main() {
   try {
     // 測試 Supabase 連接
+    console.log('🔍 除錯資訊：')
+    console.log('REACT_APP_SUPABASE_URL:', process.env.REACT_APP_SUPABASE_URL ? '✅ 已載入' : '❌ 未載入')
+    console.log('SUPABASE_SERVICE_ROLE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY ? '✅ 已載入' : '❌ 未載入')
+    console.log('dotenv 路徑:', '../.env')
+    console.log('當前工作目錄:', process.cwd())
+    console.log('最終 URL:', supabaseUrl ? '✅ 有值' : '❌ 無值')
+    console.log('最終 Service Key:', supabaseServiceKey ? '✅ 有值' : '❌ 無值')
+
     const { data, error } = await supabase
       .from('Group')
-      .select('count(*)', { count: 'exact', head: true })
+      .select('*')
 
     if (error) {
       console.error('❌ Supabase 連接失敗:', error.message)
@@ -182,6 +256,8 @@ async function main() {
     }
 
     console.log('✅ Supabase 連接成功')
+    console.log(`📊 Group 表格目前有 ${data?.length || 0} 筆記錄`)
+    
     await createTeam()
 
   } catch (error) {
