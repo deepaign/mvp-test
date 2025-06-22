@@ -249,10 +249,17 @@ function App() {
 
   const handleLogout = async () => {
     try {
-      console.log('執行登出')
+      console.log('執行完整登出（包括撤銷 Google 授權）')
       hasInitialized.current = false
       isProcessingAuth.current = false
-      await supabase.auth.signOut()
+      
+      // 使用新的 AuthService 進行完整登出
+      const { AuthService } = await import('./services/authService')
+      const result = await AuthService.completeLogout()
+      
+      if (!result.success) {
+        console.error('登出失敗:', result.error)
+      }
     } catch (error) {
       console.error(`登出失敗: ${error.message}`)
     }
@@ -283,7 +290,11 @@ function App() {
       case 'homepage':
         return (
           <div className="auth-page">
-            <Homepage onLoginClick={handleLoginClick} />
+            <Homepage 
+              onLoginClick={handleLoginClick} 
+              user={user}
+              onLogout={handleLogout}
+            />
           </div>
         )
       
@@ -300,6 +311,7 @@ function App() {
             <JoinTeamSelection 
               user={user}
               onSelectJoinMethod={handleSelectJoinMethod}
+              onLogout={handleLogout}
             />
           </div>
         )
@@ -311,6 +323,7 @@ function App() {
               user={user}
               onTeamJoined={handleTeamJoined}
               onBack={handleBackToJoinSelection}
+              onLogout={handleLogout}
             />
           </div>
         )
@@ -322,6 +335,7 @@ function App() {
               user={user}
               onTeamJoined={handleTeamJoined}
               onBack={handleBackToJoinSelection}
+              onLogout={handleLogout}
             />
           </div>
         )
@@ -350,7 +364,11 @@ function App() {
       default:
         return (
           <div className="auth-page">
-            <Homepage onLoginClick={handleLoginClick} />
+            <Homepage 
+              onLoginClick={handleLoginClick}
+              user={user}
+              onLogout={handleLogout}
+            />
           </div>
         )
     }

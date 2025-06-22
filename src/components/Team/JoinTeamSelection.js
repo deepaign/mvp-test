@@ -1,6 +1,8 @@
+// 更新的 src/components/Team/JoinTeamSelection.js
 import React from 'react'
+import LogoutButton from '../Common/LogoutButton'
 
-function JoinTeamSelection({ user, onSelectJoinMethod }) {
+function JoinTeamSelection({ user, onSelectJoinMethod, onLogout }) {
   
   const handleSelectRegistrationCode = () => {
     onSelectJoinMethod('registrationCode')
@@ -25,8 +27,22 @@ function JoinTeamSelection({ user, onSelectJoinMethod }) {
         padding: '40px',
         width: '100%',
         maxWidth: '600px',
-        boxShadow: '0 20px 40px rgba(0,0,0,0.1)'
+        boxShadow: '0 20px 40px rgba(0,0,0,0.1)',
+        position: 'relative'
       }}>
+        {/* 登出按鈕 */}
+        <div style={{
+          position: 'absolute',
+          top: '15px',
+          right: '15px'
+        }}>
+          <LogoutButton 
+            onLogout={onLogout}
+            variant="minimal"
+            size="small"
+          />
+        </div>
+
         {/* 頭部區域 */}
         <div style={{ textAlign: 'center', marginBottom: '40px' }}>
           <div style={{ fontSize: '4rem', marginBottom: '16px' }}>🏛️</div>

@@ -19,8 +19,8 @@ function LoginPage({ onBackToHome }) {
           queryParams: {
           prompt: 'consent select_account', // 🔧 正確的多參數格式
           access_type: 'offline',
-          approval_prompt: 'force', // 強制重新授權
-          include_granted_scopes: 'false', // 不包含之前的授權範圍
+          // approval_prompt: 'force', // 強制重新授權
+          // include_granted_scopes: 'false', // 不包含之前的授權範圍
         }
         }
       })

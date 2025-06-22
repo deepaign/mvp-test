@@ -1,7 +1,9 @@
+// 更新的 src/components/Team/RegistrationCodeInput.js
 import React, { useState } from 'react'
 import { TeamService } from '../../services/teamService'
+import LogoutButton from '../Common/LogoutButton'
 
-function RegistrationCodeInput({ user, onTeamJoined }) {
+function RegistrationCodeInput({ user, onTeamJoined, onBack, onLogout }) {
   const [registrationCode, setRegistrationCode] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -110,8 +112,40 @@ function RegistrationCodeInput({ user, onTeamJoined }) {
         boxShadow: '0 20px 40px rgba(0,0,0,0.1)',
         position: 'relative'
       }}>
+        {/* 返回和登出按鈕 */}
+        <div style={{
+          position: 'absolute',
+          top: '15px',
+          left: '15px',
+          right: '15px',
+          display: 'flex',
+          justifyContent: 'space-between'
+        }}>
+          <button
+            onClick={onBack}
+            style={{
+              background: 'transparent',
+              border: '1.5px solid #ddd',
+              borderRadius: '6px',
+              padding: '5px 8px',
+              fontSize: '11px',
+              color: '#666',
+              cursor: 'pointer',
+              transition: 'all 0.3s ease'
+            }}
+          >
+            ← 返回
+          </button>
+          
+          <LogoutButton 
+            onLogout={onLogout}
+            variant="minimal"
+            size="small"
+          />
+        </div>
+
         {/* 頭部區域 */}
-        <div style={{ textAlign: 'center', marginBottom: '30px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '30px', marginTop: '15px' }}>
           <div style={{ fontSize: '4rem', marginBottom: '16px' }}>🏛️</div>
           <h1 style={{ fontSize: '2rem', color: '#333', marginBottom: '10px', margin: 0 }}>
             歡迎加入 Polify！
