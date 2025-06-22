@@ -17,9 +17,11 @@ function LoginPage({ onBackToHome }) {
         options: {
           redirectTo: window.location.origin,
           queryParams: {
-            access_type: 'offline',
-            prompt: 'select_account', // 強制顯示帳號選擇
-          }
+          prompt: 'consent select_account', // 🔧 正確的多參數格式
+          access_type: 'offline',
+          approval_prompt: 'force', // 強制重新授權
+          include_granted_scopes: 'false', // 不包含之前的授權範圍
+        }
         }
       })
 

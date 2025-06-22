@@ -1,6 +1,10 @@
 #!/usr/bin/env node
+import dotenv from 'dotenv'
 import { createClient } from '@supabase/supabase-js'
 import readlineSync from 'readline-sync'
+
+// 載入專案根目錄的 .env 檔案
+dotenv.config({ path: '../.env' })
 
 // 從環境變數讀取 Supabase 配置
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || process.env.SUPABASE_URL
