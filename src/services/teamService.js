@@ -368,39 +368,37 @@ export class TeamService {
   // 生成幕僚邀請碼
   static async createStaffInvitation(groupId, createdBy, hoursValid = 72) {
     try {
-      // 驗證創建者是否為團隊負責人
-      const { data: leaderCheckRecords, error: leaderError } = await supabase
+      // 驗證創建者是否為團隊負責人，同時獲取 member.id
+      const { data: member } = await supabase
         .from('Member')
-        .select('is_leader')
+        .select('id, is_leader')  // ✅ 添加 id 字段
         .eq('auth_user_id', createdBy)
         .eq('group_id', groupId)
+        .single()
 
-      if (leaderError || !leaderCheckRecords || leaderCheckRecords.length === 0) {
-        return { success: false, message: '您不是該團隊成員' }
-      }
-
-      const leaderInfo = leaderCheckRecords[0]
-      if (!leaderInfo || !leaderInfo.is_leader) {
+      if (!member || !member.is_leader) {
         return { success: false, message: '只有團隊負責人可以邀請成員' }
       }
 
       const inviteCode = this.generateInviteCode()
       const expiresAt = new Date(Date.now() + hoursValid * 60 * 60 * 1000)
       
-      const { error: insertError } = await supabase
+      const { data, error } = await supabase
         .from('TeamInvitation')
         .insert({
           group_id: groupId,
           invite_code: inviteCode,
           expires_at: expiresAt,
-          invited_by: createdBy,
+          invited_by: member.id,  // ✅ 使用 member.id 而不是 auth_user_id
           max_uses: 5,
           status: 'active'
         })
+        .select()
+        .single()
 
-      if (insertError) {
-        console.error('生成邀請碼失敗:', insertError)
-        return { success: false, message: '生成邀請碼失敗' }
+      if (error) {
+        console.error('插入邀請記錄失敗:', error)
+        throw error
       }
       
       return { 
@@ -411,7 +409,7 @@ export class TeamService {
       }
     } catch (error) {
       console.error('生成邀請碼失敗:', error)
-      return { success: false, message: '生成邀請碼失敗，請稍後重試' }
+      return { success: false, error: error.message }
     }
   }
 
