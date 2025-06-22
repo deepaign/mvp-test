@@ -1,4 +1,4 @@
-// App.js - 簡化邏輯，修復載入問題
+// 簡化的 App.js - 修復團隊檢查邏輯
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from './supabase'
@@ -47,34 +47,49 @@ function App() {
     }
   }, [isFullscreenPage])
 
-  // 檢查用戶是否已有團隊
-  const checkUserTeam = useCallback(async (authUser) => {
+  // 決定用戶應該導向哪個頁面
+  const determineUserDestination = useCallback(async (authUser) => {
+    console.log('=== 決定用戶導向 ===')
+    console.log('用戶:', authUser.email, 'ID:', authUser.id)
+    
     try {
-      console.log(`檢查用戶團隊狀態: ${authUser.id}`)
+      // 檢查用戶是否有活躍團隊
+      const teamResult = await TeamService.checkUserTeam(authUser.id)
+      console.log('團隊檢查結果:', teamResult)
       
-      // 直接調用 TeamService，移除超時保護
-      const teamCheck = await TeamService.checkUserTeam(authUser.id)
-      console.log('TeamService.checkUserTeam 返回結果:', teamCheck)
-      
-      if (teamCheck.hasTeam) {
-        console.log(`找到現有團隊: ${teamCheck.team.name}`)
-        return { 
-          hasTeam: true, 
-          member: teamCheck.member,
-          team: teamCheck.team 
-        }
+      if (teamResult.hasTeam && teamResult.member && teamResult.team) {
+        console.log('✅ 用戶有活躍團隊')
+        console.log('成員角色:', teamResult.member.role)
+        console.log('是否為負責人:', teamResult.member.is_leader)
+        console.log('團隊名稱:', teamResult.team.name)
+        
+        // 設置狀態並導向儀表板
+        setMember(teamResult.member)
+        setTeam(teamResult.team)
+        setCurrentStep('dashboard')
+        
+        return { destination: 'dashboard', teamResult }
       } else {
-        console.log('用戶尚未加入任何團隊')
-        return { hasTeam: false, member: null, team: null }
+        console.log('❌ 用戶沒有活躍團隊，導向加入選擇頁面')
+        console.log('錯誤信息:', teamResult.error)
+        
+        // 清理狀態並導向加入選擇
+        setMember(null)
+        setTeam(null)
+        setCurrentStep('joinTeamSelection')
+        
+        return { destination: 'joinTeamSelection', teamResult }
       }
     } catch (error) {
-      console.error(`檢查團隊狀態異常: ${error.message}`)
-      console.error('完整錯誤:', error)
-      return { hasTeam: false, member: null, team: null }
+      console.error('決定用戶導向時發生錯誤:', error)
+      setMember(null)
+      setTeam(null)
+      setCurrentStep('joinTeamSelection')
+      return { destination: 'joinTeamSelection', error: error.message }
     }
   }, [])
 
-  // 處理用戶登入後的邏輯
+  // 處理用戶登入
   const handleUserSignedIn = useCallback(async (authUser) => {
     if (isProcessingAuth.current) {
       console.log('正在處理用戶登入，跳過重複處理')
@@ -85,7 +100,8 @@ function App() {
     setLoading(true)
 
     try {
-      console.log('處理用戶登入:', authUser.email)
+      console.log('=== 處理用戶登入 ===')
+      console.log('用戶:', authUser.email)
       
       // 清理 OAuth URL 參數
       const url = new URL(window.location)
@@ -109,33 +125,22 @@ function App() {
         console.log('已清理 OAuth URL 參數')
       }
 
+      // 設置用戶狀態
       setUser(authUser)
 
-      // 檢查團隊狀態
-      console.log('開始檢查團隊狀態...')
-      const teamResult = await checkUserTeam(authUser)
-      console.log('團隊檢查結果:', teamResult)
-      
-      if (teamResult.hasTeam && teamResult.member && teamResult.team) {
-        console.log('用戶已有團隊，導向儀表板')
-        setMember(teamResult.member)
-        setTeam(teamResult.team)
-        setCurrentStep('dashboard')
-      } else {
-        console.log('用戶沒有團隊，導向加入選擇頁面')
-        setCurrentStep('joinTeamSelection')
-      }
+      // 決定用戶應該導向哪裡
+      const result = await determineUserDestination(authUser)
+      console.log('用戶導向結果:', result.destination)
 
     } catch (error) {
       console.error('處理用戶登入失敗:', error)
-      // 確保即使出錯也能導向某個頁面
       setCurrentStep('joinTeamSelection')
     } finally {
-      console.log('完成用戶登入處理，設定 loading = false')
+      console.log('完成用戶登入處理')
       setLoading(false)
       isProcessingAuth.current = false
     }
-  }, [checkUserTeam])
+  }, [determineUserDestination])
 
   // 初始化應用程式
   useEffect(() => {
@@ -145,7 +150,7 @@ function App() {
 
     const initializeApp = async () => {
       try {
-        console.log('初始化應用程式...')
+        console.log('=== 初始化應用程式 ===')
         hasInitialized.current = true
 
         // 檢查是否為 OAuth 重定向
@@ -191,7 +196,7 @@ function App() {
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log(`Auth 狀態變化: ${event}`, session?.user?.email || 'no user')
+        console.log(`=== Auth 狀態變化: ${event} ===`, session?.user?.email || 'no user')
         
         if (event === 'SIGNED_IN' && session?.user) {
           await handleUserSignedIn(session.user)
@@ -203,6 +208,7 @@ function App() {
           setCurrentStep('homepage')
           setLoading(false)
           isProcessingAuth.current = false
+          hasInitialized.current = false
         }
       }
     )
@@ -210,17 +216,25 @@ function App() {
     return () => subscription.unsubscribe()
   }, [handleUserSignedIn])
 
+  // 處理登入按鈕點擊
   const handleLoginClick = async () => {
-    console.log('用戶點擊登入按鈕')
+    console.log('=== 用戶點擊登入按鈕 ===')
     
     if (user) {
-      console.log('用戶已登入，檢查當前狀態...')
-      if (member && team) {
-        setCurrentStep('dashboard')
-      } else {
+      console.log('用戶已登入，重新檢查狀態...')
+      setLoading(true)
+      
+      try {
+        const result = await determineUserDestination(user)
+        console.log('重新檢查結果:', result.destination)
+      } catch (error) {
+        console.error('重新檢查狀態失敗:', error)
         setCurrentStep('joinTeamSelection')
+      } finally {
+        setLoading(false)
       }
     } else {
+      console.log('用戶未登入，導向登入頁面')
       setCurrentStep('login')
     }
   }
@@ -234,8 +248,12 @@ function App() {
     }
   }
 
-  const handleTeamJoined = (memberData, teamData) => {
-    console.log(`團隊加入成功: ${teamData.name}`)
+  const handleTeamJoined = async (memberData, teamData) => {
+    console.log(`=== 團隊加入成功 ===`)
+    console.log('團隊:', teamData.name)
+    console.log('成員角色:', memberData.role)
+    console.log('是否為負責人:', memberData.is_leader)
+    
     setMember(memberData)
     setTeam(teamData)
     setCurrentStep('dashboard')
@@ -243,7 +261,7 @@ function App() {
 
   const handleLogout = async () => {
     try {
-      console.log('執行完整登出（包括撤銷 Google 授權）')
+      console.log('=== 執行登出 ===')
       hasInitialized.current = false
       isProcessingAuth.current = false
       
@@ -335,7 +353,10 @@ function App() {
         )
       
       case 'dashboard':
-        if (!member || !team) return <Loading />
+        if (!member || !team) {
+          console.log('Dashboard 渲染時缺少資料:', { member: !!member, team: !!team })
+          return <Loading />
+        }
         
         return (
           <div className="content-page">
@@ -356,6 +377,7 @@ function App() {
         )
       
       default:
+        console.log('未知的 currentStep:', currentStep)
         return (
           <div className="auth-page">
             <Homepage 

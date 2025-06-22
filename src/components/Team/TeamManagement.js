@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { TeamService } from '../../services/teamService'
+import MemberStatusDebug from '../Debug/MemberStatusDebug'
 
 function TeamManagement({ member, team, onLogout }) {
   const [members, setMembers] = useState([])
@@ -9,20 +10,33 @@ function TeamManagement({ member, team, onLogout }) {
   const [inviteLoading, setInviteLoading] = useState(false)
   const [error, setError] = useState('')
 
-  // 載入團隊成員
+  // 載入團隊成員 - 添加更詳細的調試
   const loadTeamMembers = React.useCallback(async () => {
     try {
+      console.log('=== 載入團隊成員 ===')
+      console.log('團隊ID:', team.id)
+      console.log('用戶ID:', member.auth_user_id)
+      
       setLoading(true)
+      setError('')
+      
       const result = await TeamService.getTeamMembers(team.id, member.auth_user_id)
       
+      console.log('=== 載入成員結果 ===', result)
+      
       if (result.success) {
+        console.log(`✅ 成功載入 ${result.members.length} 位活躍成員:`)
+        result.members.forEach(m => {
+          console.log(`  - ${m.name} (${m.role}, status: ${m.status || '未知'})`)
+        })
         setMembers(result.members)
       } else {
+        console.error('❌ 載入成員失敗:', result.message)
         setError(result.message)
       }
     } catch (error) {
-      console.error('載入團隊成員失敗:', error)
-      setError('載入團隊成員失敗')
+      console.error('❌ 載入團隊成員異常:', error)
+      setError(`載入團隊成員失敗：${error.message}`)
     } finally {
       setLoading(false)
     }
@@ -36,15 +50,25 @@ function TeamManagement({ member, team, onLogout }) {
   const generateInviteCode = async () => {
     try {
       setInviteLoading(true)
+      setError('')
+      
+      console.log('開始生成邀請碼...')
+      console.log('團隊 ID:', team.id)
+      console.log('用戶 ID:', member.auth_user_id)
+      console.log('是否為負責人:', member.is_leader)
+      
       const result = await TeamService.createStaffInvitation(
         team.id,
         member.auth_user_id
       )
 
+      console.log('邀請碼生成結果:', result)
+
       if (result.success) {
         setInviteCode(result.inviteCode)
         setShowInviteModal(true)
       } else {
+        console.error('生成失敗:', result.message)
         setError(result.message)
       }
     } catch (error) {
@@ -55,26 +79,61 @@ function TeamManagement({ member, team, onLogout }) {
     }
   }
 
-  // 移除成員
+  // 移除成員 - 添加完整的調試和驗證
   const removeMember = async (memberId, memberName) => {
-    if (!window.confirm(`確定要移除 ${memberName} 嗎？`)) return
+    // 確認對話框
+    const confirmed = window.confirm(
+      `確定要移除 ${memberName} 嗎？\n\n移除後該成員將無法訪問團隊系統。`
+    )
+    
+    if (!confirmed) return
 
     try {
+      console.log('=== 開始移除成員 ===')
+      console.log('成員ID:', memberId)
+      console.log('成員姓名:', memberName)
+      console.log('團隊ID:', team.id)
+      console.log('操作者ID:', member.auth_user_id)
+      console.log('操作者是否為負責人:', member.is_leader)
+      
+      // 清除之前的錯誤
+      setError('')
+      
       const result = await TeamService.removeMember(
         team.id,
         memberId,
         member.auth_user_id
       )
 
+      console.log('=== 移除成員結果 ===', result)
+
       if (result.success) {
-        setMembers(members.filter(m => m.id !== memberId))
-        alert(result.message)
+        console.log('✅ 移除成功，更新本地狀態')
+        
+        // 立即更新本地成員列表
+        setMembers(prevMembers => {
+          const newMembers = prevMembers.filter(m => m.id !== memberId)
+          console.log('本地成員列表已更新:', newMembers.map(m => m.name))
+          return newMembers
+        })
+        
+        // 顯示成功訊息
+        alert(`✅ ${result.message}`)
+        
+        // 重新載入成員列表以確保同步
+        console.log('重新載入成員列表以確保同步...')
+        await loadTeamMembers()
+        
       } else {
-        setError(result.message)
+        console.error('❌ 移除失敗:', result.message)
+        setError(result.message || '移除成員失敗')
+        alert(`❌ 移除失敗：${result.message}`)
       }
     } catch (error) {
-      console.error('移除成員失敗:', error)
-      setError('移除成員失敗')
+      console.error('❌ 移除成員異常:', error)
+      const errorMessage = `移除成員時發生錯誤：${error.message}`
+      setError(errorMessage)
+      alert(`❌ ${errorMessage}`)
     }
   }
 
@@ -310,6 +369,11 @@ function TeamManagement({ member, team, onLogout }) {
             </div>
           )}
         </div>
+
+        {/* 調試工具 */}
+        {(process.env.NODE_ENV === 'development' || member.is_leader) && (
+          <MemberStatusDebug team={team} member={member} />
+        )}
       </div>
 
       {/* 邀請碼彈窗 */}

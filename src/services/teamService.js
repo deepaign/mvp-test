@@ -6,108 +6,80 @@ export class TeamService {
   // 檢查用戶是否已有團隊
   static async checkUserTeam(userId) {
     try {
-      console.log('TeamService: 開始檢查用戶團隊...', userId)
+      console.log('=== checkUserTeam 開始檢查 ===')
+      console.log('用戶 ID:', userId)
       
-      // 先測試最簡單的查詢
-      console.log('TeamService: 測試 Member 表連接...')
-      const { count, error: countError } = await supabase
-        .from('Member')
-        .select('*', { count: 'exact', head: true })
-      
-      console.log('TeamService: Member 表記錄總數:', count, 'countError:', countError)
-      
-      if (countError) {
-        console.error('TeamService: Member 表連接失敗', countError)
-        return { hasTeam: false, error: countError.message }
-      }
-      
-      // 先檢查 Member 表，不使用 .single()，也先不加狀態篩選
-      console.log('TeamService: 查詢 Member 表（不加狀態篩選）...')
-      const { data: allMemberRecords, error: allMemberError } = await supabase
+      // 第一步：查詢用戶的 Member 記錄
+      const { data: memberData, error: memberError } = await supabase
         .from('Member')
         .select('*')
         .eq('auth_user_id', userId)
+        .eq('status', 'active')
+        .maybeSingle() // 使用 maybeSingle 而不是 single
 
-      console.log('TeamService: 所有 Member 查詢完成', { 
-        allMemberRecords, 
-        allMemberError,
-        recordCount: allMemberRecords?.length || 0
-      })
-
-      if (allMemberError) {
-        console.error('TeamService: Member 查詢錯誤', allMemberError)
-        return { hasTeam: false, error: allMemberError.message }
-      }
-
-      // 如果沒有任何記錄，直接返回
-      if (!allMemberRecords || allMemberRecords.length === 0) {
-        console.log('TeamService: 沒有找到用戶的任何成員記錄')
-        return { hasTeam: false }
-      }
-
-      // 過濾 active 狀態的記錄
-      const activeMemberRecords = allMemberRecords.filter(record => record.status === 'active')
-      console.log('TeamService: Active 成員記錄:', activeMemberRecords.length)
-
-      // 檢查是否找到活躍的成員記錄
-      if (activeMemberRecords.length === 0) {
-        console.log('TeamService: 沒有找到活躍的用戶成員記錄')
-        return { hasTeam: false }
-      }
-
-      const memberRecords = activeMemberRecords
-      const memberError = null
-
-      console.log('TeamService: Member 查詢完成', { memberRecords, memberError })
+      console.log('Member 查詢結果:', { memberData, memberError })
 
       if (memberError) {
-        console.error('TeamService: Member 查詢錯誤', memberError)
+        console.error('查詢 Member 失敗:', memberError)
         return { hasTeam: false, error: memberError.message }
       }
 
-      // 檢查是否找到成員記錄
-      if (!memberRecords || memberRecords.length === 0) {
-        console.log('TeamService: 沒有找到用戶的成員記錄')
+      if (!memberData) {
+        console.log('❌ 沒有找到活躍的 Member 記錄')
         return { hasTeam: false }
       }
 
-      const userMember = memberRecords[0] // 取第一個記錄
+      console.log('✅ 找到 Member 記錄:', {
+        id: memberData.id,
+        name: memberData.name,
+        role: memberData.role,
+        is_leader: memberData.is_leader,
+        group_id: memberData.group_id,
+        status: memberData.status
+      })
 
-      if (userMember && userMember.group_id) {
-        console.log('TeamService: 找到成員記錄，查詢團隊資訊...', userMember.group_id)
-        
-        // 查詢團隊資訊，也不使用 .single()
-        const { data: teamRecords, error: teamError } = await supabase
-          .from('Group')
-          .select('*')
-          .eq('id', userMember.group_id)
+      // 第二步：查詢對應的 Group 記錄
+      const { data: groupData, error: groupError } = await supabase
+        .from('Group')
+        .select('*')
+        .eq('id', memberData.group_id)
+        .single()
 
-        console.log('TeamService: 團隊查詢完成', { teamRecords, teamError })
+      console.log('Group 查詢結果:', { groupData, groupError })
 
-        if (teamError) {
-          console.error('TeamService: 團隊查詢錯誤', teamError)
-          return { hasTeam: false, error: teamError.message }
-        }
-
-        if (teamRecords && teamRecords.length > 0) {
-          const userTeam = teamRecords[0]
-          console.log('TeamService: 成功找到用戶團隊', userTeam.name)
-          
-          // 添加縣市名稱
-          const enrichedTeam = await this.enrichTeamWithCountyName(userTeam)
-          
-          return { 
-            hasTeam: true, 
-            member: userMember, 
-            team: enrichedTeam 
-          }
-        }
+      if (groupError) {
+        console.error('查詢 Group 失敗:', groupError)
+        return { hasTeam: false, error: groupError.message }
       }
 
-      console.log('TeamService: 用戶沒有團隊，返回 false')
-      return { hasTeam: false }
+      if (!groupData) {
+        console.log('❌ 沒有找到對應的 Group 記錄')
+        return { hasTeam: false }
+      }
+
+      console.log('✅ 找到 Group 記錄:', {
+        id: groupData.id,
+        name: groupData.name,
+        politician_name: groupData.politician_name,
+        status: groupData.status
+      })
+
+      // 第三步：檢查團隊狀態
+      if (groupData.status !== 'active') {
+        console.log('❌ 團隊狀態不是 active:', groupData.status)
+        return { hasTeam: false }
+      }
+
+      console.log('🎉 用戶有活躍團隊，返回成功結果')
+      
+      return { 
+        hasTeam: true, 
+        member: memberData, 
+        team: groupData 
+      }
+      
     } catch (error) {
-      console.error('TeamService: 檢查用戶團隊異常:', error)
+      console.error('checkUserTeam 異常:', error)
       return { hasTeam: false, error: error.message }
     }
   }
@@ -152,89 +124,104 @@ export class TeamService {
   // 政治人物使用註冊碼加入團隊
   static async joinTeamWithRegistrationCode(registrationCode, userId, userName, userEmail) {
     try {
-      console.log('TeamService: 開始加入團隊流程...')
+      console.log('=== joinTeamWithRegistrationCode 開始 ===')
+      console.log('註冊碼:', registrationCode)
+      console.log('用戶ID:', userId)
+      console.log('用戶名:', userName)
       
       // 先驗證註冊碼
       const validation = await this.validateRegistrationCode(registrationCode)
       if (!validation.valid) {
+        console.log('❌ 註冊碼驗證失敗:', validation.message)
         return { success: false, message: validation.message }
       }
 
-      const targetTeam = validation.team
+      const team = validation.team
+      console.log('✅ 註冊碼驗證成功，團隊:', team.name)
 
       // 檢查用戶是否已經有團隊
-      const { data: existingMembers, error: checkError } = await supabase
+      const { data: existingMember } = await supabase
         .from('Member')
-        .select('group_id')
+        .select('group_id, status')
         .eq('auth_user_id', userId)
+        .maybeSingle()
 
-      if (checkError) {
-        console.error('TeamService: 檢查現有成員失敗', checkError)
-        return { success: false, message: '檢查現有團隊失敗' }
-      }
-
-      if (existingMembers && existingMembers.length > 0) {
+      if (existingMember && existingMember.status === 'active') {
+        console.log('❌ 用戶已經有活躍團隊:', existingMember.group_id)
         return { success: false, message: '您已經加入其他團隊' }
       }
 
-      console.log('TeamService: 開始建立成員記錄...')
+      console.log('✅ 用戶可以加入團隊')
 
-      // 建立成員記錄
-      const { data: newMemberRecords, error: memberError } = await supabase
-        .from('Member')
-        .insert({
-          auth_user_id: userId,
-          group_id: targetTeam.id,
-          name: userName,
-          email: userEmail,
-          role: 'politician',
-          is_leader: true,
-          status: 'active'
-        })
-        .select()
+      // 建立/更新成員記錄
+      let memberData
+      if (existingMember && existingMember.status === 'inactive') {
+        // 重新激活之前的成員
+        console.log('重新激活之前的成員...')
+        const { data: updatedMember, error: updateError } = await supabase
+          .from('Member')
+          .update({
+            group_id: team.id,
+            name: userName,
+            email: userEmail,
+            role: 'politician',
+            is_leader: true,
+            status: 'active',
+            updated_at: new Date().toISOString()
+          })
+          .eq('auth_user_id', userId)
+          .select()
+          .single()
 
-      console.log('TeamService: 成員建立結果', { newMemberRecords, memberError })
+        if (updateError) throw updateError
+        memberData = updatedMember
+      } else {
+        // 建立新成員記錄
+        console.log('建立新成員記錄...')
+        const { data: newMember, error: memberError } = await supabase
+          .from('Member')
+          .insert({
+            auth_user_id: userId,
+            group_id: team.id,
+            name: userName,
+            email: userEmail,
+            role: 'politician',
+            is_leader: true,
+            status: 'active'
+          })
+          .select()
+          .single()
 
-      if (memberError || !newMemberRecords || newMemberRecords.length === 0) {
-        console.error('TeamService: 建立成員失敗', memberError)
-        return { success: false, message: '建立成員記錄失敗' }
+        if (memberError) throw memberError
+        memberData = newMember
       }
 
-      const newMember = newMemberRecords[0]
-
-      console.log('TeamService: 開始更新團隊狀態...')
+      console.log('✅ 成員記錄已建立/更新:', memberData.id)
 
       // 更新團隊狀態
-      const { error: teamUpdateError } = await supabase
+      const { error: teamError } = await supabase
         .from('Group')
         .update({
           code_used: true,
           code_used_at: new Date().toISOString(),
-          leader_id: newMember.id,
+          leader_id: memberData.id,
           status: 'active'
         })
-        .eq('id', targetTeam.id)
+        .eq('id', team.id)
 
-      console.log('TeamService: 團隊更新結果', { teamUpdateError })
+      if (teamError) throw teamError
 
-      if (teamUpdateError) {
-        console.error('TeamService: 更新團隊失敗', teamUpdateError)
-        // 嘗試回滾成員記錄
-        await supabase.from('Member').delete().eq('id', newMember.id)
-        return { success: false, message: '更新團隊狀態失敗' }
-      }
-
-      console.log('TeamService: 團隊加入成功')
+      console.log('✅ 團隊狀態已更新')
 
       return { 
         success: true, 
-        member: newMember, 
-        team: targetTeam,
-        message: `成功加入 ${targetTeam.name}` 
+        member: memberData, 
+        team: team,
+        message: `成功加入 ${team.name}` 
       }
     } catch (error) {
-      console.error('TeamService: 加入團隊失敗:', error)
-      return { success: false, message: `加入團隊失敗：${error.message}` }
+      console.error('加入團隊失敗:', error)
+      return { success: false, message: '加入團隊失敗，請稍後重試' }
     }
   }
 
@@ -294,70 +281,98 @@ export class TeamService {
   // 幕僚使用邀請碼加入團隊
   static async joinTeamWithInviteCode(inviteCode, userId, userName, userEmail) {
     try {
+      console.log('=== joinTeamWithInviteCode 開始 ===')
+      console.log('邀請碼:', inviteCode)
+      console.log('用戶ID:', userId)
+      console.log('用戶名:', userName)
+      
       // 驗證邀請碼
       const validation = await this.validateInviteCode(inviteCode)
       if (!validation.valid) {
+        console.log('❌ 邀請碼驗證失敗:', validation.message)
         return { success: false, message: validation.message }
       }
 
-      const validInvitation = validation.invitation
-      const inviteTeam = validation.team
+      const invitation = validation.invitation
+      const team = validation.team
+      console.log('✅ 邀請碼驗證成功，團隊:', team.name)
 
-      // 檢查是否已經是團隊成員
-      const { data: existingMembers, error: checkError } = await supabase
+      // 檢查是否已經是活躍的團隊成員
+      const { data: existingMember } = await supabase
         .from('Member')
-        .select('id')
+        .select('id, status, group_id')
         .eq('auth_user_id', userId)
-        .eq('group_id', validInvitation.group_id)
+        .eq('group_id', invitation.group_id)
+        .maybeSingle()
 
-      if (checkError) {
-        return { success: false, message: '檢查成員狀態失敗' }
+      if (existingMember && existingMember.status === 'active') {
+        console.log('❌ 用戶已經是該團隊的活躍成員')
+        return { success: false, message: '您已經是該團隊的活躍成員' }
       }
 
-      if (existingMembers && existingMembers.length > 0) {
-        return { success: false, message: '您已經是該團隊成員' }
+      let memberData
+
+      if (existingMember && existingMember.status === 'inactive') {
+        // 重新激活之前被移除的成員
+        console.log('重新激活之前被移除的成員...')
+        const { data: reactivatedMember, error: reactivateError } = await supabase
+          .from('Member')
+          .update({
+            name: userName,
+            email: userEmail,
+            status: 'active',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingMember.id)
+          .select()
+          .single()
+
+        if (reactivateError) throw reactivateError
+        memberData = reactivatedMember
+
+        console.log('✅ 重新激活成員:', memberData.name)
+      } else {
+        // 創建新成員
+        console.log('創建新幕僚成員...')
+        const { data: newMember, error: memberError } = await supabase
+          .from('Member')
+          .insert({
+            auth_user_id: userId,
+            group_id: invitation.group_id,
+            name: userName,
+            email: userEmail,
+            role: 'staff',
+            is_leader: false,
+            status: 'active'
+          })
+          .select()
+          .single()
+
+        if (memberError) throw memberError
+        memberData = newMember
+
+        console.log('✅ 創建新成員:', memberData.name)
       }
-
-      // 加入團隊
-      const { data: newStaffRecords, error: memberError } = await supabase
-        .from('Member')
-        .insert({
-          auth_user_id: userId,
-          group_id: validInvitation.group_id,
-          name: userName,
-          email: userEmail,
-          role: 'staff',
-          is_leader: false,
-          status: 'active'
-        })
-        .select()
-
-      if (memberError || !newStaffRecords || newStaffRecords.length === 0) {
-        return { success: false, message: '加入團隊失敗' }
-      }
-
-      const newStaff = newStaffRecords[0]
 
       // 更新邀請碼使用次數
       const { error: updateError } = await supabase
         .from('TeamInvitation')
         .update({
-          current_uses: validInvitation.current_uses + 1,
+          current_uses: invitation.current_uses + 1,
           used_at: new Date().toISOString(),
-          used_by: newStaff.id
+          used_by: memberData.id
         })
-        .eq('id', validInvitation.id)
+        .eq('id', invitation.id)
 
-      if (updateError) {
-        console.warn('更新邀請碼使用次數失敗:', updateError)
-        // 不回滾，因為成員已經成功加入
-      }
+      if (updateError) throw updateError
+
+      console.log('✅ 邀請碼使用次數已更新')
 
       return { 
         success: true, 
-        member: newStaff,
-        team: inviteTeam,
-        message: `成功加入 ${inviteTeam.name}` 
+        member: memberData,
+        team: team,
+        message: `成功加入 ${team.name}` 
       }
     } catch (error) {
       console.error('加入團隊失敗:', error)
@@ -416,39 +431,52 @@ export class TeamService {
   // 獲取團隊成員列表
   static async getTeamMembers(groupId, userId) {
     try {
-      // 驗證用戶是否為團隊成員
-      const { data: userCheckRecords, error: userError } = await supabase
+      console.log('getTeamMembers - 查詢團隊成員:', { groupId, userId })
+      
+      // 驗證用戶是否為團隊的活躍成員
+      const { data: member, error: memberError } = await supabase
         .from('Member')
-        .select('is_leader')
+        .select('id, is_leader, status')
         .eq('auth_user_id', userId)
         .eq('group_id', groupId)
+        .eq('status', 'active')
+        .single()
 
-      if (userError || !userCheckRecords || userCheckRecords.length === 0) {
+      if (memberError) {
+        console.error('getTeamMembers - 用戶驗證失敗:', memberError)
+        return { success: false, message: '您不是該團隊的活躍成員' }
+      }
+
+      if (!member) {
+        console.log('getTeamMembers - 用戶不是活躍成員')
         return { success: false, message: '您不是該團隊成員' }
       }
 
-      const requestingUser = userCheckRecords[0]
+      console.log('getTeamMembers - 用戶驗證通過, is_leader:', member.is_leader)
 
-      const { data: allTeamMembers, error: membersError } = await supabase
+      // 查詢所有活躍成員
+      const { data: members, error } = await supabase
         .from('Member')
-        .select('id, name, email, role, is_leader, created_at')
+        .select('id, name, email, role, is_leader, created_at, status')
         .eq('group_id', groupId)
         .eq('status', 'active')
         .order('is_leader', { ascending: false })
         .order('created_at', { ascending: true })
 
-      if (membersError) {
-        console.error('獲取團隊成員失敗:', membersError)
-        return { success: false, message: '獲取團隊成員失敗' }
+      if (error) {
+        console.error('getTeamMembers - 查詢成員失敗:', error)
+        throw error
       }
+
+      console.log(`getTeamMembers - 找到 ${members.length} 位活躍成員`)
 
       return { 
         success: true, 
-        members: allTeamMembers || [],
-        isLeader: requestingUser.is_leader 
+        members,
+        isLeader: member.is_leader 
       }
     } catch (error) {
-      console.error('獲取團隊成員失敗:', error)
+      console.error('getTeamMembers - 異常:', error)
       return { success: false, message: '獲取團隊成員失敗' }
     }
   }
@@ -456,60 +484,105 @@ export class TeamService {
   // 移除團隊成員
   static async removeMember(groupId, targetMemberId, operatorUserId) {
     try {
+      console.log('removeMember - 開始移除成員:', { groupId, targetMemberId, operatorUserId })
+      
       // 驗證操作者權限
-      const { data: operatorCheckRecords, error: operatorError } = await supabase
+      const { data: operator, error: operatorError } = await supabase
         .from('Member')
-        .select('is_leader')
+        .select('id, is_leader, name, status')
         .eq('auth_user_id', operatorUserId)
         .eq('group_id', groupId)
+        .eq('status', 'active')
+        .single()
 
-      if (operatorError || !operatorCheckRecords || operatorCheckRecords.length === 0) {
-        return { success: false, message: '您不是該團隊成員' }
+      if (operatorError) {
+        console.error('removeMember - 查詢操作者失敗:', operatorError)
+        return { success: false, message: '無法驗證操作權限' }
       }
 
-      const operatorInfo = operatorCheckRecords[0]
-      if (!operatorInfo || !operatorInfo.is_leader) {
+      if (!operator || !operator.is_leader) {
+        console.log('removeMember - 操作者無權限:', operator)
         return { success: false, message: '只有團隊負責人可以移除成員' }
       }
 
-      // 獲取目標成員資訊
-      const { data: targetCheckRecords, error: targetError } = await supabase
-        .from('Member')
-        .select('auth_user_id, is_leader, name')
-        .eq('id', targetMemberId)
+      console.log('removeMember - 操作者驗證通過:', operator.name)
 
-      if (targetError || !targetCheckRecords || targetCheckRecords.length === 0) {
-        return { success: false, message: '找不到目標成員' }
+      // 獲取目標成員資訊
+      const { data: targetMember, error: targetError } = await supabase
+        .from('Member')
+        .select('id, auth_user_id, is_leader, name, status, group_id')
+        .eq('id', targetMemberId)
+        .single()
+
+      if (targetError) {
+        console.error('removeMember - 查詢目標成員失敗:', targetError)
+        return { success: false, message: '找不到要移除的成員' }
       }
 
-      const targetInfo = targetCheckRecords[0]
+      console.log('removeMember - 目標成員資訊:', targetMember)
 
-      if (targetInfo.auth_user_id === operatorUserId) {
+      // 驗證目標成員
+      if (!targetMember) {
+        return { success: false, message: '找不到要移除的成員' }
+      }
+
+      if (targetMember.group_id !== groupId) {
+        return { success: false, message: '該成員不屬於此團隊' }
+      }
+
+      if (targetMember.auth_user_id === operatorUserId) {
         return { success: false, message: '不能移除自己' }
       }
 
-      if (targetInfo.is_leader) {
+      if (targetMember.is_leader) {
         return { success: false, message: '不能移除其他團隊負責人' }
       }
 
-      // 移除成員
-      const { error: deleteError } = await supabase
-        .from('Member')
-        .delete()
-        .eq('id', targetMemberId)
+      if (targetMember.status === 'inactive') {
+        return { success: false, message: '該成員已被移除' }
+      }
 
-      if (deleteError) {
-        console.error('移除成員失敗:', deleteError)
-        return { success: false, message: '移除成員失敗' }
+      console.log('removeMember - 開始執行軟刪除...')
+
+      // 執行軟刪除
+      const { data: updatedMember, error: updateError } = await supabase
+        .from('Member')
+        .update({ 
+          status: 'inactive',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', targetMemberId)
+        .select('id, name, status, updated_at')
+        .single()
+
+      if (updateError) {
+        console.error('removeMember - 軟刪除失敗:', updateError)
+        throw updateError
+      }
+
+      console.log('removeMember - 軟刪除成功:', updatedMember)
+
+      // 驗證軟刪除是否成功
+      const { data: verifyMember, error: verifyError } = await supabase
+        .from('Member')
+        .select('id, name, status')
+        .eq('id', targetMemberId)
+        .single()
+
+      if (verifyError) {
+        console.error('removeMember - 驗證失敗:', verifyError)
+      } else {
+        console.log('removeMember - 驗證結果:', verifyMember)
       }
 
       return { 
         success: true, 
-        message: `已移除成員 ${targetInfo.name}` 
+        message: `已移除成員 ${targetMember.name}`,
+        removedMember: updatedMember
       }
     } catch (error) {
-      console.error('移除成員失敗:', error)
-      return { success: false, message: '移除成員失敗，請稍後重試' }
+      console.error('removeMember - 異常:', error)
+      return { success: false, message: `移除成員失敗：${error.message}` }
     }
   }
 

@@ -4,26 +4,87 @@ import { TeamService } from '../../services/teamService'
 function StaffDashboard({ member, team, onLogout }) {
   const [teamMembers, setTeamMembers] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  // 檢查成員狀態是否仍然有效
+  const checkMemberStatus = async () => {
+    try {
+      console.log('=== StaffDashboard 檢查成員狀態 ===')
+      console.log('成員ID:', member.id)
+      console.log('團隊ID:', team.id)
+      
+      const result = await TeamService.checkUserTeam(member.auth_user_id)
+      console.log('成員狀態檢查結果:', result)
+      
+      if (!result.hasTeam) {
+        console.log('❌ 成員已被移除，執行登出')
+        alert('您已被移出團隊，請重新加入。')
+        onLogout()
+        return false
+      }
+      
+      if (result.member.status !== 'active') {
+        console.log('❌ 成員狀態非活躍，執行登出')
+        alert('您的帳號狀態已變更，請重新登入。')
+        onLogout()
+        return false
+      }
+      
+      console.log('✅ 成員狀態有效')
+      return true
+    } catch (error) {
+      console.error('檢查成員狀態失敗:', error)
+      return true // 如果檢查失敗，暫時允許繼續使用
+    }
+  }
 
   // 載入團隊成員
-  useEffect(() => {
-    loadTeamMembers()
-  }, [])
-
   const loadTeamMembers = async () => {
     try {
+      console.log('=== StaffDashboard 載入團隊成員 ===')
+      
+      // 先檢查成員狀態
+      const statusValid = await checkMemberStatus()
+      if (!statusValid) return
+      
       setLoading(true)
+      setError('')
+      
       const result = await TeamService.getTeamMembers(team.id, member.auth_user_id)
+      console.log('載入團隊成員結果:', result)
       
       if (result.success) {
         setTeamMembers(result.members)
+      } else {
+        setError(result.message)
+        
+        // 如果是權限問題，可能成員已被移除
+        if (result.message.includes('不是該團隊') || result.message.includes('活躍成員')) {
+          console.log('權限錯誤，可能已被移除，執行登出')
+          alert('您可能已被移出團隊，請重新登入。')
+          onLogout()
+        }
       }
     } catch (error) {
       console.error('載入團隊成員失敗:', error)
+      setError('載入團隊成員失敗')
     } finally {
       setLoading(false)
     }
   }
+
+  // 組件載入時檢查狀態
+  useEffect(() => {
+    loadTeamMembers()
+    
+    // 設定定期檢查（每30秒檢查一次狀態）
+    const interval = setInterval(async () => {
+      console.log('定期檢查成員狀態...')
+      await checkMemberStatus()
+    }, 30000)
+    
+    return () => clearInterval(interval)
+  }, [])
 
   const getPositionLabel = (position) => {
     const labels = {
@@ -41,6 +102,48 @@ function StaffDashboard({ member, team, onLogout }) {
   const getRoleDisplayName = (role, isLeader) => {
     if (isLeader) return '團隊負責人'
     return role === 'politician' ? '政治人物' : '幕僚助理'
+  }
+
+  // 如果有錯誤且是權限相關，顯示錯誤頁面
+  if (error && (error.includes('不是該團隊') || error.includes('活躍成員'))) {
+    return (
+      <div style={{ 
+        minHeight: '100vh', 
+        background: '#f8f9fa',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        textAlign: 'center'
+      }}>
+        <div style={{
+          background: 'white',
+          borderRadius: '12px',
+          padding: '40px',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
+          maxWidth: '400px'
+        }}>
+          <div style={{ fontSize: '4rem', marginBottom: '20px' }}>⚠️</div>
+          <h2 style={{ color: '#e74c3c', marginBottom: '16px' }}>存取受限</h2>
+          <p style={{ color: '#666', marginBottom: '24px' }}>
+            您可能已被移出團隊或帳號狀態已變更
+          </p>
+          <button
+            onClick={onLogout}
+            style={{
+              background: '#667eea',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '12px 24px',
+              fontSize: '1rem',
+              cursor: 'pointer'
+            }}
+          >
+            重新登入
+          </button>
+        </div>
+      </div>
+    )
   }
 
   return (
