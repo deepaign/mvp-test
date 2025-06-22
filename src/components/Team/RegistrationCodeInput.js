@@ -289,7 +289,7 @@ function RegistrationCodeInput({ user, onTeamJoined, onBack, onLogout }) {
               <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
                 <span style={{ width: '20px', textAlign: 'center' }}>📍</span>
                 <strong style={{ marginRight: '8px' }}>服務地區:</strong>
-                {teamPreview.county} {teamPreview.district && `${teamPreview.district}`}
+                {teamPreview.county_name || teamPreview.county} {teamPreview.district && `${teamPreview.district}`}
               </div>
               {teamPreview.phone && (
                 <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
