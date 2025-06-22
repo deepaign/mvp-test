@@ -52,14 +52,8 @@ function App() {
     try {
       console.log(`檢查用戶團隊狀態: ${authUser.id}`)
       
-      // 添加超時保護
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('檢查團隊狀態超時')), 10000) // 10秒超時
-      })
-      
-      const teamCheckPromise = TeamService.checkUserTeam(authUser.id)
-      
-      const teamCheck = await Promise.race([teamCheckPromise, timeoutPromise])
+      // 直接調用 TeamService，移除超時保護
+      const teamCheck = await TeamService.checkUserTeam(authUser.id)
       console.log('TeamService.checkUserTeam 返回結果:', teamCheck)
       
       if (teamCheck.hasTeam) {
