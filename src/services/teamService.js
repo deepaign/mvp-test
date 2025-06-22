@@ -484,95 +484,226 @@ export class TeamService {
   // 移除團隊成員
   static async removeMember(groupId, targetMemberId, operatorUserId) {
     try {
-      console.log('removeMember - 開始移除成員:', { groupId, targetMemberId, operatorUserId })
+      console.log('🔍 === 前端調試：移除成員參數 ===')
+      console.log('傳入參數:', { groupId, targetMemberId, operatorUserId })
+      console.log('參數類型:', { 
+        groupId: typeof groupId, 
+        targetMemberId: typeof targetMemberId, 
+        operatorUserId: typeof operatorUserId 
+      })
       
-      // 驗證操作者權限
-      const { data: operator, error: operatorError } = await supabase
+      // 檢查當前用戶的 Supabase 會話
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+      console.log('當前會話:', { 
+        hasSession: !!sessionData?.session,
+        userId: sessionData?.session?.user?.id,
+        userEmail: sessionData?.session?.user?.email,
+        sessionError
+      })
+      
+      // === 步驟1：驗證操作者權限 ===
+      console.log('\n📋 步驟1: 驗證操作者權限...')
+      
+      const { data: operatorRecords, error: operatorError } = await supabase
         .from('Member')
-        .select('id, is_leader, name, status')
+        .select('id, is_leader, name, status, auth_user_id, group_id')
         .eq('auth_user_id', operatorUserId)
         .eq('group_id', groupId)
         .eq('status', 'active')
-        .single()
+
+      console.log('操作者查詢:', {
+        query: `auth_user_id=${operatorUserId}, group_id=${groupId}, status=active`,
+        count: operatorRecords?.length,
+        data: operatorRecords,
+        error: operatorError
+      })
 
       if (operatorError) {
-        console.error('removeMember - 查詢操作者失敗:', operatorError)
-        return { success: false, message: '無法驗證操作權限' }
+        console.error('❌ 查詢操作者失敗:', operatorError)
+        return { success: false, message: `無法驗證操作權限: ${operatorError.message}` }
       }
 
-      if (!operator || !operator.is_leader) {
-        console.log('removeMember - 操作者無權限:', operator)
+      if (!operatorRecords || operatorRecords.length === 0) {
+        console.log('❌ 操作者沒有權限或不是活躍成員')
+        
+        // 額外調試：查詢所有該用戶的記錄
+        const { data: allUserRecords } = await supabase
+          .from('Member')
+          .select('*')
+          .eq('auth_user_id', operatorUserId)
+        
+        console.log('該用戶的所有 Member 記錄:', allUserRecords)
+        
+        return { success: false, message: '您不是該團隊的活躍成員' }
+      }
+
+      if (operatorRecords.length > 1) {
+        console.warn('⚠️ 發現多筆操作者記錄:', operatorRecords)
+      }
+
+      const operator = operatorRecords[0]
+
+      if (!operator.is_leader) {
+        console.log('❌ 操作者不是負責人:', operator)
         return { success: false, message: '只有團隊負責人可以移除成員' }
       }
 
-      console.log('removeMember - 操作者驗證通過:', operator.name)
+      console.log('✅ 操作者驗證通過:', operator.name)
 
-      // 獲取目標成員資訊
+      // === 步驟2：獲取目標成員資訊 ===
+      console.log('\n📋 步驟2: 獲取目標成員資訊...')
+      
       const { data: targetMember, error: targetError } = await supabase
         .from('Member')
         .select('id, auth_user_id, is_leader, name, status, group_id')
         .eq('id', targetMemberId)
-        .single()
+        .maybeSingle()
+
+      console.log('目標成員查詢:', {
+        query: `id=${targetMemberId}`,
+        data: targetMember,
+        error: targetError
+      })
 
       if (targetError) {
-        console.error('removeMember - 查詢目標成員失敗:', targetError)
-        return { success: false, message: '找不到要移除的成員' }
+        console.error('❌ 查詢目標成員失敗:', targetError)
+        return { success: false, message: `找不到要移除的成員: ${targetError.message}` }
       }
 
-      console.log('removeMember - 目標成員資訊:', targetMember)
-
-      // 驗證目標成員
       if (!targetMember) {
+        console.log('❌ 目標成員不存在')
+        
+        // 額外調試：檢查該 ID 是否存在
+        const { data: allMemberCheck } = await supabase
+          .from('Member')
+          .select('*')
+          .eq('id', targetMemberId)
+        
+        console.log('檢查該 ID 的所有記錄:', allMemberCheck)
+        
         return { success: false, message: '找不到要移除的成員' }
       }
 
+      console.log('✅ 目標成員:', targetMember.name)
+
+      // === 步驟3：驗證目標成員 ===
+      console.log('\n📋 步驟3: 驗證目標成員...')
+      
       if (targetMember.group_id !== groupId) {
+        console.log('❌ 該成員不屬於此團隊')
+        console.log('成員的團隊ID:', targetMember.group_id, '期望的團隊ID:', groupId)
         return { success: false, message: '該成員不屬於此團隊' }
       }
 
       if (targetMember.auth_user_id === operatorUserId) {
+        console.log('❌ 不能移除自己')
         return { success: false, message: '不能移除自己' }
       }
 
       if (targetMember.is_leader) {
+        console.log('❌ 不能移除其他團隊負責人')
         return { success: false, message: '不能移除其他團隊負責人' }
       }
 
       if (targetMember.status === 'inactive') {
+        console.log('❌ 該成員已被移除')
         return { success: false, message: '該成員已被移除' }
       }
 
-      console.log('removeMember - 開始執行軟刪除...')
+      console.log('✅ 目標成員驗證通過')
 
-      // 執行軟刪除
-      const { data: updatedMember, error: updateError } = await supabase
+      // === 步驟4：嘗試更新前先檢查權限 ===
+      console.log('\n📋 步驟4: 檢查更新權限...')
+      
+      // 先嘗試一個無害的查詢來檢查權限
+      const { data: permissionTest, error: permissionError } = await supabase
         .from('Member')
-        .update({ 
-          status: 'inactive',
-          updated_at: new Date().toISOString()
-        })
+        .select('id, name, status')
         .eq('id', targetMemberId)
-        .select('id, name, status, updated_at')
-        .single()
+        .limit(1)
 
-      if (updateError) {
-        console.error('removeMember - 軟刪除失敗:', updateError)
-        throw updateError
+      console.log('權限測試查詢:', {
+        data: permissionTest,
+        error: permissionError
+      })
+
+      if (permissionError) {
+        console.error('❌ 沒有查詢權限:', permissionError)
+        return { success: false, message: `權限不足: ${permissionError.message}` }
       }
 
-      console.log('removeMember - 軟刪除成功:', updatedMember)
+      // === 步驟5：執行軟刪除 ===
+      console.log('\n📋 步驟5: 執行軟刪除...')
+      
+      const updateData = {
+        status: 'inactive',
+        updated_at: new Date().toISOString()
+      }
+      
+      console.log('更新數據:', updateData)
+      console.log('更新條件: id =', targetMemberId)
 
-      // 驗證軟刪除是否成功
+      const { data: updateResult, error: updateError } = await supabase
+        .from('Member')
+        .update(updateData)
+        .eq('id', targetMemberId)
+        .select('id, name, status, updated_at')
+
+      console.log('更新操作結果:', {
+        count: updateResult?.length,
+        data: updateResult,
+        error: updateError
+      })
+
+      if (updateError) {
+        console.error('❌ 更新操作失敗:', updateError)
+        return { success: false, message: `更新失敗: ${updateError.message}` }
+      }
+
+      if (!updateResult || updateResult.length === 0) {
+        console.error('❌ 更新操作沒有影響任何記錄')
+        console.log('可能的原因:')
+        console.log('1. RLS 政策阻止了更新操作')
+        console.log('2. 目標記錄不存在或已被其他操作修改')
+        console.log('3. 數據庫連接問題')
+        
+        // 再次檢查目標記錄是否仍然存在
+        const { data: recheckTarget } = await supabase
+          .from('Member')
+          .select('*')
+          .eq('id', targetMemberId)
+          .maybeSingle()
+        
+        console.log('重新檢查目標記錄:', recheckTarget)
+        
+        return { success: false, message: '找不到要更新的成員記錄' }
+      }
+
+      if (updateResult.length > 1) {
+        console.warn('⚠️ 更新操作影響了多筆記錄:', updateResult)
+      }
+
+      const updatedMember = updateResult[0]
+      console.log('✅ 更新成功:', updatedMember)
+
+      // === 步驟6：驗證更新結果 ===
+      console.log('\n📋 步驟6: 驗證更新結果...')
+      
       const { data: verifyMember, error: verifyError } = await supabase
         .from('Member')
         .select('id, name, status')
         .eq('id', targetMemberId)
-        .single()
+        .maybeSingle()
+
+      console.log('驗證查詢結果:', { data: verifyMember, error: verifyError })
 
       if (verifyError) {
-        console.error('removeMember - 驗證失敗:', verifyError)
+        console.error('❌ 驗證查詢失敗:', verifyError)
+      } else if (verifyMember && verifyMember.status !== 'inactive') {
+        console.error('❌ 成員狀態沒有正確更新!')
+        return { success: false, message: '移除操作可能失敗，請重試' }
       } else {
-        console.log('removeMember - 驗證結果:', verifyMember)
+        console.log('✅ 驗證通過，成員已成功設為非活躍')
       }
 
       return { 
@@ -580,8 +711,11 @@ export class TeamService {
         message: `已移除成員 ${targetMember.name}`,
         removedMember: updatedMember
       }
+
     } catch (error) {
-      console.error('removeMember - 異常:', error)
+      console.error('❌ 移除成員過程發生異常:', error)
+      console.error('異常詳情:', error.message)
+      console.error('異常堆疊:', error.stack)
       return { success: false, message: `移除成員失敗：${error.message}` }
     }
   }
