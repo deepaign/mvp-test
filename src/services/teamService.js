@@ -228,17 +228,18 @@ export class TeamService {
   // 驗證邀請碼
   static async validateInviteCode(inviteCode) {
     try {
-      // 查詢邀請碼，不使用 .single()
+      // 查詢邀請碼
       const { data: invitationRecords, error: inviteError } = await supabase
         .from('TeamInvitation')
         .select('*')
         .eq('invite_code', inviteCode.toUpperCase())
         .eq('status', 'active')
+        .eq('current_uses', 0) // 確保邀請碼未被使用
 
       if (inviteError || !invitationRecords || invitationRecords.length === 0) {
         return { 
           valid: false, 
-          message: '邀請碼不存在或已失效' 
+          message: '邀請碼不存在或已被使用' 
         }
       }
 
@@ -249,12 +250,7 @@ export class TeamService {
         return { valid: false, message: '邀請碼已過期' }
       }
 
-      // 檢查使用次數
-      if (targetInvitation.current_uses >= targetInvitation.max_uses) {
-        return { valid: false, message: '邀請碼已達使用上限' }
-      }
-
-      // 單獨查詢團隊資訊
+      // 查詢團隊資訊
       const { data: teamRecords, error: teamError } = await supabase
         .from('Group')
         .select('*')
@@ -297,6 +293,22 @@ export class TeamService {
       const team = validation.team
       console.log('✅ 邀請碼驗證成功，團隊:', team.name)
 
+      // 檢查團隊成員數量是否已達上限
+      const { data: activeMembers, error: countError } = await supabase
+        .from('Member')
+        .select('id')
+        .eq('group_id', invitation.group_id)
+        .eq('status', 'active')
+
+      if (countError) {
+        console.error('檢查成員數量失敗:', countError)
+        throw countError
+      }
+
+      if (activeMembers.length >= 10) {
+        return { success: false, message: '團隊成員已達上限（10人）' }
+      }
+
       // 檢查是否已經是活躍的團隊成員
       const { data: existingMember } = await supabase
         .from('Member')
@@ -310,7 +322,7 @@ export class TeamService {
         return { success: false, message: '您已經是該團隊的活躍成員' }
       }
 
-      let memberData
+      let memberData; // 定義 memberData 變數
 
       if (existingMember && existingMember.status === 'inactive') {
         // 重新激活之前被移除的成員
@@ -353,20 +365,21 @@ export class TeamService {
 
         console.log('✅ 創建新成員:', memberData.name)
       }
-
-      // 更新邀請碼使用次數
+      
+      // 更新邀請碼狀態為已使用 (修改為使用後直接設為 inactive)
       const { error: updateError } = await supabase
         .from('TeamInvitation')
         .update({
-          current_uses: invitation.current_uses + 1,
+          current_uses: 1,
           used_at: new Date().toISOString(),
-          used_by: memberData.id
+          used_by: memberData.id,
+          status: 'inactive' // 新增：使用後直接設為inactive
         })
         .eq('id', invitation.id)
 
       if (updateError) throw updateError
 
-      console.log('✅ 邀請碼使用次數已更新')
+      console.log('✅ 邀請碼已標記為已使用')
 
       return { 
         success: true, 
@@ -383,10 +396,10 @@ export class TeamService {
   // 生成幕僚邀請碼
   static async createStaffInvitation(groupId, createdBy, hoursValid = 72) {
     try {
-      // 驗證創建者是否為團隊負責人，同時獲取 member.id
+      // 驗證創建者是否為團隊負責人
       const { data: member } = await supabase
         .from('Member')
-        .select('id, is_leader')  // ✅ 添加 id 字段
+        .select('id, is_leader')
         .eq('auth_user_id', createdBy)
         .eq('group_id', groupId)
         .single()
@@ -395,17 +408,34 @@ export class TeamService {
         return { success: false, message: '只有團隊負責人可以邀請成員' }
       }
 
+      // 檢查團隊成員數量是否已達上限
+      const { data: activeMembers, error: countError } = await supabase
+        .from('Member')
+        .select('id')
+        .eq('group_id', groupId)
+        .eq('status', 'active')
+
+      if (countError) {
+        console.error('檢查成員數量失敗:', countError)
+        throw countError
+      }
+
+      if (activeMembers.length >= 10) {
+        return { success: false, message: '團隊成員已達上限（10人）' }
+      }
+
       const inviteCode = this.generateInviteCode()
       const expiresAt = new Date(Date.now() + hoursValid * 60 * 60 * 1000)
       
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('TeamInvitation')
         .insert({
           group_id: groupId,
           invite_code: inviteCode,
           expires_at: expiresAt,
-          invited_by: member.id,  // ✅ 使用 member.id 而不是 auth_user_id
-          max_uses: 5,
+          invited_by: member.id,
+          max_uses: 1, // 修改為1，實現一次性邀請碼
+          current_uses: 0,
           status: 'active'
         })
         .select()
@@ -420,7 +450,7 @@ export class TeamService {
         success: true, 
         inviteCode, 
         expiresAt,
-        message: `邀請碼生成成功，${hoursValid}小時內有效` 
+        message: `邀請碼生成成功，${hoursValid}小時內有效，限一次使用` 
       }
     } catch (error) {
       console.error('生成邀請碼失敗:', error)
