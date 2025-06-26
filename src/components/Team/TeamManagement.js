@@ -419,7 +419,7 @@ function TeamManagement({ member, team, onLogout }) {
                 {inviteCode}
               </div>
               <p style={{ color: '#666', fontSize: '0.9rem', margin: 0 }}>
-                有效期：72小時 | 僅限使用1次
+                有效期：72小時 | 一次性使用  {/* 🔧 修改：改為一次性使用 */}
               </p>
             </div>
             <div style={{ display: 'flex', gap: '10px' }}>

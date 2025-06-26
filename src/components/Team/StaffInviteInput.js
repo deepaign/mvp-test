@@ -63,9 +63,17 @@ function StaffInviteInput({ user, onTeamJoined, onBack, onLogout }) {
     }
 
     setLoading(true)
-    setError('')
+    setError('') // 清除之前的錯誤
 
     try {
+      console.log('🚀 開始加入團隊流程...')
+      console.log('邀請碼:', inviteCode)
+      console.log('用戶資訊:', {
+        id: user.id,
+        name: user.user_metadata?.full_name,
+        email: user.email
+      })
+
       const result = await TeamService.joinTeamWithInviteCode(
         inviteCode,
         user.id,
@@ -73,14 +81,44 @@ function StaffInviteInput({ user, onTeamJoined, onBack, onLogout }) {
         user.email
       )
 
+      console.log('💫 加入團隊結果:', result)
+
       if (result.success) {
-        onTeamJoined(result.member, result.team)
+        console.log('✅ 加入團隊成功!')
+        console.log('成員資料:', result.member)
+        console.log('團隊資料:', result.team)
+        
+        // 🔧 添加成功提示
+        alert(`🎉 ${result.message}`)
+        
+        // 🔧 確保跳轉
+        if (onTeamJoined && typeof onTeamJoined === 'function') {
+          onTeamJoined(result.member, result.team)
+        } else {
+          console.error('❌ onTeamJoined 回調函數不存在或不是函數')
+        }
       } else {
-        setError(result.message || '加入團隊失敗')
+        console.error('❌ 加入團隊失敗:', result.message)
+        setError(result.message || '加入團隊失敗，請稍後重試')
       }
+
     } catch (error) {
-      console.error('加入團隊失敗:', error)
-      setError('加入團隊失敗，請稍後重試')
+      console.error('❌ 加入團隊異常:', error)
+      
+      // 🔧 更詳細的錯誤分類
+      let errorMessage = '加入團隊失敗，請稍後重試'
+      
+      if (error.message?.includes('duplicate key')) {
+        errorMessage = '您可能已經是團隊成員，請刷新頁面重試'
+      } else if (error.message?.includes('not authenticated')) {
+        errorMessage = '登入狀態已過期，請重新登入'
+      } else if (error.message?.includes('network')) {
+        errorMessage = '網路連接異常，請檢查網路連接'
+      } else if (error.message) {
+        errorMessage = `錯誤：${error.message}`
+      }
+      
+      setError(errorMessage)
     } finally {
       setLoading(false)
     }
