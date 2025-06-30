@@ -1,0 +1,298 @@
+/* src/components/Common/Navigation.css */
+.navigation-sidebar {
+  width: 280px;
+  height: 100vh;
+  background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 1000;
+  box-shadow: 4px 0 20px rgba(0, 0, 0, 0.1);
+  overflow-y: auto;
+}
+
+/* Logo 區域 */
+.nav-logo {
+  display: flex;
+  align-items: center;
+  padding: 24px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.logo-icon {
+  font-size: 2rem;
+  margin-right: 12px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.logo-text {
+  flex: 1;
+}
+
+.logo-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 2px;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.logo-subtitle {
+  font-size: 0.75rem;
+  opacity: 0.8;
+  font-weight: 400;
+}
+
+/* 新增案件按鈕 */
+.nav-actions {
+  padding: 20px;
+}
+
+.create-case-btn {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 12px;
+  color: white;
+  padding: 16px 20px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+.create-case-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+
+.create-case-btn:active {
+  transform: translateY(0);
+}
+
+.btn-icon {
+  font-size: 1.2rem;
+  font-weight: bold;
+}
+
+.btn-text {
+  font-weight: 600;
+}
+
+/* 導航項目 */
+.nav-items {
+  flex: 1;
+  padding: 20px 0;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  padding: 16px 20px;
+  margin: 4px 16px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  background: transparent;
+}
+
+.nav-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+  transform: translateX(4px);
+}
+
+.nav-item.active {
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+.nav-item.active::before {
+  content: '';
+  position: absolute;
+  left: -16px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 24px;
+  background: white;
+  border-radius: 0 2px 2px 0;
+}
+
+.nav-item-icon {
+  font-size: 1.5rem;
+  margin-right: 16px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+}
+
+.nav-item-content {
+  flex: 1;
+}
+
+.nav-item-label {
+  font-size: 1rem;
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+
+.nav-item-badge {
+  font-size: 0.7rem;
+  background: rgba(255, 193, 7, 0.8);
+  color: rgba(0, 0, 0, 0.8);
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 600;
+  display: inline-block;
+}
+
+/* 用戶資訊區域 */
+.nav-user-info {
+  padding: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.user-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  font-weight: bold;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+.user-details {
+  flex: 1;
+}
+
+.user-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.user-role {
+  font-size: 0.8rem;
+  opacity: 0.8;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* 響應式設計 */
+@media (max-width: 1024px) {
+  .navigation-sidebar {
+    width: 260px;
+  }
+  
+  .nav-logo {
+    padding: 20px 16px;
+  }
+  
+  .logo-title {
+    font-size: 1.3rem;
+  }
+  
+  .nav-actions {
+    padding: 16px;
+  }
+  
+  .create-case-btn {
+    padding: 14px 16px;
+    font-size: 0.95rem;
+  }
+  
+  .nav-item {
+    padding: 14px 16px;
+    margin: 4px 12px;
+  }
+}
+
+@media (max-width: 768px) {
+  .navigation-sidebar {
+    width: 100%;
+    height: auto;
+    position: relative;
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0;
+  }
+  
+  .nav-logo {
+    min-width: 200px;
+    padding: 16px;
+    border-bottom: none;
+    border-right: 1px solid rgba(255, 255, 255, 0.15);
+  }
+  
+  .nav-actions {
+    min-width: 160px;
+    padding: 16px 12px;
+    border-right: 1px solid rgba(255, 255, 255, 0.15);
+  }
+  
+  .create-case-btn {
+    font-size: 0.9rem;
+    padding: 12px 16px;
+  }
+  
+  .nav-items {
+    display: flex;
+    flex-direction: row;
+    min-width: 300px;
+    padding: 16px 0;
+    align-items: center;
+  }
+  
+  .nav-item {
+    min-width: 140px;
+    margin: 0 8px;
+    padding: 12px;
+    flex-direction: column;
+    text-align: center;
+  }
+  
+  .nav-item-icon {
+    margin-right: 0;
+    margin-bottom: 8px;
+  }
+  
+  .nav-item-label {
+    font-size: 0.85rem;
+  }
+  
+  .nav-user-info {
+    min-width: 180px;
+    border-left: 1px solid rgba(255, 255, 255, 0.15);
+    border-top: none;
+    padding: 16px 12px;
+  }
+}

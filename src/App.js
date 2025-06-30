@@ -1,398 +1,316 @@
-// 簡化的 App.js - 修復團隊檢查邏輯
-
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+// src/App.js
+import React, { useState, useEffect } from 'react'
 import { supabase } from './supabase'
-import Homepage from './components/Homepage/Homepage'
-import LoginPage from './components/Auth/LoginPage'
 
-// 新增團隊相關組件
+// 組件導入
+import LoginPage from './components/Auth/LoginPage'
+import Loading from './components/Common/Loading'
+import ErrorMessage from './components/Common/ErrorMessage'
+import Homepage from './components/Homepage/Homepage'
 import JoinTeamSelection from './components/Team/JoinTeamSelection'
 import RegistrationCodeInput from './components/Team/RegistrationCodeInput'
 import StaffInviteInput from './components/Team/StaffInviteInput'
-import TeamManagement from './components/Team/TeamManagement'
-import StaffDashboard from './components/Dashboard/StaffDashboard'
-import Loading from './components/Common/Loading'
+import DashboardLayout from './components/Dashboard/DashboardLayout'
+
+// 服務導入
+import { AuthService } from './services/authService'
 import { TeamService } from './services/teamService'
+
+// 樣式導入
 import './App.css'
-import './components/Homepage/Homepage.css'
 
 function App() {
+  // 認證狀態
   const [user, setUser] = useState(null)
   const [member, setMember] = useState(null)
   const [team, setTeam] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [currentStep, setCurrentStep] = useState(null)
-  
-  // 使用 useRef 來追蹤狀態
-  const hasInitialized = useRef(false)
-  const isProcessingAuth = useRef(false)
+  const [error, setError] = useState('')
 
-  // 定義哪些頁面需要全螢幕模式（無捲動）
-  const fullscreenPages = ['homepage', 'login', 'joinTeamSelection', 'registrationCode', 'inviteCode']
-  const isFullscreenPage = fullscreenPages.includes(currentStep)
+  // 頁面狀態
+  const [currentPage, setCurrentPage] = useState('homepage')
+  const [isFullscreen, setIsFullscreen] = useState(false)
 
-  // 根據當前頁面動態控制 body 的捲動
+  // OAuth 重定向處理
+  const [processingOAuth, setProcessingOAuth] = useState(false)
+
+  // 檢查初始認證狀態
   useEffect(() => {
-    if (isFullscreenPage) {
-      document.body.style.overflow = 'hidden'
-      document.documentElement.style.overflow = 'hidden'
-    } else {
-      document.body.style.overflow = 'auto'
-      document.documentElement.style.overflow = 'auto'
-    }
-
-    return () => {
-      document.body.style.overflow = 'auto'
-      document.documentElement.style.overflow = 'auto'
-    }
-  }, [isFullscreenPage])
-
-  // 決定用戶應該導向哪個頁面
-  const determineUserDestination = useCallback(async (authUser) => {
-    console.log('=== 決定用戶導向 ===')
-    console.log('用戶:', authUser.email, 'ID:', authUser.id)
+    checkInitialAuth()
     
-    try {
-      // 檢查用戶是否有活躍團隊
-      const teamResult = await TeamService.checkUserTeam(authUser.id)
-      console.log('團隊檢查結果:', teamResult)
+    // 監聽認證狀態變化
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('🔔 認證狀態變化:', event, session?.user?.email)
       
-      if (teamResult.hasTeam && teamResult.member && teamResult.team) {
-        console.log('✅ 用戶有活躍團隊')
-        console.log('成員角色:', teamResult.member.role)
-        console.log('是否為負責人:', teamResult.member.is_leader)
-        console.log('團隊名稱:', teamResult.team.name)
-        
-        // 設置狀態並導向儀表板
-        setMember(teamResult.member)
-        setTeam(teamResult.team)
-        setCurrentStep('dashboard')
-        
-        return { destination: 'dashboard', teamResult }
-      } else {
-        console.log('❌ 用戶沒有活躍團隊，導向加入選擇頁面')
-        console.log('錯誤信息:', teamResult.error)
-        
-        // 清理狀態並導向加入選擇
-        setMember(null)
-        setTeam(null)
-        setCurrentStep('joinTeamSelection')
-        
-        return { destination: 'joinTeamSelection', teamResult }
+      if (event === 'SIGNED_IN' && session?.user) {
+        console.log('✅ 用戶已登入，處理登入後邏輯')
+        await handleUserSignedIn(session.user)
+      } else if (event === 'SIGNED_OUT') {
+        console.log('👋 用戶已登出')
+        handleSignOut()
       }
-    } catch (error) {
-      console.error('決定用戶導向時發生錯誤:', error)
-      setMember(null)
-      setTeam(null)
-      setCurrentStep('joinTeamSelection')
-      return { destination: 'joinTeamSelection', error: error.message }
-    }
-  }, [])
-
-  // 處理用戶登入
-  const handleUserSignedIn = useCallback(async (authUser) => {
-    if (isProcessingAuth.current) {
-      console.log('正在處理用戶登入，跳過重複處理')
-      return
-    }
-
-    isProcessingAuth.current = true
-    setLoading(true)
-
-    try {
-      console.log('=== 處理用戶登入 ===')
-      console.log('用戶:', authUser.email)
-      
-      // 清理 OAuth URL 參數
-      const url = new URL(window.location)
-      let needsCleanup = false
-      
-      if (url.searchParams.has('code')) {
-        url.searchParams.delete('code')
-        needsCleanup = true
-      }
-      if (url.searchParams.has('state')) {
-        url.searchParams.delete('state')
-        needsCleanup = true
-      }
-      if (url.hash.includes('access_token') || url.hash.includes('refresh_token')) {
-        url.hash = ''
-        needsCleanup = true
-      }
-      
-      if (needsCleanup) {
-        window.history.replaceState({}, document.title, url.toString())
-        console.log('已清理 OAuth URL 參數')
-      }
-
-      // 設置用戶狀態
-      setUser(authUser)
-
-      // 決定用戶應該導向哪裡
-      const result = await determineUserDestination(authUser)
-      console.log('用戶導向結果:', result.destination)
-
-    } catch (error) {
-      console.error('處理用戶登入失敗:', error)
-      setCurrentStep('joinTeamSelection')
-    } finally {
-      console.log('完成用戶登入處理')
-      setLoading(false)
-      isProcessingAuth.current = false
-    }
-  }, [determineUserDestination])
-
-  // 初始化應用程式
-  useEffect(() => {
-    if (hasInitialized.current) {
-      return
-    }
-
-    const initializeApp = async () => {
-      try {
-        console.log('=== 初始化應用程式 ===')
-        hasInitialized.current = true
-
-        // 檢查是否為 OAuth 重定向
-        const urlParams = new URLSearchParams(window.location.search)
-        const isOAuthRedirect = urlParams.has('code') || window.location.hash.includes('access_token')
-        
-        if (isOAuthRedirect) {
-          console.log('檢測到 OAuth 重定向，等待認證狀態更新...')
-          // 不設定任何狀態，讓 onAuthStateChange 處理
-          return
-        }
-
-        // 檢查現有 session
-        const { data, error } = await supabase.auth.getSession()
-        
-        if (error) {
-          console.error(`Supabase 錯誤: ${error.message}`)
-          setCurrentStep('homepage')
-          setLoading(false)
-          return
-        }
-
-        if (data?.session?.user) {
-          console.log(`發現已登入用戶: ${data.session.user.email}`)
-          await handleUserSignedIn(data.session.user)
-        } else {
-          console.log('沒有現有 session，顯示首頁')
-          setCurrentStep('homepage')
-          setLoading(false)
-        }
-
-      } catch (error) {
-        console.error(`初始化錯誤: ${error.message}`)
-        setCurrentStep('homepage')
-        setLoading(false)
-      }
-    }
-
-    initializeApp()
-  }, [handleUserSignedIn])
-
-  // 認證狀態監聽器
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log(`=== Auth 狀態變化: ${event} ===`, session?.user?.email || 'no user')
-        
-        if (event === 'SIGNED_IN' && session?.user) {
-          await handleUserSignedIn(session.user)
-        } else if (event === 'SIGNED_OUT') {
-          console.log('處理登出事件')
-          setUser(null)
-          setMember(null)
-          setTeam(null)
-          setCurrentStep('homepage')
-          setLoading(false)
-          isProcessingAuth.current = false
-          hasInitialized.current = false
-        }
-      }
-    )
+    })
 
     return () => subscription.unsubscribe()
-  }, [handleUserSignedIn])
+  }, [])
 
-  // 處理登入按鈕點擊
-  const handleLoginClick = async () => {
-    console.log('=== 用戶點擊登入按鈕 ===')
-    
-    if (user) {
-      console.log('用戶已登入，重新檢查狀態...')
-      setLoading(true)
+  // 檢查初始認證狀態
+  const checkInitialAuth = async () => {
+    try {
+      console.log('🔍 檢查初始認證狀態...')
       
-      try {
-        const result = await determineUserDestination(user)
-        console.log('重新檢查結果:', result.destination)
-      } catch (error) {
-        console.error('重新檢查狀態失敗:', error)
-        setCurrentStep('joinTeamSelection')
-      } finally {
+      const { data: { session }, error } = await supabase.auth.getSession()
+      
+      if (error) {
+        console.error('❌ 獲取 session 失敗:', error)
+        setError('認證檢查失敗，請重新整理頁面')
+        setLoading(false)
+        return
+      }
+
+      if (session?.user) {
+        console.log('✅ 發現現有 session，用戶:', session.user.email)
+        await handleUserSignedIn(session.user)
+      } else {
+        console.log('ℹ️ 無現有 session，顯示首頁')
+        setCurrentPage('homepage')
         setLoading(false)
       }
-    } else {
-      console.log('用戶未登入，導向登入頁面')
-      setCurrentStep('login')
+    } catch (error) {
+      console.error('❌ 初始認證檢查失敗:', error)
+      setError('系統初始化失敗，請重新整理頁面')
+      setLoading(false)
     }
   }
 
-  const handleSelectJoinMethod = (method) => {
-    console.log(`選擇加入方式: ${method}`)
-    if (method === 'registrationCode') {
-      setCurrentStep('registrationCode')
-    } else if (method === 'inviteCode') {
-      setCurrentStep('inviteCode')
-    }
-  }
-
-  const handleTeamJoined = async (memberData, teamData) => {
-    console.log(`=== 團隊加入成功 ===`)
-    console.log('團隊:', teamData.name)
-    console.log('成員角色:', memberData.role)
-    console.log('是否為負責人:', memberData.is_leader)
-    
-    setMember(memberData)
-    setTeam(teamData)
-    setCurrentStep('dashboard')
-  }
-
-  const handleLogout = async () => {
+  // 處理用戶登入後的邏輯
+  const handleUserSignedIn = async (user) => {
     try {
-      console.log('=== 執行登出 ===')
-      hasInitialized.current = false
-      isProcessingAuth.current = false
+      setProcessingOAuth(true)
+      setUser(user)
+      setError('')
+
+      console.log('🔍 檢查用戶團隊狀態...')
+      const teamResult = await TeamService.checkUserTeam(user.id)
       
-      // 使用新的 AuthService 進行完整登出
-      const { AuthService } = await import('./services/authService')
-      const result = await AuthService.completeLogout()
-      
-      if (!result.success) {
-        console.error('登出失敗:', result.error)
+      if (teamResult.hasTeam && teamResult.member && teamResult.team) {
+        console.log('✅ 用戶已加入團隊:', teamResult.team.name)
+        setMember(teamResult.member)
+        setTeam(teamResult.team)
+        setCurrentPage('dashboard')
+        setIsFullscreen(true)
+      } else {
+        console.log('ℹ️ 用戶尚未加入團隊，導向團隊加入流程')
+        setCurrentPage('joinTeamSelection')
+        setIsFullscreen(true)
       }
     } catch (error) {
-      console.error(`登出失敗: ${error.message}`)
+      console.error('❌ 處理登入後邏輯失敗:', error)
+      setError('登入後處理失敗，請稍後重試')
+    } finally {
+      setProcessingOAuth(false)
+      setLoading(false)
     }
   }
 
-  const handleBackToHome = () => {
-    console.log('返回首頁')
-    setCurrentStep('homepage')
+  // 處理登出
+  const handleSignOut = () => {
+    setUser(null)
+    setMember(null)
+    setTeam(null)
+    setCurrentPage('homepage')
+    setIsFullscreen(false)
+    setError('')
   }
 
-  const handleBackToJoinSelection = () => {
-    console.log('返回加入方式選擇頁面')
-    setCurrentStep('joinTeamSelection')
+  // 處理登出操作
+  const handleLogout = async (useCompleteLogout = true) => {
+    try {
+      setLoading(true)
+      console.log('🚪 執行登出...')
+      
+      if (useCompleteLogout) {
+        await AuthService.completeLogout()
+      } else {
+        await AuthService.quickLogout()
+      }
+      
+      handleSignOut()
+    } catch (error) {
+      console.error('❌ 登出失敗:', error)
+      setError('登出失敗，請稍後重試')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  // 如果在載入中，顯示載入畫面
-  if (loading) {
-    return <Loading />
+  // 處理團隊加入成功
+  const handleTeamJoinSuccess = async (memberData, teamData) => {
+    try {
+      console.log('✅ 團隊加入成功:', teamData.name)
+      setMember(memberData)
+      setTeam(teamData)
+      setCurrentPage('dashboard')
+      setIsFullscreen(true)
+    } catch (error) {
+      console.error('❌ 處理團隊加入成功失敗:', error)
+      setError('加入團隊後處理失敗')
+    }
   }
 
-  // 如果 currentStep 還沒設定，顯示載入畫面
-  if (!currentStep) {
-    return <Loading />
+  // 處理頁面導航
+  const handleNavigate = (page) => {
+    setCurrentPage(page)
+    
+    // 設定全螢幕模式
+    const fullscreenPages = ['login', 'joinTeamSelection', 'registrationCode', 'inviteCode', 'dashboard']
+    setIsFullscreen(fullscreenPages.includes(page))
   }
 
-  const renderCurrentStep = () => {
-    switch (currentStep) {
+  // 渲染頁面內容
+  const renderPage = () => {
+    // OAuth 處理中
+    if (processingOAuth) {
+      return (
+        <Loading message="正在處理 Google 登入，請稍候..." />
+      )
+    }
+
+    // 頁面路由
+    switch(currentPage) {
       case 'homepage':
-        return (
-          <div className="auth-page">
-            <Homepage 
-              onLoginClick={handleLoginClick} 
-              user={user}
-              onLogout={handleLogout}
-            />
-          </div>
-        )
+        return <Homepage onNavigate={handleNavigate} />
       
       case 'login':
         return (
-          <div className="auth-page">
-            <LoginPage onBackToHome={handleBackToHome} />
-          </div>
+          <LoginPage 
+            onNavigate={handleNavigate}
+            onLoginSuccess={(user) => handleUserSignedIn(user)}
+          />
         )
       
       case 'joinTeamSelection':
         return (
-          <div className="auth-page">
-            <JoinTeamSelection 
-              user={user}
-              onSelectJoinMethod={handleSelectJoinMethod}
-              onLogout={handleLogout}
-            />
-          </div>
+          <JoinTeamSelection 
+            user={user}
+            onNavigate={handleNavigate}
+            onJoinSuccess={handleTeamJoinSuccess}
+            onLogout={handleLogout}
+          />
         )
       
       case 'registrationCode':
         return (
-          <div className="auth-page">
-            <RegistrationCodeInput 
-              user={user}
-              onTeamJoined={handleTeamJoined}
-              onBack={handleBackToJoinSelection}
-              onLogout={handleLogout}
-            />
-          </div>
+          <RegistrationCodeInput 
+            user={user}
+            onNavigate={handleNavigate}
+            onJoinSuccess={handleTeamJoinSuccess}
+            onLogout={handleLogout}
+          />
         )
       
       case 'inviteCode':
         return (
-          <div className="auth-page">
-            <StaffInviteInput 
-              user={user}
-              onTeamJoined={handleTeamJoined}
-              onBack={handleBackToJoinSelection}
-              onLogout={handleLogout}
-            />
-          </div>
+          <StaffInviteInput 
+            user={user}
+            onNavigate={handleNavigate}
+            onJoinSuccess={handleTeamJoinSuccess}
+            onLogout={handleLogout}
+          />
         )
       
       case 'dashboard':
         if (!member || !team) {
-          console.log('Dashboard 渲染時缺少資料:', { member: !!member, team: !!team })
-          return <Loading />
+          return <Loading message="載入用戶資料中..." />
         }
-        
         return (
-          <div className="content-page">
-            {member.role === 'politician' && member.is_leader ? (
-              <TeamManagement 
-                member={member} 
-                team={team}
-                onLogout={handleLogout}
-              />
-            ) : (
-              <StaffDashboard 
-                member={member} 
-                team={team}
-                onLogout={handleLogout}
-              />
-            )}
-          </div>
+          <DashboardLayout 
+            member={member}
+            team={team}
+            onLogout={handleLogout}
+          />
         )
       
       default:
-        console.log('未知的 currentStep:', currentStep)
-        return (
-          <div className="auth-page">
-            <Homepage 
-              onLoginClick={handleLoginClick}
-              user={user}
-              onLogout={handleLogout}
-            />
-          </div>
-        )
+        return <Homepage onNavigate={handleNavigate} />
     }
   }
 
+  // 載入中狀態
+  if (loading) {
+    return <Loading message="系統初始化中..." />
+  }
+
   return (
-    <div className={`app ${isFullscreenPage ? 'fullscreen-mode' : ''}`}>
-      {renderCurrentStep()}
+    <div className={`app-container ${isFullscreen ? 'fullscreen' : ''}`}>
+      {/* 錯誤訊息 */}
+      {error && (
+        <ErrorMessage 
+          message={error} 
+          onClose={() => setError('')}
+        />
+      )}
+      
+      {/* 頂部導航 - 僅在非全螢幕模式下顯示 */}
+      {!isFullscreen && (
+        <header className="navbar">
+          <div className="logo" onClick={() => handleNavigate('homepage')} style={{ cursor: 'pointer' }}>
+            <span className="icon-clock">📋</span>
+            <span>Polify 智能選服幕僚系統</span>
+          </div>
+          <nav className="nav-links">
+            <a 
+              href="#" 
+              className={currentPage === 'homepage' ? 'active' : ''} 
+              onClick={(e) => { e.preventDefault(); handleNavigate('homepage'); }}
+            >
+              首頁
+            </a>
+            <a 
+              href="#" 
+              className={currentPage === 'login' ? 'active' : ''} 
+              onClick={(e) => { e.preventDefault(); handleNavigate('login'); }}
+            >
+              登入
+            </a>
+          </nav>
+        </header>
+      )}
+
+      {/* 主要內容 */}
+      <main className={isFullscreen ? 'fullscreen-content' : 'main-content'}>
+        {renderPage()}
+      </main>
+
+      {/* 頁腳 - 僅在非全螢幕模式且非儀表板頁面顯示 */}
+      {!isFullscreen && currentPage !== 'dashboard' && (
+        <footer>
+          <div className="footer-content">
+            <div className="footer-section">
+              <h3>關於我們</h3>
+              <p>Polify 致力於提供優質的政治服務平台，讓政治人物與民眾共同打造更美好的社區環境。</p>
+            </div>
+            
+            <div className="footer-section">
+              <h3>聯絡資訊</h3>
+              <p>地址：台北市大安區羅斯福路四段1號</p>
+              <p>電話：(02) 2345-6789</p>
+              <p>Email：polify.tw@gmail.com</p>
+            </div>
+            
+            <div className="footer-section">
+              <h3>服務時間</h3>
+              <p>週一至週五：9:00 - 18:00</p>
+              <p>週六：9:00 - 12:00（僅電話服務）</p>
+              <p>Line 機器人：24小時服務</p>
+            </div>
+          </div>
+          
+          <div className="copyright">
+            © 2025 Polify. All rights reserved.
+          </div>
+        </footer>
+      )}
     </div>
   )
 }
