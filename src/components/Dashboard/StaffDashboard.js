@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { TeamService } from '../../services/teamService'
 import DashboardNavBar from './DashboardNavBar'
+import CaseManagement from '../Case/CaseManagement'
 
 function StaffDashboard({ member, team, onLogout }) {
   const [teamMembers, setTeamMembers] = useState([])
@@ -149,21 +150,7 @@ function StaffDashboard({ member, team, onLogout }) {
         )
       
       case 'cases':
-        return (
-          <div style={{
-            background: 'white',
-            borderRadius: '12px',
-            padding: '40px',
-            textAlign: 'center',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-          }}>
-            <div style={{ fontSize: '3rem', marginBottom: '20px' }}>📋</div>
-            <h2 style={{ color: '#667eea', marginBottom: '16px' }}>案件管理</h2>
-            <p style={{ color: '#666', fontSize: '1.1rem' }}>
-              案件管理功能開發中，敬請期待！
-            </p>
-          </div>
-        )
+        return <CaseManagement member={member} team={team} />
       
       case 'team':
       default:
