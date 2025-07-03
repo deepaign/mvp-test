@@ -1,0 +1,196 @@
+/* DashboardNavBar.css */
+.dashboard-navbar {
+  background: white;
+  border-bottom: 1px solid #e9ecef;
+  padding: 16px 40px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+/* 左側團隊資訊 */
+.navbar-left {
+  flex: 1;
+  min-width: 0; /* 允許文字截斷 */
+}
+
+.team-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.team-name {
+  color: #333;
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.team-details {
+  color: #666;
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+/* 中間導航選項 */
+.navbar-center {
+  flex: 2;
+  display: flex;
+  justify-content: center;
+}
+
+.nav-tabs {
+  display: flex;
+  gap: 8px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 4px;
+}
+
+.nav-tab {
+  background: transparent;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.nav-tab:hover {
+  background: rgba(102, 126, 234, 0.1);
+  color: #667eea;
+}
+
+.nav-tab.active {
+  background: #667eea;
+  color: white;
+  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
+}
+
+/* 右側用戶資訊 */
+.navbar-right {
+  flex: 1;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 16px;
+}
+
+.welcome-text {
+  color: #666;
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+.logout-btn {
+  background: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.logout-btn:hover {
+  background: #c82333;
+}
+
+/* 響應式設計 */
+@media (max-width: 1200px) {
+  .dashboard-navbar {
+    padding: 16px 20px;
+  }
+  
+  .team-details {
+    font-size: 0.8rem;
+  }
+  
+  .nav-tab {
+    padding: 8px 16px;
+    font-size: 0.85rem;
+  }
+}
+
+@media (max-width: 992px) {
+  .dashboard-navbar {
+    flex-direction: column;
+    gap: 16px;
+    padding: 16px 20px;
+  }
+  
+  .navbar-left,
+  .navbar-center,
+  .navbar-right {
+    flex: none;
+    width: 100%;
+  }
+  
+  .navbar-left {
+    text-align: center;
+  }
+  
+  .navbar-center {
+    justify-content: center;
+  }
+  
+  .navbar-right {
+    justify-content: center;
+  }
+  
+  .nav-tabs {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 768px) {
+  .team-name {
+    font-size: 1rem;
+  }
+  
+  .team-details {
+    font-size: 0.75rem;
+  }
+  
+  .nav-tab {
+    padding: 8px 12px;
+    font-size: 0.8rem;
+  }
+  
+  .welcome-text {
+    font-size: 0.85rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .dashboard-navbar {
+    padding: 12px 16px;
+  }
+  
+  .nav-tabs {
+    gap: 4px;
+    padding: 3px;
+  }
+  
+  .nav-tab {
+    padding: 6px 10px;
+    font-size: 0.75rem;
+  }
+  
+  .logout-btn {
+    padding: 6px 12px;
+    font-size: 0.8rem;
+  }
+}
