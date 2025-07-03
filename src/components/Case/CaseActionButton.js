@@ -24,9 +24,9 @@ function CaseActionButton({ onViewModeChange, onAddCase }) {
         <button
           className={`view-mode-btn ${viewMode === 'list' ? 'active' : ''}`}
           onClick={() => handleViewModeChange('list')}
-          title="逐條檢視"
+          title="列表檢視"
         >
-          逐條檢視
+          列表檢視
         </button>
         <button
           className={`view-mode-btn ${viewMode === 'card' ? 'active' : ''}`}

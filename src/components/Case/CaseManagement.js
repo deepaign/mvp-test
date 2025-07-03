@@ -1,12 +1,14 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import CaseTabs from './CaseTabs'
 import CaseFilters from './CaseFilters'
+import CaseModal from './CaseModal/CaseModal'
 import { CaseService } from '../../services/caseService'
 
 function CaseManagement({ member, team }) {
   const [activeTab, setActiveTab] = useState('all')
   const [currentFilters, setCurrentFilters] = useState({})
   const [viewMode, setViewMode] = useState('card') // 'card' 或 'list'
+  const [showCaseModal, setShowCaseModal] = useState(false)
   const [cases, setCases] = useState([])
   const [loading, setLoading] = useState(false)
   const [stats, setStats] = useState({
@@ -15,15 +17,7 @@ function CaseManagement({ member, team }) {
     byPriority: { urgent: 0, normal: 0, low: 0 }
   })
 
-  // 載入案件資料
-  useEffect(() => {
-    if (team?.id) {
-      loadCases()
-      loadStats()
-    }
-  }, [team?.id, activeTab, currentFilters])
-
-  const loadCases = async () => {
+  const loadCases = useCallback(async () => {
     setLoading(true)
     try {
       console.log('載入案件，團隊:', team.id, '狀態:', activeTab, '篩選:', currentFilters)
@@ -51,9 +45,9 @@ function CaseManagement({ member, team }) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [team.id, activeTab, currentFilters])
 
-  const loadStats = async () => {
+  const loadStats = useCallback(async () => {
     try {
       const result = await CaseService.getCaseStats(team.id)
       
@@ -66,7 +60,15 @@ function CaseManagement({ member, team }) {
     } catch (error) {
       console.error('載入統計發生錯誤:', error)
     }
-  }
+  }, [team.id])
+
+  // 載入案件資料
+  useEffect(() => {
+    if (team?.id) {
+      loadCases()
+      loadStats()
+    }
+  }, [team?.id, loadCases, loadStats])
 
   const handleTabChange = (tabId) => {
     setActiveTab(tabId)
@@ -85,7 +87,32 @@ function CaseManagement({ member, team }) {
 
   const handleAddCase = () => {
     console.log('點擊新增案件')
-    // TODO: 實作新增案件功能
+    setShowCaseModal(true)
+  }
+
+  const handleCaseCreated = async (caseData) => {
+    console.log('=== CaseManagement.handleCaseCreated ===')
+    console.log('收到新建立的案件:', caseData)
+    
+    try {
+      // 重新載入案件列表和統計
+      console.log('重新載入案件列表和統計資料...')
+      await Promise.all([loadCases(), loadStats()])
+      
+      console.log('✅ 案件列表和統計資料已更新')
+      
+      // 案件建立成功的額外處理
+      // 可以在這裡添加成功通知或其他邏輯
+      
+    } catch (error) {
+      console.error('❌ 重新載入資料失敗:', error)
+      // 即使重新載入失敗，也不影響案件建立成功的事實
+    }
+  }
+
+  const handleCloseModal = () => {
+    console.log('關閉案件建立視窗')
+    setShowCaseModal(false)
   }
 
   const renderCaseContent = () => {
@@ -152,6 +179,11 @@ function CaseManagement({ member, team }) {
           statusIcon = '✅'
           statusTitle = '已完成案件'
           break
+        default:
+          statusCount = stats.total
+          statusIcon = '📋'
+          statusTitle = '全部案件'
+          break
       }
 
       return { statusCount, statusIcon, statusTitle }
@@ -182,19 +214,62 @@ function CaseManagement({ member, team }) {
               找到 {cases.length} 筆案件
             </p>
             {getFilterSummary()}
+            
+            {/* 案件列表 */}
             <div style={{ 
               marginTop: '24px', 
-              padding: '16px', 
-              background: '#e3f2fd', 
+              padding: '20px', 
+              background: '#f8f9fa', 
               borderRadius: '8px',
-              fontSize: '0.9rem',
-              color: '#1976d2'
+              textAlign: 'left'
             }}>
-              📊 案件列表組件開發中，目前顯示案件數量統計
-              <br />
-              <small style={{ opacity: 0.8 }}>
-                檢視模式: {viewMode === 'card' ? '卡片檢視' : '逐條檢視'}
-              </small>
+              <h4 style={{ marginBottom: '16px', color: '#333' }}>案件列表</h4>
+              <div style={{ 
+                display: 'grid', 
+                gap: '12px',
+                gridTemplateColumns: viewMode === 'card' ? 'repeat(auto-fill, minmax(300px, 1fr))' : '1fr'
+              }}>
+                {cases.map((caseItem, index) => (
+                  <div key={caseItem.id || index} style={{
+                    background: 'white',
+                    padding: '16px',
+                    borderRadius: '6px',
+                    border: '1px solid #e0e0e0',
+                    cursor: 'pointer',
+                    transition: 'box-shadow 0.2s ease',
+                    ':hover': {
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                    }
+                  }}>
+                    <h5 style={{ margin: '0 0 8px 0', color: '#333' }}>
+                      {caseItem.title || '未命名案件'}
+                    </h5>
+                    <p style={{ margin: '0 0 8px 0', fontSize: '0.85rem', color: '#666' }}>
+                      {caseItem.description ? 
+                        (caseItem.description.length > 100 ? 
+                          `${caseItem.description.substring(0, 100)}...` : 
+                          caseItem.description
+                        ) : 
+                        '無描述'
+                      }
+                    </p>
+                    <div style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      alignItems: 'center',
+                      fontSize: '0.8rem',
+                      color: '#888'
+                    }}>
+                      <span>
+                        狀態: {CaseService.getStatusLabel(caseItem.status)}
+                      </span>
+                      <span>
+                        優先順序: {CaseService.getPriorityLabel(caseItem.priority)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         ) : (
@@ -203,23 +278,6 @@ function CaseManagement({ member, team }) {
               目前沒有案件
             </p>
             {getFilterSummary()}
-            <div style={{ 
-              marginTop: '24px', 
-              padding: '16px', 
-              background: '#f8f9fa', 
-              borderRadius: '8px',
-              fontSize: '0.9rem',
-              color: '#666'
-            }}>
-              💡 提示：篩選功能已準備就緒，案件資料載入功能已完成
-              <br />
-              <small style={{ opacity: 0.8 }}>
-                統計資料 - 總計: {stats.total} | 
-                待處理: {stats.byStatus.pending} | 
-                處理中: {stats.byStatus.processing} | 
-                已完成: {stats.byStatus.completed}
-              </small>
-            </div>
           </div>
         )}
       </div>
@@ -252,6 +310,14 @@ function CaseManagement({ member, team }) {
       }}>
         {renderCaseContent()}
       </div>
+
+      {/* 新增案件彈窗 */}
+      <CaseModal
+        isOpen={showCaseModal}
+        onClose={handleCloseModal}
+        team={team}
+        onCaseCreated={handleCaseCreated}
+      />
     </div>
   )
 }

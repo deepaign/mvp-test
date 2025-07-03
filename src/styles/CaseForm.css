@@ -1,0 +1,266 @@
+/* CaseForm.css */
+.case-form-container {
+  padding: 24px;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.case-form {
+  max-width: 100%;
+}
+
+/* 區塊樣式 */
+.form-section {
+  margin-bottom: 32px;
+  border-bottom: 1px solid #f0f0f0;
+  padding-bottom: 24px;
+}
+
+.form-section:last-of-type {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.section-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #333;
+  margin: 0 0 16px 0;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #667eea;
+  display: inline-block;
+}
+
+/* 表單網格 */
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-field.full-width {
+  grid-column: 1 / -1;
+}
+
+/* 標籤樣式 */
+.form-field label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #555;
+  margin-bottom: 4px;
+}
+
+.required {
+  color: #e74c3c;
+}
+
+/* 輸入欄位樣式 */
+.form-field input,
+.form-field select,
+.form-field textarea {
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 0.9rem;
+  color: #333;
+  transition: all 0.2s ease;
+}
+
+.form-field input:focus,
+.form-field select:focus,
+.form-field textarea:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.form-field input:hover,
+.form-field select:hover,
+.form-field textarea:hover {
+  border-color: #bbb;
+}
+
+.readonly-input {
+  background-color: #f8f9fa !important;
+  color: #666 !important;
+  cursor: not-allowed;
+}
+
+.form-field textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+/* 行政區選擇器 */
+.district-selector {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.county-select,
+.district-select {
+  width: 100%;
+}
+
+.district-select:disabled {
+  background-color: #f8f9fa;
+  color: #999;
+  cursor: not-allowed;
+}
+
+/* 事發地點群組 */
+.incident-location-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 核取方塊樣式 */
+.checkbox-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  color: #555;
+  cursor: pointer;
+  margin: 0;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  cursor: pointer;
+}
+
+/* Footer 樣式 */
+.form-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 24px;
+  border-top: 1px solid #e9ecef;
+  margin-top: 24px;
+}
+
+.cancel-btn {
+  background: #f8f9fa;
+  color: #666;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 12px 24px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cancel-btn:hover:not(:disabled) {
+  background: #e9ecef;
+  border-color: #bbb;
+}
+
+.cancel-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.submit-btn {
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 12px 24px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.2);
+}
+
+.submit-btn:hover:not(:disabled) {
+  background: #5a6fd8;
+  box-shadow: 0 3px 6px rgba(102, 126, 234, 0.3);
+  transform: translateY(-1px);
+}
+
+.submit-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* 響應式設計 */
+@media (max-width: 768px) {
+  .case-form-container {
+    padding: 16px;
+    max-height: 75vh;
+  }
+  
+  .form-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  
+  .form-section {
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+  }
+  
+  .section-title {
+    font-size: 1rem;
+  }
+  
+  .district-selector {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  
+  .form-footer {
+    flex-direction: column-reverse;
+    gap: 8px;
+  }
+  
+  .cancel-btn,
+  .submit-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 576px) {
+  .case-form-container {
+    padding: 12px;
+  }
+  
+  .form-field input,
+  .form-field select,
+  .form-field textarea {
+    padding: 8px 10px;
+    font-size: 0.85rem;
+  }
+  
+  .section-title {
+    font-size: 0.95rem;
+  }
+  
+  .form-field label {
+    font-size: 0.85rem;
+  }
+}
