@@ -1,0 +1,234 @@
+/* CaseFilters.css */
+.case-filters-container {
+  background: white;
+  padding: 20px;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.case-filters-wrapper {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 20px;
+}
+
+.case-filters {
+  display: flex;
+  gap: 20px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 140px;
+}
+
+.filter-label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #555;
+  margin-bottom: 2px;
+}
+
+.filter-select {
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 0.9rem;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 120px;
+}
+
+.filter-select:hover {
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
+.filter-select:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+}
+
+.reset-filters-btn {
+  background: #f8f9fa;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  height: fit-content;
+  white-space: nowrap;
+  min-width: auto;
+  width: auto;
+}
+
+.reset-filters-btn:hover {
+  background: #e9ecef;
+  color: #333;
+  border-color: #bbb;
+}
+
+.reset-filters-btn:active {
+  transform: translateY(1px);
+}
+
+/* 自定義日期選擇器 */
+.custom-date-picker {
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #f0f0f0;
+  flex-wrap: wrap;
+}
+
+.date-picker-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 140px;
+}
+
+.date-label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #555;
+}
+
+.date-input {
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 0.9rem;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.date-input:hover {
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
+.date-input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+}
+
+/* 響應式設計 */
+@media (max-width: 1200px) {
+  .case-filters-wrapper {
+    gap: 16px;
+  }
+  
+  .case-filters {
+    gap: 16px;
+  }
+  
+  .filter-group {
+    min-width: 120px;
+  }
+  
+  .filter-select {
+    min-width: 100px;
+    font-size: 0.85rem;
+  }
+}
+
+@media (max-width: 992px) {
+  .case-filters-container {
+    padding: 16px;
+  }
+  
+  .case-filters-wrapper {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+  
+  .case-filters {
+    gap: 12px;
+  }
+  
+  .filter-group {
+    min-width: 110px;
+  }
+  
+  .filter-select {
+    padding: 6px 10px;
+    font-size: 0.8rem;
+  }
+  
+  .reset-filters-btn {
+    padding: 6px 12px;
+    font-size: 0.8rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .case-filters {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+  
+  .filter-group {
+    min-width: auto;
+    width: 100%;
+  }
+  
+  .filter-select {
+    width: 100%;
+    min-width: auto;
+  }
+  
+  .custom-date-picker {
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch;
+  }
+  
+  .date-picker-group {
+    min-width: auto;
+    width: 100%;
+  }
+  
+  .date-input {
+    width: 100%;
+  }
+}
+
+@media (max-width: 576px) {
+  .case-filters-container {
+    padding: 12px;
+  }
+  
+  .filter-label,
+  .date-label {
+    font-size: 0.8rem;
+  }
+  
+  .filter-select,
+  .date-input {
+    font-size: 0.75rem;
+    padding: 6px 8px;
+  }
+  
+  .reset-filters-btn {
+    font-size: 0.75rem;
+    padding: 6px 10px;
+  }
+}
