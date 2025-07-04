@@ -360,19 +360,11 @@ function App() {
         
         return (
           <div className="content-page">
-            {member.role === 'politician' && member.is_leader ? (
-              <TeamManagement 
-                member={member} 
-                team={team}
-                onLogout={handleLogout}
-              />
-            ) : (
-              <StaffDashboard 
-                member={member} 
-                team={team}
-                onLogout={handleLogout}
-              />
-            )}
+            <StaffDashboard 
+              member={member} 
+              team={team}
+              onLogout={handleLogout}
+            />
           </div>
         )
       

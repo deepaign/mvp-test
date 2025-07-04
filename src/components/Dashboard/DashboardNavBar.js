@@ -1,4 +1,6 @@
+// src/components/Dashboard/DashboardNavBar.js
 import React from 'react'
+import { PermissionService } from '../../services/permissionService'
 import '../../styles/DashboardNavBar.css'
 
 function DashboardNavBar({ team, member, activeTab, onTabChange, onLogout }) {
@@ -15,12 +17,8 @@ function DashboardNavBar({ team, member, activeTab, onTabChange, onLogout }) {
     return labels[position] || position
   }
 
-  const navItems = [
-    { id: 'achievements', label: '政績展示' },
-    { id: 'analytics', label: '資料分析' },
-    { id: 'cases', label: '案件管理' },
-    { id: 'team', label: '團隊成員' }
-  ]
+  // 根據用戶權限獲取可見的導航項目
+  const navItems = PermissionService.getVisibleNavItems(member)
 
   return (
     <div className="dashboard-navbar">
@@ -52,6 +50,9 @@ function DashboardNavBar({ team, member, activeTab, onTabChange, onLogout }) {
       {/* 右側：用戶資訊和登出 */}
       <div className="navbar-right">
         <span className="welcome-text">歡迎，{member.name}</span>
+        <span className="role-badge">
+          {member.is_leader ? '👑 負責人' : '🤝 幕僚'}
+        </span>
         <button className="logout-btn" onClick={onLogout}>
           登出
         </button>

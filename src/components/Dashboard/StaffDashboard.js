@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { TeamService } from '../../services/teamService'
 import DashboardNavBar from './DashboardNavBar'
 import CaseManagement from '../Case/CaseManagement'
+import { PermissionService } from '../../services/permissionService'
 
 function StaffDashboard({ member, team, onLogout }) {
   const [teamMembers, setTeamMembers] = useState([])
@@ -150,6 +151,28 @@ function StaffDashboard({ member, team, onLogout }) {
         )
       
       case 'cases':
+        // 檢查案件管理權限
+        const hasCasePermission = PermissionService.hasPermission(member, 'case_view_all') || 
+                                    PermissionService.hasPermission(member, 'case_view_assigned')
+        
+        if (!hasCasePermission) {
+          return (
+            <div style={{
+              background: 'white',
+              borderRadius: '12px',
+              padding: '40px',
+              textAlign: 'center',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+            }}>
+              <div style={{ fontSize: '3rem', marginBottom: '20px' }}>🚫</div>
+              <h2 style={{ color: '#e74c3c', marginBottom: '16px' }}>權限不足</h2>
+              <p style={{ color: '#666', fontSize: '1.1rem' }}>
+                您沒有權限存取案件管理功能
+              </p>
+            </div>
+          )
+        }
+        
         return <CaseManagement member={member} team={team} />
       
       case 'team':
@@ -187,7 +210,9 @@ function StaffDashboard({ member, team, onLogout }) {
                 }}>
                   <div style={{ fontSize: '1.5rem', color: '#f093fb', marginBottom: '8px' }}>🤝</div>
                   <div style={{ color: '#333', fontWeight: '600' }}>我的身份</div>
-                  <div style={{ color: '#666', fontSize: '0.9rem' }}>幕僚助理</div>
+                  <div style={{ color: '#666', fontSize: '0.9rem' }}>
+                    {getRoleDisplayName(member.role, member.is_leader)}
+                  </div>
                 </div>
                 
                 <div style={{

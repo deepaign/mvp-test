@@ -3,8 +3,14 @@ import CaseTabs from './CaseTabs'
 import CaseFilters from './CaseFilters'
 import CaseModal from './CaseModal/CaseModal'
 import { CaseService } from '../../services/caseService'
+import { PermissionService } from '../../services/permissionService'
+
 
 function CaseManagement({ member, team }) {
+  const canViewAll = PermissionService.hasPermission(member, 'case_view_all')
+  const canCreate = PermissionService.hasPermission(member, 'case_create')
+  const canAssign = PermissionService.hasPermission(member, 'case_assign')
+
   const [activeTab, setActiveTab] = useState('all')
   const [currentFilters, setCurrentFilters] = useState({})
   const [viewMode, setViewMode] = useState('card') // 'card' 或 'list'
@@ -86,6 +92,10 @@ function CaseManagement({ member, team }) {
   }
 
   const handleAddCase = () => {
+    if (!canCreate) {
+      alert('您沒有建立案件的權限')
+      return
+    }
     console.log('點擊新增案件')
     setShowCaseModal(true)
   }
