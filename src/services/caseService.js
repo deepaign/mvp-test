@@ -126,12 +126,12 @@ export class CaseService {
         }
       }
 
-      // 建立基礎查詢
+      // 建立基礎查詢 - 移除 !inner
       let query = supabase
         .from('Case')
         .select(`
           *,
-          CategoryCase!inner (
+          CategoryCase (
             Category (
               id,
               name
