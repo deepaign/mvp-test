@@ -1,20 +1,89 @@
-/* CaseForm.css - 完整版 */
+/* CaseTextInput.css - 完整版 */
 
 /* 主容器 */
-.case-form-container {
+.case-text-input-container {
   width: 100%;
   max-width: 100%;
   padding: 0;
   background-color: #fff;
 }
 
-.case-form {
+.case-text-form {
   display: flex;
   flex-direction: column;
-  gap: 32px;
+  gap: 24px;
   padding: 32px;
   max-height: 80vh;
   overflow-y: auto;
+}
+
+/* 文本輸入區域 */
+.text-input-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.text-input-label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+.text-input-textarea {
+  width: 100%;
+  min-height: 300px;
+  padding: 16px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  resize: vertical;
+  font-family: inherit;
+  transition: border-color 0.2s ease;
+  box-sizing: border-box;
+}
+
+.text-input-textarea:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
+.text-input-textarea::placeholder {
+  color: #999;
+  font-style: italic;
+}
+
+/* AI 萃取提示區域 */
+.ai-extract-notice {
+  background: linear-gradient(135deg, #e3f2fd 0%, #f1f8ff 100%);
+  border: 1px solid #bbdefb;
+  border-radius: 8px;
+  padding: 16px;
+  margin: 8px 0;
+}
+
+.ai-extract-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: #1976d2;
+  font-size: 0.95rem;
+}
+
+.ai-icon {
+  font-size: 1.2rem;
+}
+
+.ai-extract-description {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #1976d2;
+  opacity: 0.8;
+  line-height: 1.4;
 }
 
 /* 表單區塊 */
@@ -25,7 +94,7 @@
 }
 
 .section-title {
-  font-size: 1.2rem;
+  font-size: 1.1rem;
   font-weight: 600;
   color: #333;
   margin: 0;
@@ -33,153 +102,10 @@
   border-bottom: 2px solid #f0f0f0;
 }
 
-/* 表單網格 */
-.form-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
-  align-items: start;
-}
-
-/* 表單欄位 */
-.form-field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.form-field.full-width {
-  grid-column: 1 / -1;
-}
-
-.form-field label {
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: #333;
-  margin-bottom: 4px;
-}
-
 /* 必填標記 */
 .required {
   color: #e74c3c;
   font-weight: bold;
-}
-
-/* 輸入框樣式 */
-.form-field input,
-.form-field select,
-.form-field textarea {
-  padding: 10px 12px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  font-size: 0.9rem;
-  font-family: inherit;
-  background-color: #fff;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.form-field input:focus,
-.form-field select:focus,
-.form-field textarea:focus {
-  outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
-}
-
-/* 只讀輸入框 */
-.readonly-input {
-  background-color: #f8f9fa;
-  color: #6c757d;
-  cursor: not-allowed;
-}
-
-.readonly-input:focus {
-  border-color: #ddd;
-  box-shadow: none;
-}
-
-/* 日期時間組合輸入框 */
-.datetime-group {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  width: 100%;
-}
-
-.date-input {
-  flex: 2;
-  padding: 10px 12px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  font-size: 0.9rem;
-  background-color: #fff;
-  transition: border-color 0.2s ease;
-}
-
-.date-input:focus {
-  outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
-}
-
-.time-input {
-  flex: 1;
-  padding: 10px 12px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  font-size: 0.9rem;
-  background-color: #fff;
-  transition: border-color 0.2s ease;
-}
-
-.time-input:focus {
-  outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
-}
-
-.time-input:disabled {
-  background-color: #f5f5f5;
-  cursor: not-allowed;
-  color: #999;
-}
-
-/* 行政區選擇器 */
-.district-selector {
-  display: flex;
-  gap: 8px;
-  width: 100%;
-}
-
-.county-select,
-.district-select {
-  flex: 1;
-  padding: 10px 12px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  font-size: 0.9rem;
-  background-color: #fff;
-  transition: border-color 0.2s ease;
-}
-
-.county-select:focus,
-.district-select:focus {
-  outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
-}
-
-.district-select:disabled {
-  background-color: #f5f5f5;
-  cursor: not-allowed;
-  color: #999;
-}
-
-/* 事發地點群組 */
-.incident-location-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
 }
 
 /* 行事曆與通知設定樣式 */
@@ -224,6 +150,12 @@
   height: 42px;
   box-sizing: border-box;
   transition: border-color 0.2s ease;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 16px;
+  padding-right: 32px;
 }
 
 .notification-select:focus {
@@ -372,37 +304,12 @@
   flex: 1;
 }
 
-/* 複選框群組 */
-.checkbox-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.checkbox-group .checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  font-size: 0.9rem;
-  line-height: 1.4;
-  margin: 0;
-}
-
-.checkbox-group input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  margin: 0;
-  cursor: pointer;
-  accent-color: #667eea;
-}
-
 /* 表單底部按鈕 */
 .form-footer {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
-  padding-top: 24px;
+  padding-top: 20px;
   border-top: 1px solid #e9ecef;
   margin-top: 8px;
 }
@@ -468,35 +375,27 @@
 }
 
 @media (max-width: 768px) {
-  .case-form {
+  .case-text-form {
     padding: 24px;
-    gap: 28px;
+    gap: 20px;
   }
   
-  .form-grid {
-    grid-template-columns: 1fr;
-    gap: 12px;
+  .text-input-textarea {
+    min-height: 250px;
+    padding: 12px;
+    font-size: 0.85rem;
   }
   
-  .datetime-group {
-    flex-direction: column;
-    gap: 8px;
+  .ai-extract-notice {
+    padding: 12px;
   }
   
-  .date-input,
-  .time-input {
-    flex: 1;
-    width: 100%;
+  .ai-extract-header {
+    font-size: 0.9rem;
   }
   
-  .district-selector {
-    flex-direction: column;
-    gap: 8px;
-  }
-  
-  .county-select,
-  .district-select {
-    width: 100%;
+  .ai-extract-description {
+    font-size: 0.8rem;
   }
   
   .notification-row {
@@ -534,24 +433,31 @@
 }
 
 @media (max-width: 480px) {
-  .case-form {
+  .case-text-form {
     padding: 16px;
-    gap: 24px;
+    gap: 16px;
+  }
+  
+  .text-input-textarea {
+    min-height: 200px;
+    padding: 10px;
+    font-size: 0.8rem;
   }
   
   .section-title {
-    font-size: 1.1rem;
+    font-size: 1rem;
   }
   
-  .form-field input,
-  .form-field select,
-  .form-field textarea {
-    padding: 8px 10px;
+  .ai-extract-notice {
+    padding: 10px;
+  }
+  
+  .ai-extract-header {
     font-size: 0.85rem;
   }
   
-  .calendar-notification-container {
-    gap: 16px;
+  .ai-extract-description {
+    font-size: 0.75rem;
   }
   
   .notification-row {
@@ -566,14 +472,15 @@
   .btn-icon {
     font-size: 0.9rem;
   }
+  
+  .cancel-btn,
+  .submit-btn {
+    padding: 12px;
+    font-size: 0.85rem;
+  }
 }
 
-/* 確保在表單網格中正確顯示 */
-.form-grid .calendar-notification-container {
-  grid-column: 1 / -1;
-}
-
-/* 修正可能的樣式衝突 */
+/* 確保在表單區塊中正確顯示 */
 .form-section .calendar-notification-container {
   margin-top: 0;
 }
@@ -582,60 +489,132 @@
   margin-bottom: 0;
 }
 
-/* 文本域特殊樣式 */
-.form-field textarea {
-  resize: vertical;
-  min-height: 100px;
-  line-height: 1.5;
-}
-
-/* 選擇框箭頭樣式 */
-.form-field select {
-  appearance: none;
-  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
-  background-repeat: no-repeat;
-  background-position: right 8px center;
-  background-size: 16px;
-  padding-right: 32px;
-}
-
-/* 錯誤狀態樣式 */
-.form-field.error input,
-.form-field.error select,
-.form-field.error textarea {
-  border-color: #e74c3c;
-  box-shadow: 0 0 0 2px rgba(231, 76, 60, 0.1);
-}
-
-/* 成功狀態樣式 */
-.form-field.success input,
-.form-field.success select,
-.form-field.success textarea {
-  border-color: #27ae60;
-  box-shadow: 0 0 0 2px rgba(39, 174, 96, 0.1);
-}
-
 /* 表單加載狀態 */
-.case-form.loading {
+.case-text-form.loading {
   pointer-events: none;
   opacity: 0.7;
 }
 
 /* 滾動條樣式 */
-.case-form::-webkit-scrollbar {
+.case-text-form::-webkit-scrollbar {
   width: 6px;
 }
 
-.case-form::-webkit-scrollbar-track {
+.case-text-form::-webkit-scrollbar-track {
   background: #f1f1f1;
   border-radius: 3px;
 }
 
-.case-form::-webkit-scrollbar-thumb {
+.case-text-form::-webkit-scrollbar-thumb {
   background: #c1c1c1;
   border-radius: 3px;
 }
 
-.case-form::-webkit-scrollbar-thumb:hover {
+.case-text-form::-webkit-scrollbar-thumb:hover {
   background: #a1a1a1;
+}
+
+/* 文本區域特殊樣式 */
+.text-input-textarea {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+}
+
+/* 錯誤狀態樣式 */
+.text-input-section.error .text-input-textarea {
+  border-color: #e74c3c;
+  box-shadow: 0 0 0 2px rgba(231, 76, 60, 0.1);
+}
+
+/* 成功狀態樣式 */
+.text-input-section.success .text-input-textarea {
+  border-color: #27ae60;
+  box-shadow: 0 0 0 2px rgba(39, 174, 96, 0.1);
+}
+
+/* 字符計數器（如果需要的話） */
+.text-input-counter {
+  font-size: 0.8rem;
+  color: #666;
+  text-align: right;
+  margin-top: 4px;
+}
+
+.text-input-counter.warning {
+  color: #f39c12;
+}
+
+.text-input-counter.error {
+  color: #e74c3c;
+}
+
+/* 提示文本樣式 */
+.input-hint {
+  font-size: 0.8rem;
+  color: #666;
+  margin-top: 4px;
+  line-height: 1.3;
+}
+
+/* 焦點狀態增強 */
+.text-input-textarea:focus {
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+/* 禁用狀態 */
+.text-input-textarea:disabled {
+  background-color: #f5f5f5;
+  cursor: not-allowed;
+  color: #999;
+}
+
+/* 暗色模式支持（如果需要） */
+@media (prefers-color-scheme: dark) {
+  .case-text-input-container {
+    background-color: #1a1a1a;
+    color: #fff;
+  }
+  
+  .text-input-textarea {
+    background-color: #2d2d2d;
+    border-color: #404040;
+    color: #fff;
+  }
+  
+  .text-input-textarea:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+  }
+  
+  .ai-extract-notice {
+    background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
+    border-color: #3b82f6;
+    color: #dbeafe;
+  }
+  
+  .section-title {
+    color: #fff;
+    border-bottom-color: #404040;
+  }
+  
+  .notification-select,
+  .datetime-input {
+    background-color: #2d2d2d;
+    border-color: #404040;
+    color: #fff;
+  }
+  
+  .action-btn {
+    background-color: #2d2d2d;
+    border-color: #404040;
+    color: #fff;
+  }
+  
+  .cancel-btn {
+    background-color: #374151;
+    border-color: #4b5563;
+    color: #d1d5db;
+  }
 }

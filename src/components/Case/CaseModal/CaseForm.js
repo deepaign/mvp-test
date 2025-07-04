@@ -10,12 +10,14 @@ function CaseForm({ team, onSubmit, onCancel }) {
     caseNumber: '',
     contactMethod: 'phone',
     receivedDate: new Date().toISOString().split('T')[0],
+    receivedTime: '08:00',
     closedDate: '',
+    closedTime: '',
     receiver: '',
     handler: '',
     category: '',
-    homeCounty: '', // 新增：住家縣市
-    homeDistrict: '', // 住家里別 -> VoterDistrict
+    homeCounty: '',
+    homeDistrict: '',
     priority: 'normal',
     hasAttachment: 'none',
     
@@ -28,9 +30,9 @@ function CaseForm({ team, onSubmit, onCancel }) {
     // 陳情內容
     title: '',
     description: '',
-    incidentLocation: '', // 事發地點文字描述
-    incidentCounty: '', // 新增：事發地點縣市
-    incidentDistrict: '', // 事發地點行政區 -> DistrictCase
+    incidentLocation: '',
+    incidentCounty: '',
+    incidentDistrict: '',
     processingStatus: 'pending',
     
     // 行事曆與通知
@@ -45,8 +47,8 @@ function CaseForm({ team, onSubmit, onCancel }) {
     members: [],
     categories: [],
     counties: [],
-    homeDistricts: [], // 住家里別的行政區選項
-    incidentDistricts: [] // 事發地點的行政區選項
+    homeDistricts: [],
+    incidentDistricts: []
   })
 
   const [loading, setLoading] = useState(true)
@@ -54,10 +56,7 @@ function CaseForm({ team, onSubmit, onCancel }) {
   // 載入行政區資料
   const loadDistricts = async (countyId, type) => {
     try {
-      console.log(`載入行政區: countyId=${countyId}, type=${type}`) // 除錯用
-      
       if (!countyId) {
-        // 如果沒有縣市ID，清空對應的行政區選項
         setDropdownOptions(prev => ({
           ...prev,
           [type === 'home' ? 'homeDistricts' : 'incidentDistricts']: []
@@ -65,17 +64,14 @@ function CaseForm({ team, onSubmit, onCancel }) {
         return
       }
 
-      // 使用 CaseService 載入行政區
       const result = await CaseService.getDistricts(countyId)
       
       if (result.success) {
-        console.log(`載入到的行政區資料:`, result.data) // 除錯用
         setDropdownOptions(prev => ({
           ...prev,
           [type === 'home' ? 'homeDistricts' : 'incidentDistricts']: result.data || []
         }))
       } else {
-        console.error('載入行政區失敗:', result.error)
         setDropdownOptions(prev => ({
           ...prev,
           [type === 'home' ? 'homeDistricts' : 'incidentDistricts']: []
@@ -107,7 +103,7 @@ function CaseForm({ team, onSubmit, onCancel }) {
       const [membersResult, categoriesResult, countiesResult] = await Promise.all([
         CaseService.getTeamMembers(team.id),
         CaseService.getCategories(team.id),
-        CaseService.getCounties() // 使用新的 CaseService 方法
+        CaseService.getCounties()
       ])
 
       setDropdownOptions({
@@ -118,8 +114,6 @@ function CaseForm({ team, onSubmit, onCancel }) {
         incidentDistricts: []
       })
 
-      console.log('載入下拉選單資料:', { membersResult, categoriesResult, countiesResult })
-
     } catch (error) {
       console.error('載入下拉選單失敗:', error)
     } finally {
@@ -129,8 +123,6 @@ function CaseForm({ team, onSubmit, onCancel }) {
 
   // 處理表單輸入變更
   const handleInputChange = (field, value) => {
-    console.log(`表單變更: ${field} = ${value}`) // 除錯用
-    
     setFormData(prev => ({
       ...prev,
       [field]: value
@@ -140,7 +132,7 @@ function CaseForm({ team, onSubmit, onCancel }) {
     if (field === 'homeCounty') {
       setFormData(prev => ({
         ...prev,
-        homeDistrict: '' // 清空住家行政區
+        homeDistrict: ''
       }))
     }
 
@@ -148,26 +140,43 @@ function CaseForm({ team, onSubmit, onCancel }) {
     if (field === 'incidentCounty') {
       setFormData(prev => ({
         ...prev,
-        incidentDistrict: '' // 清空事發地點行政區
+        incidentDistrict: ''
+      }))
+    }
+
+    // 特殊處理：結案日期清空時，同時清空結案時間
+    if (field === 'closedDate' && !value) {
+      setFormData(prev => ({
+        ...prev,
+        closedTime: ''
+      }))
+    }
+
+    // 特殊處理：如果設定了結案日期但沒有時間，預設為現在時間
+    if (field === 'closedDate' && value && !formData.closedTime) {
+      const now = new Date()
+      const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`
+      setFormData(prev => ({
+        ...prev,
+        closedTime: currentTime
       }))
     }
   }
 
-  // 表單驗證
+  // 表單驗證（簡化版）
   const validateForm = () => {
-    console.log('=== 開始表單驗證 ===')
-    
     const requiredFields = [
       'title',
       'contact1Name',
       'contact1Phone',
       'receiver',
-      'category'
+      'category',
+      'receivedDate',
+      'receivedTime'
     ]
 
     for (const field of requiredFields) {
       const value = formData[field]
-      console.log(`檢查欄位 ${field}:`, value)
       
       if (!value || !value.toString().trim()) {
         const fieldNames = {
@@ -175,11 +184,12 @@ function CaseForm({ team, onSubmit, onCancel }) {
           contact1Name: '聯絡人1姓名',
           contact1Phone: '聯絡人1電話',
           receiver: '受理人員',
-          category: '案件類別'
+          category: '案件類別',
+          receivedDate: '受理日期',
+          receivedTime: '受理時間'
         }
         
         const errorMsg = `請填寫 ${fieldNames[field]}`
-        console.error(`❌ 驗證失敗: ${errorMsg}`)
         alert(errorMsg)
         return false
       }
@@ -187,114 +197,53 @@ function CaseForm({ team, onSubmit, onCancel }) {
     
     // 檢查團隊資料
     if (!team || !team.id) {
-      console.error('❌ 團隊資料不完整')
       alert('團隊資料不完整，無法建立案件')
       return false
     }
     
-    // 檢查電話格式（基本檢查）
+    // 檢查電話格式
     const phoneRegex = /^[0-9+\-\s()]{8,15}$/
     if (!phoneRegex.test(formData.contact1Phone)) {
-      console.error('❌ 聯絡人1電話格式不正確')
       alert('聯絡人1電話格式不正確，請輸入有效的電話號碼')
       return false
     }
     
-    // 警告：如果選擇了縣市但沒有選擇行政區
-    if (formData.homeCounty && !formData.homeDistrict) {
-      console.warn('⚠️ 選擇了住家縣市但沒有選擇行政區')
-      const confirmMsg = '您選擇了住家縣市但沒有選擇行政區，是否繼續？'
-      if (!window.confirm(confirmMsg)) {
-        return false
-      }
+    // 檢查結案日期時間的一致性
+    if (formData.closedDate && !formData.closedTime) {
+      alert('請設定結案時間')
+      return false
     }
     
-    if (formData.incidentCounty && !formData.incidentDistrict) {
-      console.warn('⚠️ 選擇了事發縣市但沒有選擇行政區')
-      const confirmMsg = '您選擇了事發縣市但沒有選擇行政區，是否繼續？'
-      if (!window.confirm(confirmMsg)) {
-        return false
-      }
-    }
-    
-    console.log('✅ 表單驗證通過')
     return true
   }
 
-  // 提交表單
+  // 提交表單（簡化版）
   const handleSubmit = async (e) => {
     e.preventDefault()
     
-    console.log('=== CaseForm.handleSubmit 開始 ===')
-    console.log('表單資料:', formData)
-    console.log('團隊資料:', team)
-    
     if (!validateForm()) {
-      console.log('表單驗證失敗')
       return
     }
 
-    console.log('表單驗證通過，開始建立案件')
-    
-    setIsSubmitting(true) // 設定提交中狀態
+    setIsSubmitting(true)
 
     try {
-      // 詳細檢查必要資料
-      console.log('檢查必要資料:')
-      console.log('- Team ID:', team?.id)
-      console.log('- 案件標題:', formData.title)
-      console.log('- 聯絡人1:', formData.contact1Name)
-      console.log('- 聯絡人1電話:', formData.contact1Phone)
-      console.log('- 受理人員:', formData.receiver)
-      console.log('- 案件類別:', formData.category)
-      console.log('- 住家行政區:', formData.homeDistrict || '未選擇')
-      console.log('- 事發行政區:', formData.incidentDistrict || '未選擇')
-      
-      // 檢查 team 物件
-      if (!team || !team.id) {
-        console.error('❌ 團隊資料不完整:', team)
-        alert('團隊資料不完整，無法建立案件')
-        return
-      }
-      
-      console.log('✅ 開始呼叫 CaseService.createCaseWithRelations')
-      
-      // 建立案件
       const result = await CaseService.createCaseWithRelations({
         formData,
         teamId: team.id
       })
 
-      console.log('CaseService.createCaseWithRelations 回傳結果:', result)
-
       if (result.success) {
-        console.log('✅ 案件建立成功!')
-        console.log('建立的案件資料:', result.data)
-        
-        // 顯示更詳細的成功訊息
-        const relationSummary = result.data.relationSummary
-        if (relationSummary) {
-          const successMsg = `案件建立成功！\n\n案件資訊：\n- 案件ID: ${result.data.case.id}\n- 案件標題: ${result.data.case.title}\n- 案件編號: ${result.data.caseNumber}\n\n關聯建立狀況：\n- 成功: ${relationSummary.success} 個\n- 失敗: ${relationSummary.failed} 個\n- 總計: ${relationSummary.total} 個`
-          console.log(successMsg)
-          alert(successMsg)
-        } else {
-          alert('案件建立成功！')
-        }
-        
-        // 呼叫父組件的 onSubmit 函數
-        console.log('呼叫父組件的 onSubmit 函數')
+        // 直接調用 onSubmit，不顯示成功訊息
         if (onSubmit) {
           await onSubmit(result.data)
         }
-        
       } else {
-        console.error('❌ 案件建立失敗:', result.error)
-        
-        // 提供更友善的錯誤訊息
+        // 只在真正失敗時顯示錯誤訊息
         let errorMessage = '建立案件失敗：'
         
         if (result.error.includes('time with time zone')) {
-          errorMessage += '日期格式問題，請聯繫系統管理員'
+          errorMessage += '日期時間格式問題，請聯繫系統管理員'
         } else if (result.error.includes('foreign key')) {
           errorMessage += '資料關聯問題，請檢查選擇的選項是否正確'
         } else if (result.error.includes('permission')) {
@@ -309,11 +258,6 @@ function CaseForm({ team, onSubmit, onCancel }) {
       }
 
     } catch (error) {
-      console.error('❌ 提交表單時發生異常:', error)
-      console.error('錯誤詳細:', error.message)
-      console.error('錯誤堆疊:', error.stack)
-      
-      // 提供更友善的錯誤訊息
       let errorMessage = '建立案件時發生錯誤：'
       
       if (error.message.includes('network')) {
@@ -328,10 +272,8 @@ function CaseForm({ team, onSubmit, onCancel }) {
       
       alert(errorMessage)
     } finally {
-      setIsSubmitting(false) // 重置提交中狀態
+      setIsSubmitting(false)
     }
-    
-    console.log('=== CaseForm.handleSubmit 結束 ===')
   }
 
   // useEffect hooks
@@ -339,14 +281,12 @@ function CaseForm({ team, onSubmit, onCancel }) {
     loadDropdownData()
   }, [loadDropdownData])
 
-  // 監聽住家縣市變更，載入對應行政區
   useEffect(() => {
     if (formData.homeCounty) {
       loadDistricts(formData.homeCounty, 'home')
     }
   }, [formData.homeCounty])
 
-  // 監聽事發地點縣市變更，載入對應行政區
   useEffect(() => {
     if (formData.incidentCounty) {
       loadDistricts(formData.incidentCounty, 'incident')
@@ -405,22 +345,42 @@ function CaseForm({ team, onSubmit, onCancel }) {
             </div>
 
             <div className="form-field">
-              <label>受理日期 <span className="required">*</span></label>
-              <input
-                type="date"
-                value={formData.receivedDate}
-                onChange={(e) => handleInputChange('receivedDate', e.target.value)}
-                required
-              />
+              <label>受理日期時間 <span className="required">*</span></label>
+              <div className="datetime-group">
+                <input
+                  type="date"
+                  value={formData.receivedDate}
+                  onChange={(e) => handleInputChange('receivedDate', e.target.value)}
+                  required
+                  className="date-input"
+                />
+                <input
+                  type="time"
+                  value={formData.receivedTime}
+                  onChange={(e) => handleInputChange('receivedTime', e.target.value)}
+                  required
+                  className="time-input"
+                />
+              </div>
             </div>
 
             <div className="form-field">
-              <label>結案日期</label>
-              <input
-                type="date"
-                value={formData.closedDate}
-                onChange={(e) => handleInputChange('closedDate', e.target.value)}
-              />
+              <label>結案日期時間</label>
+              <div className="datetime-group">
+                <input
+                  type="date"
+                  value={formData.closedDate}
+                  onChange={(e) => handleInputChange('closedDate', e.target.value)}
+                  className="date-input"
+                />
+                <input
+                  type="time"
+                  value={formData.closedTime}
+                  onChange={(e) => handleInputChange('closedTime', e.target.value)}
+                  disabled={!formData.closedDate}
+                  className="time-input"
+                />
+              </div>
             </div>
 
             <div className="form-field">
@@ -611,13 +571,6 @@ function CaseForm({ team, onSubmit, onCancel }) {
             <div className="form-field full-width">
               <label>事發地點</label>
               <div className="incident-location-group">
-                <input
-                  type="text"
-                  value={formData.incidentLocation}
-                  onChange={(e) => handleInputChange('incidentLocation', e.target.value)}
-                  placeholder="請輸入詳細地點描述"
-                  style={{ marginBottom: '8px' }}
-                />
                 <div className="district-selector">
                   <select
                     value={formData.incidentCounty}
@@ -652,6 +605,13 @@ function CaseForm({ team, onSubmit, onCancel }) {
                     ))}
                   </select>
                 </div>
+                <input
+                  type="text"
+                  value={formData.incidentLocation}
+                  onChange={(e) => handleInputChange('incidentLocation', e.target.value)}
+                  placeholder="請輸入詳細地點描述"
+                  style={{ marginTop: '8px' }}
+                />
               </div>
             </div>
 
@@ -669,84 +629,77 @@ function CaseForm({ team, onSubmit, onCancel }) {
           </div>
         </div>
 
-        {/* 行事曆與通知設定 */}
+        {/* 通知與行事曆設定 */}
         <div className="form-section">
-          <h3 className="section-title">行事曆與通知設定</h3>
-          <div className="form-grid">
-            <div className="form-field">
-              <label>通知方式</label>
-              <select
-                value={formData.notificationMethod}
-                onChange={(e) => handleInputChange('notificationMethod', e.target.value)}
-              >
-                <option value="phone">電話</option>
-                <option value="sms">簡訊</option>
-                <option value="email">Email</option>
-                <option value="line">Line</option>
-                <option value="other">其他</option>
-              </select>
-            </div>
+          <h3 className="section-title">通知與行事曆設定</h3>
+          <div className="calendar-notification-container">
+            {/* 通知設定行 */}
+            <div className="notification-row">
+              <div className="notification-field">
+                <label>通知方式</label>
+                <select
+                  value={formData.notificationMethod}
+                  onChange={(e) => handleInputChange('notificationMethod', e.target.value)}
+                  className="notification-select"
+                >
+                  <option value="phone">電話</option>
+                  <option value="sms">簡訊</option>
+                  <option value="email">Email</option>
+                  <option value="line">Line</option>
+                  <option value="other">其他</option>
+                </select>
+              </div>
 
-            <div className="form-field">
-              <label>提醒日期</label>
-              <input
-                type="date"
-                value={formData.reminderDate}
-                onChange={(e) => handleInputChange('reminderDate', e.target.value)}
-              />
-            </div>
+              <div className="notification-field">
+                <label>提醒日期時間</label>
+                <input
+                  type="datetime-local"
+                  value={formData.reminderDate ? 
+                    new Date(formData.reminderDate).toISOString().slice(0, 16) : 
+                    ''
+                  }
+                  onChange={(e) => handleInputChange('reminderDate', e.target.value)}
+                  className="datetime-input"
+                />
+              </div>
 
-            <div className="form-field">
-              <div className="checkbox-group">
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={formData.googleCalendarSync}
-                    onChange={(e) => handleInputChange('googleCalendarSync', e.target.checked)}
-                  />
+              <div className="notification-actions">
+                <button
+                  type="button"
+                  className={`action-btn calendar-btn ${formData.googleCalendarSync ? 'active' : ''}`}
+                  onClick={() => handleInputChange('googleCalendarSync', !formData.googleCalendarSync)}
+                >
+                  <span className="btn-icon">📅</span>
                   同步至 Google 行事曆
-                </label>
-              </div>
-            </div>
-
-            <div className="form-field">
-              <div className="checkbox-group">
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={formData.sendNotification}
-                    onChange={(e) => handleInputChange('sendNotification', e.target.checked)}
-                  />
+                </button>
+                
+                <button
+                  type="button"
+                  className={`action-btn notification-btn ${formData.sendNotification ? 'active' : ''}`}
+                  onClick={() => handleInputChange('sendNotification', !formData.sendNotification)}
+                >
+                  <span className="btn-icon">🔔</span>
                   發送通知
-                </label>
+                </button>
               </div>
             </div>
 
-            <div className="form-field full-width">
-              <div className="checkbox-group">
+            {/* 多次提醒設定 */}
+            <div className="multiple-reminder-row">
+              <div className="checkbox-container">
                 <label className="checkbox-label">
                   <input
                     type="checkbox"
                     checked={formData.multipleReminders}
                     onChange={(e) => handleInputChange('multipleReminders', e.target.checked)}
+                    className="checkbox-input"
                   />
-                  設定多次提醒（設定時間前1天、當天和逾期時自動發送通知）
+                  <span className="checkbox-text">
+                    設定多次提醒（會在設定時間前1天、當天和逾期時自動發送通知）
+                  </span>
                 </label>
               </div>
             </div>
-          </div>
-        </div>
-
-        {/* 系統提示 */}
-        <div className="form-section">
-          <div className="form-notice">
-            <h4>🔔 系統提示</h4>
-            <ul>
-              <li>標有 <span className="required">*</span> 的欄位為必填項目</li>
-              <li>即使無法選擇行政區，仍可正常建立案件</li>
-              <li>系統會自動建立或更新聯絡人資料</li>
-              <li>如果部分關聯建立失敗，案件本身仍會建立成功</li>
-            </ul>
           </div>
         </div>
 
