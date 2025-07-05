@@ -91,6 +91,13 @@
   font-size: 0.9rem;
 }
 
+/* 角色標籤樣式 - 修改為與歡迎文字一致 */
+.role-badge {
+  color: #666;
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
 .logout-btn {
   background: #dc3545;
   color: white;
@@ -170,6 +177,11 @@
   }
   
   .welcome-text {
+    font-size: 0.85rem;
+  }
+  
+  /* 響應式中的角色標籤 */
+  .role-badge {
     font-size: 0.85rem;
   }
 }

@@ -2,40 +2,40 @@
 .case-action-buttons {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
 }
 
-/* 檢視模式按鈕組 */
-.view-mode-group {
-  display: flex;
+/* 檢視模式切換按鈕 */
+.view-mode-toggle-btn {
   background: #f8f9fa;
+  border: 1px solid #ddd;
   border-radius: 6px;
-  padding: 2px;
-  gap: 2px;
-}
-
-.view-mode-btn {
-  background: transparent;
-  border: none;
-  border-radius: 4px;
   padding: 6px 12px;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: 500;
   color: #666;
   cursor: pointer;
   transition: all 0.2s ease;
   white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 100px;
 }
 
-.view-mode-btn:hover {
+.view-mode-toggle-btn:hover {
   background: rgba(102, 126, 234, 0.1);
   color: #667eea;
+  border-color: #667eea;
 }
 
-.view-mode-btn.active {
-  background: #667eea;
-  color: white;
-  box-shadow: 0 1px 3px rgba(102, 126, 234, 0.3);
+.view-mode-icon {
+  font-size: 0.9rem;
+  font-weight: bold;
+}
+
+.view-mode-text {
+  font-size: 0.75rem;
 }
 
 /* 新增案件按鈕 */
@@ -44,8 +44,8 @@
   color: white;
   border: none;
   border-radius: 6px;
-  padding: 8px 16px;
-  font-size: 0.85rem;
+  padding: 6px 14px;
+  font-size: 0.8rem;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -67,50 +67,63 @@
 /* 響應式設計 */
 @media (max-width: 992px) {
   .case-action-buttons {
-    gap: 12px;
+    gap: 8px;
   }
   
-  .view-mode-btn {
+  .view-mode-toggle-btn {
     padding: 5px 10px;
-    font-size: 0.8rem;
+    font-size: 0.75rem;
+    min-width: 90px;
+  }
+  
+  .view-mode-text {
+    font-size: 0.7rem;
   }
   
   .add-case-btn {
-    padding: 6px 12px;
-    font-size: 0.8rem;
+    padding: 5px 12px;
+    font-size: 0.75rem;
   }
 }
 
 @media (max-width: 768px) {
   .case-action-buttons {
-    flex-direction: column;
-    gap: 8px;
-    align-items: stretch;
+    gap: 6px;
   }
   
-  .view-mode-group {
-    width: 100%;
-    justify-content: center;
+  .view-mode-toggle-btn {
+    padding: 4px 8px;
+    font-size: 0.7rem;
+    min-width: 80px;
   }
   
-  .view-mode-btn {
-    flex: 1;
-    text-align: center;
+  .view-mode-text {
+    font-size: 0.65rem;
   }
   
   .add-case-btn {
-    width: 100%;
+    padding: 4px 10px;
+    font-size: 0.7rem;
   }
 }
 
 @media (max-width: 576px) {
-  .view-mode-btn {
-    padding: 4px 8px;
-    font-size: 0.75rem;
+  .view-mode-toggle-btn {
+    padding: 4px 6px;
+    min-width: 70px;
+    gap: 4px;
+  }
+  
+  .view-mode-icon {
+    font-size: 0.8rem;
+  }
+  
+  .view-mode-text {
+    font-size: 0.6rem;
   }
   
   .add-case-btn {
-    padding: 6px 10px;
-    font-size: 0.75rem;
+    padding: 4px 8px;
+    font-size: 0.65rem;
   }
 }

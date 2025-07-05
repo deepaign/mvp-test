@@ -1,0 +1,207 @@
+/* CaseCard.css - 加強版，防止被任何外部樣式覆蓋 */
+
+/* 覆蓋任何可能的父容器影響 */
+.dashboard-container .case-card-container,
+div[style*="padding"] .case-card-container,
+.case-card-container {
+  margin: 8px 0 36px 0 !important;
+  width: 100% !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  position: relative !important;
+}
+
+.dashboard-container .case-cards-wrapper,
+div[style*="padding"] .case-cards-wrapper,
+.case-cards-wrapper {
+  display: grid !important;
+  grid-template-columns: repeat(4, 1fr) !important;
+  gap: 20px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  width: 100% !important;
+}
+
+/* 多層級選擇器確保樣式生效 */
+.dashboard-container .case-card-container .case-card,
+div[style*="padding"] .case-card-container .case-card,
+.case-card-container .case-card,
+.case-card {
+  background: white !important;
+  border-radius: 8px !important;
+  padding: 24px 20px !important;
+  text-align: center !important;
+  transition: all 0.2s ease !important;
+  min-height: 120px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: space-between !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+  border: none !important;
+  outline: none !important;
+  position: relative !important;
+}
+
+.dashboard-container .case-card-container .case-card:hover,
+div[style*="padding"] .case-card-container .case-card:hover,
+.case-card-container .case-card:hover,
+.case-card:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+  transform: translateY(-2px) !important;
+}
+
+.dashboard-container .case-card-container .case-card-header,
+div[style*="padding"] .case-card-container .case-card-header,
+.case-card-container .case-card-header,
+.case-card-header {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  margin-bottom: 16px !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: none !important;
+}
+
+.dashboard-container .case-card-container .case-card-title,
+div[style*="padding"] .case-card-container .case-card-title,
+.case-card-container .case-card-title,
+.case-card-title {
+  font-size: 1rem !important;
+  font-weight: 600 !important;
+  color: #666 !important;
+  line-height: 1.2 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  text-decoration: none !important;
+}
+
+.dashboard-container .case-card-container .case-card-count,
+div[style*="padding"] .case-card-container .case-card-count,
+.case-card-container .case-card-count,
+.case-card-count {
+  font-size: 2.5rem !important;
+  font-weight: 700 !important;
+  color: #667eea !important;
+  line-height: 1 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: none !important;
+}
+
+/* 響應式設計 */
+@media (max-width: 1200px) {
+  .case-card-container {
+    margin: 6px 0 32px 0 !important;
+  }
+  
+  .case-cards-wrapper {
+    gap: 16px !important;
+  }
+  
+  .case-card-container .case-card {
+    padding: 20px 16px !important;
+    min-height: 100px !important;
+    border: none !important;
+  }
+  
+  .case-card-container .case-card-title {
+    font-size: 0.95rem !important;
+    color: #666 !important;
+  }
+  
+  .case-card-container .case-card-count {
+    font-size: 2.2rem !important;
+  }
+}
+
+@media (max-width: 992px) {
+  .case-cards-wrapper {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 16px !important;
+  }
+  
+  .case-card-container .case-card {
+    padding: 18px 14px !important;
+    min-height: 90px !important;
+    border: none !important;
+  }
+  
+  .case-card-container .case-card-title {
+    font-size: 0.9rem !important;
+    color: #666 !important;
+  }
+  
+  .case-card-container .case-card-count {
+    font-size: 2rem !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .case-card-container {
+    margin: 4px 0 28px 0 !important;
+  }
+  
+  .case-cards-wrapper {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 12px !important;
+  }
+  
+  .case-card-container .case-card {
+    padding: 16px 12px !important;
+    min-height: 80px !important;
+    border: none !important;
+  }
+  
+  .case-card-container .case-card-header {
+    margin-bottom: 12px !important;
+  }
+  
+  .case-card-container .case-card-title {
+    font-size: 0.85rem !important;
+    color: #666 !important;
+  }
+  
+  .case-card-container .case-card-count {
+    font-size: 1.8rem !important;
+  }
+}
+
+@media (max-width: 576px) {
+  .case-cards-wrapper {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+  
+  .case-card-container .case-card {
+    padding: 14px 10px !important;
+    min-height: 70px !important;
+    flex-direction: row !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    text-align: left !important;
+    border: none !important;
+  }
+  
+  .case-card-container .case-card-header {
+    margin-bottom: 0 !important;
+    flex-direction: row !important;
+  }
+  
+  .case-card-container .case-card-title {
+    font-size: 0.8rem !important;
+    color: #666 !important;
+  }
+  
+  .case-card-container .case-card-count {
+    font-size: 1.6rem !important;
+  }
+}

@@ -1,18 +1,44 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import CaseTabs from './CaseTabs'
 import CaseFilters from './CaseFilters'
+import CaseCard from './CaseCard'
 import CaseModal from './CaseModal/CaseModal'
 import { CaseService } from '../../services/caseService'
 import { PermissionService } from '../../services/permissionService'
 
-
 function CaseManagement({ member, team }) {
-  const canViewAll = PermissionService.hasPermission(member, 'case_view_all')
-  const canCreate = PermissionService.hasPermission(member, 'case_create')
-  const canAssign = PermissionService.hasPermission(member, 'case_assign')
+  // 修改權限檢查邏輯：允許負責人和幕僚都能新增案件
+  const canViewAll = PermissionService.hasPermission(member, 'case_view_all') || 
+                     member?.is_leader === true || 
+                     member?.role === 'staff'
+                     
+  const canCreate = PermissionService.hasPermission(member, 'case_create') || 
+                   member?.is_leader === true || 
+                   member?.role === 'staff'
+                   
+  const canAssign = PermissionService.hasPermission(member, 'case_assign') || 
+                   member?.is_leader === true
+
+  // 除錯資訊
+  console.log('=== CaseManagement 權限檢查 ===')
+  console.log('member:', member)
+  console.log('member.role:', member?.role)
+  console.log('member.is_leader:', member?.is_leader)
+  console.log('原始權限檢查結果:')
+  console.log('- PermissionService.hasPermission(member, "case_view_all"):', 
+              PermissionService.hasPermission(member, 'case_view_all'))
+  console.log('- PermissionService.hasPermission(member, "case_create"):', 
+              PermissionService.hasPermission(member, 'case_create'))
+  console.log('- PermissionService.hasPermission(member, "case_assign"):', 
+              PermissionService.hasPermission(member, 'case_assign'))
+  console.log('修正後權限結果:')
+  console.log('- canViewAll:', canViewAll)
+  console.log('- canCreate:', canCreate)
+  console.log('- canAssign:', canAssign)
 
   const [activeTab, setActiveTab] = useState('all')
   const [currentFilters, setCurrentFilters] = useState({})
+  const [searchTerm, setSearchTerm] = useState('')
   const [viewMode, setViewMode] = useState('card') // 'card' 或 'list'
   const [showCaseModal, setShowCaseModal] = useState(false)
   const [cases, setCases] = useState([])
@@ -26,12 +52,13 @@ function CaseManagement({ member, team }) {
   const loadCases = useCallback(async () => {
     setLoading(true)
     try {
-      console.log('載入案件，團隊:', team.id, '狀態:', activeTab, '篩選:', currentFilters)
+      console.log('載入案件，團隊:', team.id, '狀態:', activeTab, '篩選:', currentFilters, '搜尋:', searchTerm)
       
       const result = await CaseService.getCases({
         groupId: team.id,
         status: activeTab,
         filters: currentFilters,
+        searchTerm: searchTerm,
         page: 0,
         limit: 50
       })
@@ -51,7 +78,7 @@ function CaseManagement({ member, team }) {
     } finally {
       setLoading(false)
     }
-  }, [team.id, activeTab, currentFilters])
+  }, [team.id, activeTab, currentFilters, searchTerm])
 
   const loadStats = useCallback(async () => {
     try {
@@ -81,6 +108,11 @@ function CaseManagement({ member, team }) {
     console.log('切換到案件狀態:', tabId)
   }
 
+  const handleSearch = (term) => {
+    setSearchTerm(term)
+    console.log('搜尋條件變更:', term)
+  }
+
   const handleFiltersChange = (filters) => {
     setCurrentFilters(filters)
     console.log('篩選條件變更:', filters)
@@ -92,11 +124,28 @@ function CaseManagement({ member, team }) {
   }
 
   const handleAddCase = () => {
+    console.log('=== handleAddCase 權限檢查 ===')
+    console.log('canCreate:', canCreate)
+    console.log('member.role:', member?.role)
+    console.log('member.is_leader:', member?.is_leader)
+    
     if (!canCreate) {
-      alert('您沒有建立案件的權限')
+      // 提供更詳細的錯誤訊息
+      let errorMessage = '您沒有建立案件的權限。'
+      
+      if (!member) {
+        errorMessage += ' 無法取得成員資訊。'
+      } else if (!member.role && !member.is_leader) {
+        errorMessage += ' 您的角色資訊不完整。'
+      } else {
+        errorMessage += ` 您的角色：${member.role}，是否為負責人：${member.is_leader}。只有負責人和幕僚可以建立案件。`
+      }
+      
+      alert(errorMessage)
       return
     }
-    console.log('點擊新增案件')
+    
+    console.log('權限檢查通過，開啟新增案件視窗')
     setShowCaseModal(true)
   }
 
@@ -163,42 +212,6 @@ function CaseManagement({ member, team }) {
       ) : null
     }
 
-    const getStatusInfo = () => {
-      let statusCount = 0
-      let statusIcon = '📋'
-      let statusTitle = '全部案件'
-
-      switch (activeTab) {
-        case 'all':
-          statusCount = stats.total
-          statusIcon = '📋'
-          statusTitle = '全部案件'
-          break
-        case 'pending':
-          statusCount = stats.byStatus.pending
-          statusIcon = '⏳'
-          statusTitle = '待處理案件'
-          break
-        case 'processing':
-          statusCount = stats.byStatus.processing
-          statusIcon = '🔄'
-          statusTitle = '處理中案件'
-          break
-        case 'completed':
-          statusCount = stats.byStatus.completed
-          statusIcon = '✅'
-          statusTitle = '已完成案件'
-          break
-        default:
-          statusCount = stats.total
-          statusIcon = '📋'
-          statusTitle = '全部案件'
-          break
-      }
-
-      return { statusCount, statusIcon, statusTitle }
-    }
-
     if (loading) {
       return (
         <div style={{ padding: '40px', textAlign: 'center' }}>
@@ -209,15 +222,8 @@ function CaseManagement({ member, team }) {
       )
     }
 
-    const { statusCount, statusIcon, statusTitle } = getStatusInfo()
-
     return (
       <div style={{ padding: '40px', textAlign: 'center' }}>
-        <div style={{ fontSize: '2rem', marginBottom: '16px' }}>{statusIcon}</div>
-        <h3 style={{ color: '#333', marginBottom: '12px' }}>
-          {statusTitle} ({statusCount})
-        </h3>
-        
         {cases.length > 0 ? (
           <div>
             <p style={{ color: '#666', marginBottom: '20px' }}>
@@ -295,39 +301,48 @@ function CaseManagement({ member, team }) {
   }
 
   return (
-    <div style={{ 
-      background: 'white', 
-      borderRadius: '12px', 
-      boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-      minHeight: '600px'
-    }}>
-      <CaseTabs 
-        activeTab={activeTab} 
-        onTabChange={handleTabChange} 
-      />
+    <div>
+      {/* 案件統計卡片 */}
+      <CaseCard stats={stats} />
       
-      <CaseFilters 
-        team={team}
-        onFiltersChange={handleFiltersChange}
-        onViewModeChange={handleViewModeChange}
-        onAddCase={handleAddCase}
-      />
-      
+      {/* 案件管理主要區域 */}
       <div style={{ 
-        background: 'white',
-        borderRadius: '0 0 12px 12px',
-        minHeight: '500px'
+        background: 'white', 
+        borderRadius: '12px', 
+        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+        minHeight: '600px'
       }}>
-        {renderCaseContent()}
-      </div>
+        {/* 將 CaseActionButton 的 props 傳遞給 CaseTabs */}
+        <CaseTabs 
+          activeTab={activeTab} 
+          onTabChange={handleTabChange}
+          onViewModeChange={handleViewModeChange}
+          onAddCase={handleAddCase}
+        />
+        
+        {/* CaseFilters 現在包含搜尋功能 */}
+        <CaseFilters 
+          team={team}
+          onFiltersChange={handleFiltersChange}
+          onSearch={handleSearch}
+        />
+        
+        <div style={{ 
+          background: 'white',
+          borderRadius: '0 0 12px 12px',
+          minHeight: '500px'
+        }}>
+          {renderCaseContent()}
+        </div>
 
-      {/* 新增案件彈窗 */}
-      <CaseModal
-        isOpen={showCaseModal}
-        onClose={handleCloseModal}
-        team={team}
-        onCaseCreated={handleCaseCreated}
-      />
+        {/* 新增案件彈窗 */}
+        <CaseModal
+          isOpen={showCaseModal}
+          onClose={handleCloseModal}
+          team={team}
+          onCaseCreated={handleCaseCreated}
+        />
+      </div>
     </div>
   )
 }

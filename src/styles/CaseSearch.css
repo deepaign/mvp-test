@@ -1,0 +1,159 @@
+/* CaseSearch.css */
+.case-search-container {
+  display: flex;
+  align-items: center;
+  margin-left: auto; /* 推到右側 */
+  flex-shrink: 0;
+}
+
+.case-search-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 0;
+  transition: all 0.2s ease;
+  min-width: 200px;
+  max-width: 280px;
+}
+
+.case-search-wrapper:hover {
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
+.case-search-wrapper:focus-within {
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+}
+
+/* 搜尋圖標 */
+.search-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 0 8px 10px;
+  color: #666;
+  pointer-events: none;
+  flex-shrink: 0;
+}
+
+/* 搜尋輸入框 */
+.case-search-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  padding: 8px 8px 8px 4px;
+  font-size: 0.85rem;
+  color: #333;
+  background: transparent;
+  min-width: 0; /* 確保可以收縮 */
+}
+
+.case-search-input::placeholder {
+  color: #999;
+  font-style: italic;
+}
+
+/* 清除按鈕 */
+.search-clear-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  margin-right: 6px;
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  color: #999;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.search-clear-btn:hover {
+  background: #f5f5f5;
+  color: #666;
+}
+
+.search-clear-btn:active {
+  background: #e9ecef;
+}
+
+/* 響應式設計 */
+@media (max-width: 1200px) {
+  .case-search-wrapper {
+    min-width: 180px;
+    max-width: 220px;
+  }
+  
+  .case-search-input {
+    font-size: 0.8rem;
+  }
+  
+  .search-icon {
+    padding: 6px 0 6px 8px;
+  }
+  
+  .search-icon svg {
+    width: 14px;
+    height: 14px;
+  }
+}
+
+@media (max-width: 992px) {
+  .case-search-container {
+    margin-left: 0;
+    margin-top: 8px;
+    width: 100%;
+  }
+  
+  .case-search-wrapper {
+    min-width: auto;
+    max-width: none;
+    width: 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .case-search-wrapper {
+    padding: 0;
+  }
+  
+  .case-search-input {
+    font-size: 0.8rem;
+    padding: 6px 6px 6px 4px;
+  }
+  
+  .search-icon {
+    padding: 6px 0 6px 8px;
+  }
+  
+  .search-icon svg {
+    width: 14px;
+    height: 14px;
+  }
+  
+  .search-clear-btn svg {
+    width: 12px;
+    height: 12px;
+  }
+}
+
+@media (max-width: 576px) {
+  .case-search-input {
+    font-size: 0.75rem;
+    padding: 5px 5px 5px 3px;
+  }
+  
+  .search-icon {
+    padding: 5px 0 5px 6px;
+  }
+  
+  .search-icon svg {
+    width: 12px;
+    height: 12px;
+  }
+}

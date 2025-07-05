@@ -4,10 +4,11 @@ import '../../styles/CaseActionButton.css'
 function CaseActionButton({ onViewModeChange, onAddCase }) {
   const [viewMode, setViewMode] = useState('card') // 'card' 或 'list'
 
-  const handleViewModeChange = (mode) => {
-    setViewMode(mode)
-    onViewModeChange(mode)
-    console.log('切換檢視模式:', mode)
+  const handleViewModeToggle = () => {
+    const newMode = viewMode === 'card' ? 'list' : 'card'
+    setViewMode(newMode)
+    onViewModeChange(newMode)
+    console.log('切換檢視模式:', newMode)
   }
 
   const handleAddCase = () => {
@@ -17,25 +18,34 @@ function CaseActionButton({ onViewModeChange, onAddCase }) {
     }
   }
 
+  // 根據當前模式顯示不同的圖標和文字
+  const getViewModeDisplay = () => {
+    if (viewMode === 'list') {
+      return {
+        icon: '☰', // 三條橫線
+        text: '列表檢視'
+      }
+    } else {
+      return {
+        icon: '⊞', // 窗戶形狀
+        text: '卡片檢視'
+      }
+    }
+  }
+
+  const { icon, text } = getViewModeDisplay()
+
   return (
     <div className="case-action-buttons">
-      {/* 檢視模式切換 */}
-      <div className="view-mode-group">
-        <button
-          className={`view-mode-btn ${viewMode === 'list' ? 'active' : ''}`}
-          onClick={() => handleViewModeChange('list')}
-          title="列表檢視"
-        >
-          列表檢視
-        </button>
-        <button
-          className={`view-mode-btn ${viewMode === 'card' ? 'active' : ''}`}
-          onClick={() => handleViewModeChange('card')}
-          title="卡片檢視"
-        >
-          卡片檢視
-        </button>
-      </div>
+      {/* 檢視模式切換按鈕 */}
+      <button
+        className="view-mode-toggle-btn"
+        onClick={handleViewModeToggle}
+        title={`切換到${viewMode === 'card' ? '列表' : '卡片'}檢視`}
+      >
+        <span className="view-mode-icon">{icon}</span>
+        <span className="view-mode-text">{text}</span>
+      </button>
 
       {/* 新增案件按鈕 */}
       <button

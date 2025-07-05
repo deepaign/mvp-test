@@ -51,7 +51,7 @@ function DashboardNavBar({ team, member, activeTab, onTabChange, onLogout }) {
       <div className="navbar-right">
         <span className="welcome-text">歡迎，{member.name}</span>
         <span className="role-badge">
-          {member.is_leader ? '👑 負責人' : '🤝 幕僚'}
+          {member.is_leader ? '負責人' : '幕僚'}
         </span>
         <button className="logout-btn" onClick={onLogout}>
           登出

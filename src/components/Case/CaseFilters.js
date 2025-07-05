@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react'
 import { CaseService } from '../../services/caseService'
-import CaseActionButton from './CaseActionButton'
+import CaseSearch from './CaseSearch'
 import '../../styles/CaseFilters.css'
 
-function CaseFilters({ team, onFiltersChange, onViewModeChange, onAddCase }) {
+function CaseFilters({ team, onFiltersChange, onSearch }) {
   const [filters, setFilters] = useState({
     category: 'all',
     dateRange: 'all',
@@ -150,6 +150,13 @@ function CaseFilters({ team, onFiltersChange, onViewModeChange, onAddCase }) {
     setShowDatePicker(false)
   }
 
+  const handleSearch = (searchTerm) => {
+    console.log('搜尋案件:', searchTerm)
+    if (onSearch) {
+      onSearch(searchTerm)
+    }
+  }
+
   return (
     <div className="case-filters-container">
       <div className="case-filters-wrapper">
@@ -231,10 +238,10 @@ function CaseFilters({ team, onFiltersChange, onViewModeChange, onAddCase }) {
           </div>
         </div>
 
-        {/* 操作按鈕組 */}
-        <CaseActionButton 
-          onViewModeChange={onViewModeChange}
-          onAddCase={onAddCase}
+        {/* 搜尋框 */}
+        <CaseSearch 
+          onSearchChange={handleSearch}
+          placeholder="搜尋案件標題或內容..."
         />
       </div>
 
