@@ -209,15 +209,16 @@ function CaseFilters({ team, onFiltersChange, onSearch }) {
             </select>
           </div>
 
-          {/* 負責人篩選 */}
+          {/* 承辦人員篩選 */}
           <div className="filter-group">
-            <label className="filter-label">負責人</label>
+            <label className="filter-label">承辦人員</label>
             <select 
               className="filter-select"
               value={filters.assignee}
               onChange={(e) => handleFilterChange('assignee', e.target.value)}
             >
               <option value="all">全部</option>
+              <option value="unassigned">尚未指派</option>
               {filterOptions.members.map(member => (
                 <option key={member.id} value={member.id}>
                   {member.name}
@@ -232,6 +233,7 @@ function CaseFilters({ team, onFiltersChange, onSearch }) {
               className="reset-filters-btn"
               onClick={resetFilters}
               title="重置所有篩選條件"
+              disabled={loading}
             >
               重新篩選
             </button>

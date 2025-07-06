@@ -1,4 +1,4 @@
-// services/caseService.js
+// services/caseService.js - 修正版
 import { supabase } from '../supabase'
 
 export class CaseService {
@@ -96,11 +96,12 @@ export class CaseService {
   }
 
   /**
-   * 取得案件列表（支援篩選和分頁）
+   * 取得案件列表（支援篩選和分頁）- 修正日期篩選和多重篩選交集
    * @param {Object} options - 查詢選項
    * @param {string} options.groupId - 團隊 ID
    * @param {string} options.status - 案件狀態 (all, pending, processing, completed)
    * @param {Object} options.filters - 篩選條件
+   * @param {string} options.searchTerm - 搜尋關鍵字
    * @param {number} options.page - 頁碼（從 0 開始）
    * @param {number} options.limit - 每頁筆數
    * @returns {Promise<Object>} 查詢結果
@@ -111,22 +112,23 @@ export class CaseService {
         groupId,
         status = 'all',
         filters = {},
+        searchTerm = '',
         page = 0,
         limit = 20
       } = options
 
       console.log('=== CaseService.getCases ===')
-      console.log('查詢參數:', { groupId, status, filters, page, limit })
+      console.log('查詢參數:', { groupId, status, filters, searchTerm, page, limit })
 
       if (!groupId) {
         return {
           success: false,
           error: '團隊 ID 必填',
-          data: null
+          data: []
         }
       }
 
-      // 建立基礎查詢 - 移除 !inner
+      // 建立基礎查詢 - 修正 InChargeCase 的查詢
       let query = supabase
         .from('Case')
         .select(`
@@ -138,10 +140,18 @@ export class CaseService {
             )
           ),
           InChargeCase (
+            member_id,
             Member (
               id,
               name
             )
+          ),
+          CaseMember (
+            Member (
+              id,
+              name
+            ),
+            role
           ),
           VoterCase (
             Voter (
@@ -163,37 +173,25 @@ export class CaseService {
         `)
         .eq('group_id', groupId)
 
-      // 狀態篩選
+      // 狀態篩選 - 在資料庫層級處理
       if (status !== 'all') {
         query = query.eq('status', status)
       }
 
-      // 案件類型篩選
-      if (filters.category && filters.category !== 'all') {
-        // 如果是預設類型，需要特殊處理
-        if (['traffic', 'environment', 'security', 'public_service'].includes(filters.category)) {
-          // TODO: 這裡需要根據實際的類別資料結構調整
-          query = query.eq('CategoryCase.Category.name', this.getCategoryName(filters.category))
-        } else {
-          query = query.eq('CategoryCase.category_id', filters.category)
+      // 搜尋篩選 - 在資料庫層級處理
+      if (searchTerm && searchTerm.trim()) {
+        query = query.or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`)
+      }
+
+      // 日期篩選 - 在資料庫層級處理（根據 created_at）
+      if (filters.dateRange && filters.dateRange !== 'all') {
+        const dateFilter = this.buildDateFilter(filters.dateRange, filters.startDate, filters.endDate)
+        if (dateFilter.startDate && dateFilter.endDate) {
+          console.log('應用日期篩選:', dateFilter)
+          query = query
+            .gte('created_at', dateFilter.startDate)
+            .lte('created_at', dateFilter.endDate)
         }
-      }
-
-      // 優先順序篩選
-      if (filters.priority && filters.priority !== 'all') {
-        query = query.eq('priority', filters.priority)
-      }
-
-      // 負責人篩選
-      if (filters.assignee && filters.assignee !== 'all') {
-        query = query.eq('InChargeCase.member_id', filters.assignee)
-      }
-
-      // 日期篩選
-      if (filters.startDate && filters.endDate) {
-        query = query
-          .gte('created_at', filters.startDate)
-          .lte('created_at', filters.endDate)
       }
 
       // 排序（預設由新到舊）
@@ -206,23 +204,82 @@ export class CaseService {
         query = query.range(start, end)
       }
 
-      const { data, error, count } = await query
+      const { data, error } = await query
 
       if (error) {
         console.error('查詢案件失敗:', error)
         return {
           success: false,
           error: error.message,
-          data: null
+          data: []
         }
       }
 
       console.log(`查詢成功，共 ${data?.length || 0} 筆案件`)
       
+      // 在前端進行多重篩選（交集邏輯）
+      let filteredData = data || []
+      
+      // 案件類型篩選
+      if (filters.category && filters.category !== 'all') {
+        console.log('應用案件類型篩選:', filters.category)
+        filteredData = filteredData.filter(caseItem => {
+          const categories = caseItem.CategoryCase || []
+          
+          // 檢查預設類型
+          if (['traffic', 'environment', 'security', 'public_service'].includes(filters.category)) {
+            const targetCategoryName = this.getCategoryName(filters.category)
+            return categories.some(cat => cat.Category && cat.Category.name === targetCategoryName)
+          } else {
+            // 檢查自定義類型
+            return categories.some(cat => cat.Category && cat.Category.id === filters.category)
+          }
+        })
+        console.log(`案件類型篩選後，剩餘 ${filteredData.length} 筆案件`)
+      }
+
+      // 優先順序篩選
+      if (filters.priority && filters.priority !== 'all') {
+        console.log('應用優先順序篩選:', filters.priority)
+        filteredData = filteredData.filter(caseItem => caseItem.priority === filters.priority)
+        console.log(`優先順序篩選後，剩餘 ${filteredData.length} 筆案件`)
+      }
+
+      // 承辦人員篩選
+      if (filters.assignee && filters.assignee !== 'all') {
+        console.log('應用承辦人員篩選:', filters.assignee)
+        
+        if (filters.assignee === 'unassigned') {
+          // 篩選尚未指派承辦人員的案件
+          filteredData = filteredData.filter(caseItem => {
+            const inCharge = caseItem.InChargeCase || []
+            
+            if (inCharge.length === 0) {
+              return true // 沒有 InChargeCase 記錄
+            }
+            
+            // 檢查是否所有記錄都沒有有效的 member_id
+            const hasAssignedMember = inCharge.some(ic => ic.member_id !== null && ic.member_id !== undefined)
+            return !hasAssignedMember
+          })
+        } else {
+          // 篩選指定承辦人員的案件
+          filteredData = filteredData.filter(caseItem => {
+            const inCharge = caseItem.InChargeCase || []
+            
+            // 檢查是否有符合指定 member_id 的記錄
+            return inCharge.some(ic => ic.member_id === filters.assignee)
+          })
+        }
+        console.log(`承辦人員篩選後，剩餘 ${filteredData.length} 筆案件`)
+      }
+
+      console.log(`最終篩選結果：${filteredData.length} 筆案件`)
+      
       return {
         success: true,
-        data: data || [],
-        count,
+        data: filteredData,
+        count: filteredData.length,
         page,
         limit,
         error: null
@@ -233,13 +290,81 @@ export class CaseService {
       return {
         success: false,
         error: error.message,
-        data: null
+        data: []
       }
     }
   }
 
   /**
-   * 取得案件類別列表
+   * 建立日期篩選條件 - 新增方法
+   * @param {string} dateRange - 日期範圍類型
+   * @param {string} customStartDate - 自定義開始日期
+   * @param {string} customEndDate - 自定義結束日期
+   * @returns {Object} 日期篩選條件
+   */
+  static buildDateFilter(dateRange, customStartDate, customEndDate) {
+    const now = new Date()
+    
+    switch (dateRange) {
+      case 'today': {
+        // 今天 00:00:00 到 23:59:59
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+        const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999)
+        
+        return {
+          startDate: todayStart.toISOString(),
+          endDate: todayEnd.toISOString()
+        }
+      }
+      
+      case 'week': {
+        // 本週：從週一 00:00:00 到週日 23:59:59
+        const currentDay = now.getDay() // 0=週日, 1=週一, ..., 6=週六
+        const mondayOffset = currentDay === 0 ? -6 : 1 - currentDay // 計算到週一的偏移
+        
+        const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + mondayOffset)
+        const weekEnd = new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000) // 週一 + 6天 = 週日
+        weekEnd.setHours(23, 59, 59, 999)
+        
+        return {
+          startDate: weekStart.toISOString(),
+          endDate: weekEnd.toISOString()
+        }
+      }
+      
+      case 'month': {
+        // 本月：從月初 00:00:00 到月底 23:59:59
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+        const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999)
+        
+        return {
+          startDate: monthStart.toISOString(),
+          endDate: monthEnd.toISOString()
+        }
+      }
+      
+      case 'custom': {
+        // 自定義範圍
+        if (customStartDate && customEndDate) {
+          const startDate = new Date(customStartDate)
+          const endDate = new Date(customEndDate)
+          endDate.setHours(23, 59, 59, 999) // 結束日期設為當天的最後一刻
+          
+          return {
+            startDate: startDate.toISOString(),
+            endDate: endDate.toISOString()
+          }
+        }
+        return { startDate: null, endDate: null }
+      }
+      
+      default:
+        return { startDate: null, endDate: null }
+    }
+  }
+
+  /**
+   * 取得案件類別列表（修改版）
    * @param {string} groupId - 團隊 ID（未來可能需要）
    * @returns {Promise<Object>} 類別列表
    */
@@ -247,22 +372,22 @@ export class CaseService {
     try {
       console.log('=== CaseService.getCategories ===')
 
-      // 嘗試從資料庫載入類別
+      // 預設類別（始終包含）
+      const defaultCategories = [
+        { id: 'traffic', name: '交通問題', isDefault: true },
+        { id: 'environment', name: '環境問題', isDefault: true },
+        { id: 'security', name: '治安問題', isDefault: true },
+        { id: 'public_service', name: '民生服務', isDefault: true }
+      ]
+
+      // 嘗試從資料庫載入自定義類別
       const { data: dbCategories, error } = await supabase
         .from('Category')
         .select('id, name, description')
         .order('name')
 
       if (error) {
-        console.error('載入類別失敗，使用預設類別:', error)
-        // 如果資料庫載入失敗，返回預設類別
-        const defaultCategories = [
-          { id: 'traffic', name: '交通問題' },
-          { id: 'environment', name: '環境問題' },
-          { id: 'security', name: '治安問題' },
-          { id: 'public_service', name: '民生服務' }
-        ]
-
+        console.error('載入自定義類別失敗，僅使用預設類別:', error)
         return {
           success: true,
           data: defaultCategories,
@@ -270,30 +395,39 @@ export class CaseService {
         }
       }
 
-      // 如果資料庫有類別資料，使用資料庫的；否則使用預設的
-      const categories = dbCategories && dbCategories.length > 0 
-        ? dbCategories 
-        : [
-            { id: 'traffic', name: '交通問題' },
-            { id: 'environment', name: '環境問題' },
-            { id: 'security', name: '治安問題' },
-            { id: 'public_service', name: '民生服務' }
-          ]
+      // 合併預設類別和自定義類別
+      const customCategories = (dbCategories || []).map(cat => ({
+        ...cat,
+        isDefault: false
+      }))
 
-      console.log(`載入類別成功，共 ${categories.length} 筆`)
+      // 移除可能重複的預設類別名稱
+      const filteredCustomCategories = customCategories.filter(custom => 
+        !defaultCategories.some(def => def.name === custom.name)
+      )
+
+      const allCategories = [...defaultCategories, ...filteredCustomCategories]
+
+      console.log(`載入類別成功，共 ${allCategories.length} 筆（預設: ${defaultCategories.length}, 自定義: ${filteredCustomCategories.length}）`)
 
       return {
         success: true,
-        data: categories,
+        data: allCategories,
         error: null
       }
 
     } catch (error) {
       console.error('CaseService.getCategories 發生錯誤:', error)
+      // 發生錯誤時至少返回預設類別
       return {
-        success: false,
-        error: error.message,
-        data: []
+        success: true,
+        data: [
+          { id: 'traffic', name: '交通問題', isDefault: true },
+          { id: 'environment', name: '環境問題', isDefault: true },
+          { id: 'security', name: '治安問題', isDefault: true },
+          { id: 'public_service', name: '民生服務', isDefault: true }
+        ],
+        error: error.message
       }
     }
   }
@@ -380,11 +514,20 @@ export class CaseService {
             )
           ),
           InChargeCase (
+            member_id,
             Member (
               id,
               name,
               email
             )
+          ),
+          CaseMember (
+            Member (
+              id,
+              name,
+              email
+            ),
+            role
           ),
           VoterCase (
             Voter (
@@ -508,7 +651,25 @@ export class CaseService {
         deletionResults.push({ type: 'VoterCase', success: false, error: error.message })
       }
 
-      // 2. 刪除 CategoryCase 關聯
+      // 2. 刪除 CaseMember 關聯
+      try {
+        const { error: caseMemberError } = await supabase
+          .from('CaseMember')
+          .delete()
+          .eq('case_id', caseId)
+
+        if (caseMemberError) {
+          console.warn('刪除 CaseMember 關聯失敗:', caseMemberError)
+          deletionResults.push({ type: 'CaseMember', success: false, error: caseMemberError.message })
+        } else {
+          deletionResults.push({ type: 'CaseMember', success: true })
+        }
+      } catch (error) {
+        console.warn('刪除 CaseMember 關聯異常:', error)
+        deletionResults.push({ type: 'CaseMember', success: false, error: error.message })
+      }
+
+      // 3. 刪除 CategoryCase 關聯
       try {
         const { error: categoryCaseError } = await supabase
           .from('CategoryCase')
@@ -526,7 +687,7 @@ export class CaseService {
         deletionResults.push({ type: 'CategoryCase', success: false, error: error.message })
       }
 
-      // 3. 刪除 InChargeCase 關聯
+      // 4. 刪除 InChargeCase 關聯
       try {
         const { error: inChargeCaseError } = await supabase
           .from('InChargeCase')
@@ -544,7 +705,7 @@ export class CaseService {
         deletionResults.push({ type: 'InChargeCase', success: false, error: error.message })
       }
 
-      // 4. 刪除 DistrictCase 關聯
+      // 5. 刪除 DistrictCase 關聯
       try {
         const { error: districtCaseError } = await supabase
           .from('DistrictCase')
@@ -562,7 +723,7 @@ export class CaseService {
         deletionResults.push({ type: 'DistrictCase', success: false, error: error.message })
       }
 
-      // 5. 最後刪除案件本身
+      // 6. 最後刪除案件本身
       const { error: caseDeleteError } = await supabase
         .from('Case')
         .delete()
@@ -635,10 +796,49 @@ export class CaseService {
   }
 
   /**
-   * 構建案件描述（包含所有詳細資訊）
+   * 構建案件描述（包含事發地點等詳細資訊）
    */
-  static buildDescription(formData) {
+  static buildDescription(formData, dropdownOptions = {}) {
     let description = formData.description || ''
+    
+    // 添加事發地點資訊（放在最前面，方便之後讀取）
+    if (formData.incidentLocation || formData.incidentCounty || formData.incidentDistrict) {
+      let locationInfo = '事發地點：'
+      
+      // 拼接完整地點資訊
+      const locationParts = []
+      
+      // 加入縣市名稱
+      if (formData.incidentCounty) {
+        const county = (dropdownOptions.counties || []).find(c => c.id === formData.incidentCounty)
+        if (county) {
+          locationParts.push(county.name)
+        } else {
+          locationParts.push(`縣市ID:${formData.incidentCounty}`)
+        }
+      }
+      
+      // 加入行政區名稱
+      if (formData.incidentDistrict) {
+        const district = (dropdownOptions.incidentDistricts || []).find(d => d.id === formData.incidentDistrict)
+        if (district) {
+          locationParts.push(district.name)
+        } else {
+          locationParts.push(`行政區ID:${formData.incidentDistrict}`)
+        }
+      }
+      
+      // 加入詳細地點
+      if (formData.incidentLocation) {
+        locationParts.push(formData.incidentLocation)
+      }
+      
+      // 組合地點資訊
+      if (locationParts.length > 0) {
+        locationInfo += locationParts.join(' ')
+        description = locationInfo + (description ? '\n\n' + description : '')
+      }
+    }
     
     // 添加時間資訊
     if (formData.receivedDate && formData.receivedTime) {
@@ -647,11 +847,6 @@ export class CaseService {
     
     if (formData.closedDate && formData.closedTime) {
       description += `\n結案時間：${formData.closedDate} ${formData.closedTime}`
-    }
-    
-    // 添加事發地點
-    if (formData.incidentLocation) {
-      description += `\n\n事發地點：${formData.incidentLocation}`
     }
 
     // 添加案件編號
@@ -677,13 +872,106 @@ export class CaseService {
   }
 
   /**
-   * 建立案件及相關關聯（完整流程）
+   * 處理案件類型（建立或查找 Category）- 修改版
+   * @param {string} categoryName - 類型名稱
+   * @returns {Promise<Object>} 處理結果
+   */
+  static async handleCategory(categoryName) {
+    try {
+      if (!categoryName) {
+        return { success: false, error: '案件類型名稱必填' }
+      }
+
+      console.log('處理案件類型:', categoryName)
+
+      // 如果是預設類型 ID，轉換為名稱
+      const categoryDisplayName = this.getCategoryName(categoryName)
+
+      // 檢查是否為預設類型
+      const defaultCategories = ['交通問題', '環境問題', '治安問題', '民生服務']
+      const isDefaultCategory = defaultCategories.includes(categoryDisplayName)
+
+      // 如果是預設類型，返回一個虛擬的 category 對象，不存入資料庫
+      if (isDefaultCategory) {
+        const defaultMap = {
+          '交通問題': 'traffic',
+          '環境問題': 'environment', 
+          '治安問題': 'security',
+          '民生服務': 'public_service'
+        }
+        
+        return {
+          success: true,
+          data: {
+            id: defaultMap[categoryDisplayName] || categoryDisplayName.toLowerCase(),
+            name: categoryDisplayName,
+            isDefault: true
+          }
+        }
+      }
+
+      // 對於自定義類型，先檢查是否已存在相同名稱的類型
+      const { data: existingCategories, error: searchError } = await supabase
+        .from('Category')
+        .select('*')
+        .eq('name', categoryDisplayName)
+        .limit(1)
+
+      if (searchError) {
+        console.error('查找案件類型失敗:', searchError)
+      } else if (existingCategories && existingCategories.length > 0) {
+        const existingCategory = existingCategories[0]
+        console.log('找到已存在的案件類型:', existingCategory)
+        return { 
+          success: true, 
+          data: {
+            ...existingCategory,
+            isDefault: false
+          }
+        }
+      }
+
+      // 建立新的自定義案件類型
+      console.log('建立新自定義案件類型:', categoryDisplayName)
+      const { data: newCategory, error: createError } = await supabase
+        .from('Category')
+        .insert([{
+          name: categoryDisplayName,
+          description: `${categoryDisplayName}相關案件`,
+          created_at: new Date().toISOString()
+        }])
+        .select()
+        .single()
+
+      if (createError) {
+        console.error('建立案件類型失敗:', createError)
+        return { success: false, error: createError.message }
+      }
+
+      console.log('建立新自定義案件類型成功:', newCategory)
+      return { 
+        success: true, 
+        data: {
+          ...newCategory,
+          isDefault: false
+        }
+      }
+
+    } catch (error) {
+      console.error('處理案件類型發生錯誤:', error)
+      return { success: false, error: error.message }
+    }
+  }
+
+  /**
+   * 建立案件及相關關聯（完整流程）- 最新修改版
    * @param {Object} options - 建立選項
    * @param {Object} options.formData - 表單資料
    * @param {string} options.teamId - 團隊 ID
+   * @param {Object} options.dropdownOptions - 下拉選單選項（用於地點名稱轉換）
    * @returns {Promise<Object>} 建立結果
    */
-  static async createCaseWithRelations({ formData, teamId }) {
+  static async createCaseWithRelations({ formData, teamId, dropdownOptions = {} }) {
     try {
       console.log('=== CaseService.createCaseWithRelations ===')
       console.log('表單資料:', formData)
@@ -713,12 +1001,18 @@ export class CaseService {
 
       console.log('聯絡人處理結果:', { contact1Result, contact2Result })
 
-      // 2. 建立案件
+      // 2. 處理案件類型（如果有的話）
+      let categoryResult = null
+      if (formData.category) {
+        categoryResult = await this.handleCategory(formData.category)
+        console.log('案件類型處理結果:', categoryResult)
+      }
+
+      // 3. 建立案件（包含事發地點在 description 中）
       const caseData = {
         group_id: teamId,
         title: formData.title,
-        description: this.buildDescription(formData),
-        // start_date 和 end_date 是 "time with time zone" 格式
+        description: this.buildDescription(formData, dropdownOptions), // 傳遞 dropdownOptions
         start_date: this.formatToTimetz(formData.receivedDate, formData.receivedTime),
         end_date: formData.closedDate && formData.closedTime ? 
           this.formatToTimetz(formData.closedDate, formData.closedTime) : null,
@@ -726,7 +1020,6 @@ export class CaseService {
         contact_type: formData.contactMethod || 'phone',
         priority: formData.priority || 'normal',
         file: null,
-        // created_at 和 updated_at 是 "timestamp with time zone" 格式
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       }
@@ -751,10 +1044,10 @@ export class CaseService {
       const newCase = caseResult
       console.log('案件建立成功:', newCase)
 
-      // 3. 建立關聯
+      // 4. 建立關聯
       const relationResults = []
 
-      // 3.1 聯絡人關聯
+      // 4.1 聯絡人關聯
       if (contact1Result?.success) {
         try {
           const voterCaseResult = await this.createVoterCaseRelation(newCase.id, contact1Result.data.id)
@@ -775,40 +1068,62 @@ export class CaseService {
         }
       }
 
-      // 3.2 案件類別關聯
-      if (formData.category) {
+      // 4.2 案件類別關聯（只有自定義類型才建立關聯）
+      if (categoryResult?.success) {
         try {
-          const categoryResult = await this.createCategoryCaseRelation(newCase.id, formData.category)
-          relationResults.push({ type: 'CategoryCase', success: true, data: categoryResult })
+          const categoryResult2 = await this.createCategoryCaseRelation(
+            newCase.id, 
+            categoryResult.data.id, 
+            categoryResult.data.isDefault
+          )
+          relationResults.push({ type: 'CategoryCase', success: true, data: categoryResult2 })
+          
+          if (categoryResult.data.isDefault) {
+            console.log('✅ 預設類型，記錄但不建立 CategoryCase 關聯')
+          } else {
+            console.log('✅ 自定義類型，CategoryCase 關聯建立成功')
+          }
         } catch (error) {
           console.warn('建立類別關聯失敗:', error)
           relationResults.push({ type: 'CategoryCase', success: false, error: error.message })
         }
+      } else if (formData.category) {
+        console.warn('案件類型處理失敗，無法建立 CategoryCase 關聯')
+        relationResults.push({ 
+          type: 'CategoryCase', 
+          success: false, 
+          error: categoryResult?.error || '案件類型處理失敗' 
+        })
       }
 
-      // 3.3 負責人關聯
+      // 4.3 受理人員關聯（記錄在 CaseMember）
       if (formData.receiver) {
         try {
-          const receiverResult = await this.createInChargeCaseRelation(newCase.id, formData.receiver, 'receiver')
-          relationResults.push({ type: 'InChargeCase', success: true, data: receiverResult })
+          const receiverResult = await this.createCaseMemberRelation(newCase.id, formData.receiver, 'receiver')
+          relationResults.push({ type: 'CaseMember', success: true, data: receiverResult })
+          console.log('✅ CaseMember 受理人員關聯建立成功')
         } catch (error) {
           console.warn('建立受理人關聯失敗:', error)
-          relationResults.push({ type: 'InChargeCase', success: false, error: error.message })
+          relationResults.push({ type: 'CaseMember', success: false, error: error.message })
         }
       }
 
-      // 3.4 承辦人關聯（如果與受理人不同）
-      if (formData.handler && formData.handler !== formData.receiver) {
-        try {
-          const handlerResult = await this.createInChargeCaseRelation(newCase.id, formData.handler, 'handler')
-          relationResults.push({ type: 'InChargeCaseHandler', success: true, data: handlerResult })
-        } catch (error) {
-          console.warn('建立承辦人關聯失敗:', error)
-          relationResults.push({ type: 'InChargeCaseHandler', success: false, error: error.message })
+      // 4.4 承辦人員關聯（記錄在 InChargeCase，允許為 null）
+      try {
+        const handlerResult = await this.createInChargeCaseRelation(newCase.id, formData.handler || null)
+        relationResults.push({ type: 'InChargeCase', success: true, data: handlerResult })
+        
+        if (formData.handler) {
+          console.log('✅ InChargeCase 承辦人員關聯建立成功')
+        } else {
+          console.log('✅ InChargeCase 記錄建立成功（承辦人員為空）')
         }
+      } catch (error) {
+        console.warn('建立承辦人關聯失敗:', error)
+        relationResults.push({ type: 'InChargeCase', success: false, error: error.message })
       }
 
-      // 3.5 事發地點關聯（只有在有選擇行政區時才建立）
+      // 4.5 事發地點關聯（如果有選擇行政區）
       if (formData.incidentDistrict) {
         try {
           const districtResult = await this.createDistrictCaseRelation(newCase.id, formData.incidentDistrict)
@@ -819,7 +1134,7 @@ export class CaseService {
         }
       }
 
-      // 3.6 住家里別關聯（只有在有選擇行政區時才建立）
+      // 4.6 住家里別關聯（如果有選擇行政區）
       if (formData.homeDistrict && contact1Result?.success) {
         try {
           const voterDistrictResult = await this.createVoterDistrictRelation(contact1Result.data.id, formData.homeDistrict)
@@ -838,12 +1153,12 @@ export class CaseService {
 
       console.log(`關聯建立完成: ${successCount} 成功, ${failCount} 失敗`)
 
-      // 即使部分關聯失敗，只要案件本身建立成功就回傳成功
       return {
         success: true,
         data: {
           case: newCase,
           contacts: { contact1: contact1Result?.data, contact2: contact2Result?.data },
+          category: categoryResult?.data,
           caseNumber: formData.caseNumber,
           relationResults: relationResults,
           relationSummary: {
@@ -966,12 +1281,25 @@ export class CaseService {
   }
 
   /**
-   * 建立 CategoryCase 關聯
+   * 建立 CategoryCase 關聯 - 修改版
    * @param {string} caseId - 案件 ID
-   * @param {string} categoryId - 類別 ID
+   * @param {string} categoryId - 類別 ID 或名稱
+   * @param {boolean} isDefault - 是否為預設類型
    * @returns {Promise<Object>} 建立結果
    */
-  static async createCategoryCaseRelation(caseId, categoryId) {
+  static async createCategoryCaseRelation(caseId, categoryId, isDefault = false) {
+    // 如果是預設類型，不建立 CategoryCase 關聯
+    // 因為預設類型不存在於 Category 表格中
+    if (isDefault) {
+      console.log('預設類型不建立 CategoryCase 關聯:', categoryId)
+      return { 
+        id: `default_${categoryId}`,
+        case_id: caseId, 
+        category_id: categoryId,
+        note: '預設類型，未存入關聯表'
+      }
+    }
+
     const { data, error } = await supabase
       .from('CategoryCase')
       .insert([{ case_id: caseId, category_id: categoryId }])
@@ -1044,16 +1372,44 @@ export class CaseService {
   }
 
   /**
-   * 建立 InChargeCase 關聯
+   * 建立 CaseMember 關聯（受理人員）
    * @param {string} caseId - 案件 ID
    * @param {string} memberId - 成員 ID
-   * @param {string} role - 角色 (receiver, handler)
+   * @param {string} role - 角色 (receiver, handler 等)
    * @returns {Promise<Object>} 建立結果
    */
-  static async createInChargeCaseRelation(caseId, memberId, role = 'handler') {
+  static async createCaseMemberRelation(caseId, memberId, role = 'receiver') {
+    const { data, error } = await supabase
+      .from('CaseMember')
+      .insert([{ case_id: caseId, member_id: memberId, role: role }])
+      .select()
+
+    if (error) {
+      console.error('建立 CaseMember 關聯失敗:', error)
+      throw error
+    }
+
+    return data
+  }
+
+  /**
+   * 建立 InChargeCase 關聯（承辦人員，允許 member_id 為 null）
+   * @param {string} caseId - 案件 ID
+   * @param {string|null} memberId - 成員 ID（可為 null）
+   * @returns {Promise<Object>} 建立結果
+   */
+  static async createInChargeCaseRelation(caseId, memberId = null) {
+    const insertData = { case_id: caseId }
+    
+    // 只有當 memberId 不為空時才添加 member_id
+    if (memberId) {
+      insertData.member_id = memberId
+    }
+    // 如果 memberId 為空，member_id 欄位會自動為 null
+
     const { data, error } = await supabase
       .from('InChargeCase')
-      .insert([{ case_id: caseId, member_id: memberId }])
+      .insert([insertData])
       .select()
 
     if (error) {
@@ -1305,9 +1661,9 @@ export class CaseService {
     const categories = caseData.CategoryCase || []
     const primaryCategory = categories.length > 0 ? categories[0].Category : null
 
-    // 提取負責人資訊
+    // 提取負責人資訊 - 修正這裡
     const inCharge = caseData.InChargeCase || []
-    const primaryHandler = inCharge.length > 0 ? inCharge[0].Member : null
+    const primaryHandler = inCharge.length > 0 && inCharge[0].Member ? inCharge[0].Member : null
 
     // 提取地點資訊
     const districts = caseData.DistrictCase || []

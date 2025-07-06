@@ -174,6 +174,57 @@ function CaseManagement({ member, team }) {
     setShowCaseModal(false)
   }
 
+  // 修正承辦人員名稱顯示邏輯
+  const getHandlerName = (caseItem) => {
+    console.log('=== getHandlerName ===')
+    console.log('案件資料:', caseItem)
+    
+    // 從 InChargeCase 中取得承辦人員資訊
+    const inCharge = caseItem.InChargeCase || []
+    console.log('InChargeCase 資料:', inCharge)
+    
+    if (inCharge.length > 0) {
+      // 如果有多筆記錄，我們需要決定要顯示哪一筆
+      // 方案1: 顯示最後一筆（最新的）
+      // 方案2: 顯示第一筆有 member_id 的記錄
+      // 方案3: 顯示所有有效的承辦人員
+      
+      // 採用方案2: 找第一筆有 member_id 且有 Member 資料的記錄
+      const validRecord = inCharge.find(record => 
+        record.member_id && record.Member
+      )
+      
+      if (validRecord) {
+        console.log('找到有效的承辦人員記錄:', validRecord)
+        return validRecord.Member.name
+      }
+      
+      // 如果沒有找到有效記錄，檢查是否都是 null（未指派）
+      const allNull = inCharge.every(record => !record.member_id)
+      if (allNull) {
+        console.log('所有記錄的 member_id 都是 null，尚未指派')
+        return '尚未指派'
+      }
+      
+      // 如果有 member_id 但沒有 Member 資料，可能是資料不一致
+      console.log('有 member_id 但無 Member 資料，資料可能不一致')
+      return '資料異常'
+    }
+    
+    console.log('無 InChargeCase 記錄')
+    return '尚未指派'
+  }
+
+  const getReceiverName = (caseItem) => {
+    // 從 CaseMember 中取得受理人員資訊
+    const caseMembers = caseItem.CaseMember || []
+    const receiver = caseMembers.find(cm => cm.role === 'receiver')
+    if (receiver && receiver.Member) {
+      return receiver.Member.name
+    }
+    return '未知'
+  }
+
   const renderCaseContent = () => {
     const getFilterSummary = () => {
       const activeFilters = []
@@ -195,7 +246,11 @@ function CaseManagement({ member, team }) {
         activeFilters.push(`優先順序: ${priorityLabel}`)
       }
       if (currentFilters.assignee && currentFilters.assignee !== 'all') {
-        activeFilters.push(`負責人: ${currentFilters.assignee}`)
+        if (currentFilters.assignee === 'unassigned') {
+          activeFilters.push(`承辦人員: 尚未指派`)
+        } else {
+          activeFilters.push(`承辦人員: ${currentFilters.assignee}`)
+        }
       }
 
       return activeFilters.length > 0 ? (
@@ -270,17 +325,24 @@ function CaseManagement({ member, team }) {
                       }
                     </p>
                     <div style={{ 
-                      display: 'flex', 
-                      justifyContent: 'space-between', 
-                      alignItems: 'center',
-                      fontSize: '0.8rem',
-                      color: '#888'
+                      display: 'grid',
+                      gridTemplateColumns: '1fr 1fr',
+                      gap: '8px',
+                      fontSize: '0.75rem',
+                      color: '#888',
+                      marginTop: '12px'
                     }}>
                       <span>
                         狀態: {CaseService.getStatusLabel(caseItem.status)}
                       </span>
                       <span>
                         優先順序: {CaseService.getPriorityLabel(caseItem.priority)}
+                      </span>
+                      <span>
+                        受理人員: {getReceiverName(caseItem)}
+                      </span>
+                      <span>
+                        承辦人員: {getHandlerName(caseItem)}
                       </span>
                     </div>
                   </div>

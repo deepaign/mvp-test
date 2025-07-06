@@ -1,4 +1,4 @@
-// src/components/Case/CaseModal/CaseForm/CaseForm.js
+// src/components/Case/CaseModal/CaseForm/CaseForm.js - 修正版
 import React from 'react'
 import { useCaseForm } from './useCaseForm'
 import { 
@@ -20,6 +20,14 @@ const CaseForm = ({ team, onSubmit, onCancel }) => {
     handleSubmit
   } = useCaseForm(team, onSubmit)
 
+  // 防止表單內的 Enter 鍵觸發提交
+  const handleFormKeyDown = (e) => {
+    if (e.key === 'Enter' && e.target.type !== 'submit' && e.target.type !== 'textarea') {
+      e.preventDefault()
+      console.log('攔截 Enter 鍵，防止意外提交表單')
+    }
+  }
+
   if (loading) {
     return (
       <div style={{ 
@@ -35,7 +43,11 @@ const CaseForm = ({ team, onSubmit, onCancel }) => {
 
   return (
     <div className="case-form-container">
-      <form onSubmit={handleSubmit} className="case-form">
+      <form 
+        onSubmit={handleSubmit} 
+        onKeyDown={handleFormKeyDown}
+        className="case-form"
+      >
         
         <BasicInfoSection 
           formData={formData}

@@ -71,7 +71,6 @@ function CaseTextInput({ team, onSubmit, onCancel }) {
         {/* AI 萃取提示 */}
         <div className="ai-extract-notice">
           <div className="ai-extract-header">
-            <span className="ai-icon">🤖</span>
             <strong>AI 萃取資訊</strong>
           </div>
           <p className="ai-extract-description">
@@ -101,7 +100,7 @@ function CaseTextInput({ team, onSubmit, onCancel }) {
               </div>
 
               <div className="notification-field">
-                <label>提醒日期時間</label>
+                <label>提醒時間</label>
                 <input
                   type="datetime-local"
                   value={notificationSettings.reminderDate}

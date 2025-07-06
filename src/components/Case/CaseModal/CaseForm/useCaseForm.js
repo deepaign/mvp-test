@@ -54,7 +54,7 @@ export const useCaseForm = (team, onSubmit) => {
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // 載入行政區資料
-  const loadDistricts = async (countyId, type) => {
+  const loadDistricts = useCallback(async (countyId, type) => {
     try {
       if (!countyId) {
         setDropdownOptions(prev => ({
@@ -81,7 +81,7 @@ export const useCaseForm = (team, onSubmit) => {
     } catch (error) {
       console.error('載入行政區發生錯誤:', error)
     }
-  }
+  }, [])
 
   // 生成案件編號
   const generateCaseNumber = useCallback(() => {
@@ -98,6 +98,12 @@ export const useCaseForm = (team, onSubmit) => {
 
   // 載入下拉選單資料
   const loadDropdownData = useCallback(async () => {
+    if (!team?.id) {
+      console.error('團隊 ID 缺失')
+      setLoading(false)
+      return
+    }
+
     setLoading(true)
     try {
       const [membersResult, categoriesResult, countiesResult] = await Promise.all([
@@ -119,7 +125,7 @@ export const useCaseForm = (team, onSubmit) => {
     } finally {
       setLoading(false)
     }
-  }, [team.id])
+  }, [team?.id])
 
   // 處理表單輸入變更
   const handleInputChange = useCallback((field, value) => {
@@ -222,7 +228,8 @@ export const useCaseForm = (team, onSubmit) => {
     try {
       const result = await CaseService.createCaseWithRelations({
         formData,
-        teamId: team.id
+        teamId: team.id,
+        dropdownOptions // 傳遞 dropdownOptions
       })
 
       if (result.success) {
@@ -266,24 +273,26 @@ export const useCaseForm = (team, onSubmit) => {
     } finally {
       setIsSubmitting(false)
     }
-  }, [formData, team, onSubmit, validateForm])
+  }, [formData, team, onSubmit, validateForm, dropdownOptions])
 
   // useEffect hooks
   useEffect(() => {
-    loadDropdownData()
-  }, [loadDropdownData])
+    if (team?.id) {
+      loadDropdownData()
+    }
+  }, [loadDropdownData, team?.id])
 
   useEffect(() => {
     if (formData.homeCounty) {
       loadDistricts(formData.homeCounty, 'home')
     }
-  }, [formData.homeCounty])
+  }, [formData.homeCounty, loadDistricts])
 
   useEffect(() => {
     if (formData.incidentCounty) {
       loadDistricts(formData.incidentCounty, 'incident')
     }
-  }, [formData.incidentCounty])
+  }, [formData.incidentCounty, loadDistricts])
 
   useEffect(() => {
     generateCaseNumber()
