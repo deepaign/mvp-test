@@ -227,7 +227,7 @@ export class CaseService {
           const categories = caseItem.CategoryCase || []
           
           // 檢查預設類型
-          if (['traffic', 'environment', 'security', 'public_service'].includes(filters.category)) {
+          if (['traffic', 'environment', 'security', 'public_service', 'legal_consultation'].includes(filters.category)) {
             const targetCategoryName = this.getCategoryName(filters.category)
             return categories.some(cat => cat.Category && cat.Category.name === targetCategoryName)
           } else {
@@ -364,7 +364,7 @@ export class CaseService {
   }
 
   /**
-   * 取得案件類別列表（修改版）
+   * 取得案件類別列表（修改版）- 新增法律諮詢
    * @param {string} groupId - 團隊 ID（未來可能需要）
    * @returns {Promise<Object>} 類別列表
    */
@@ -372,12 +372,13 @@ export class CaseService {
     try {
       console.log('=== CaseService.getCategories ===')
 
-      // 預設類別（始終包含）
+      // 預設類別（始終包含）- 新增法律諮詢
       const defaultCategories = [
         { id: 'traffic', name: '交通問題', isDefault: true },
         { id: 'environment', name: '環境問題', isDefault: true },
         { id: 'security', name: '治安問題', isDefault: true },
-        { id: 'public_service', name: '民生服務', isDefault: true }
+        { id: 'public_service', name: '民生服務', isDefault: true },
+        { id: 'legal_consultation', name: '法律諮詢', isDefault: true }
       ]
 
       // 嘗試從資料庫載入自定義類別
@@ -425,7 +426,8 @@ export class CaseService {
           { id: 'traffic', name: '交通問題', isDefault: true },
           { id: 'environment', name: '環境問題', isDefault: true },
           { id: 'security', name: '治安問題', isDefault: true },
-          { id: 'public_service', name: '民生服務', isDefault: true }
+          { id: 'public_service', name: '民生服務', isDefault: true },
+          { id: 'legal_consultation', name: '法律諮詢', isDefault: true }
         ],
         error: error.message
       }
@@ -872,7 +874,7 @@ export class CaseService {
   }
 
   /**
-   * 處理案件類型（建立或查找 Category）- 修改版
+   * 處理案件類型（建立或查找 Category）- 重要修正版
    * @param {string} categoryName - 類型名稱
    * @returns {Promise<Object>} 處理結果
    */
@@ -888,24 +890,57 @@ export class CaseService {
       const categoryDisplayName = this.getCategoryName(categoryName)
 
       // 檢查是否為預設類型
-      const defaultCategories = ['交通問題', '環境問題', '治安問題', '民生服務']
+      const defaultCategories = ['交通問題', '環境問題', '治安問題', '民生服務', '法律諮詢']
       const isDefaultCategory = defaultCategories.includes(categoryDisplayName)
 
-      // 如果是預設類型，返回一個虛擬的 category 對象，不存入資料庫
+      // 如果是預設類型，先確保它存在於 Category 表中
       if (isDefaultCategory) {
-        const defaultMap = {
-          '交通問題': 'traffic',
-          '環境問題': 'environment', 
-          '治安問題': 'security',
-          '民生服務': 'public_service'
+        // 檢查預設類型是否已經存在於 Category 表中
+        const { data: existingCategory, error: searchError } = await supabase
+          .from('Category')
+          .select('*')
+          .eq('name', categoryDisplayName)
+          .limit(1)
+
+        if (searchError) {
+          console.error('查找預設類型失敗:', searchError)
         }
-        
-        return {
-          success: true,
-          data: {
-            id: defaultMap[categoryDisplayName] || categoryDisplayName.toLowerCase(),
-            name: categoryDisplayName,
-            isDefault: true
+
+        if (existingCategory && existingCategory.length > 0) {
+          // 預設類型已經存在於 Category 表中
+          console.log('預設類型已存在於 Category 表:', existingCategory[0])
+          return {
+            success: true,
+            data: {
+              ...existingCategory[0],
+              isDefault: true
+            }
+          }
+        } else {
+          // 預設類型不存在，需要建立
+          console.log('建立預設類型到 Category 表:', categoryDisplayName)
+          const { data: newCategory, error: createError } = await supabase
+            .from('Category')
+            .insert([{
+              name: categoryDisplayName,
+              description: `${categoryDisplayName}相關案件（系統預設類型）`,
+              created_at: new Date().toISOString()
+            }])
+            .select()
+            .single()
+
+          if (createError) {
+            console.error('建立預設類型失敗:', createError)
+            return { success: false, error: createError.message }
+          }
+
+          console.log('預設類型建立成功:', newCategory)
+          return { 
+            success: true, 
+            data: {
+              ...newCategory,
+              isDefault: true
+            }
           }
         }
       }
@@ -964,7 +999,7 @@ export class CaseService {
   }
 
   /**
-   * 建立案件及相關關聯（完整流程）- 最新修改版
+   * 建立案件及相關關聯（完整流程）- 重要修正版
    * @param {Object} options - 建立選項
    * @param {Object} options.formData - 表單資料
    * @param {string} options.teamId - 團隊 ID
@@ -985,23 +1020,29 @@ export class CaseService {
         }
       }
 
-      // 1. 處理聯絡人（建立或查找 Voter）
+      // 1. 處理聯絡人（建立或查找 Voter）- 傳遞住址資訊
+      // 準備擴展的 dropdownOptions，包含選擇的縣市 ID
+      const extendedDropdownOptions = {
+        ...dropdownOptions,
+        selectedCountyId: formData.homeCounty // 傳遞選擇的縣市 ID
+      }
+      
       const contact1Result = await this.handleContact({
         name: formData.contact1Name,
         phone: formData.contact1Phone
-      })
+      }, extendedDropdownOptions, formData.homeDistrict)
 
       let contact2Result = null
       if (formData.contact2Name && formData.contact2Phone) {
         contact2Result = await this.handleContact({
           name: formData.contact2Name,
           phone: formData.contact2Phone
-        })
+        }, dropdownOptions, null) // 聯絡人2 沒有住址資訊
       }
 
       console.log('聯絡人處理結果:', { contact1Result, contact2Result })
 
-      // 2. 處理案件類型（如果有的話）
+      // 2. 處理案件類型（如果有的話）- 確保存在於 Category 表中
       let categoryResult = null
       if (formData.category) {
         categoryResult = await this.handleCategory(formData.category)
@@ -1068,21 +1109,16 @@ export class CaseService {
         }
       }
 
-      // 4.2 案件類別關聯（只有自定義類型才建立關聯）
+      // 4.2 案件類別關聯（重要修正：所有案件都建立 CategoryCase 關聯）
       if (categoryResult?.success) {
         try {
           const categoryResult2 = await this.createCategoryCaseRelation(
             newCase.id, 
-            categoryResult.data.id, 
-            categoryResult.data.isDefault
+            categoryResult.data.id // 使用實際的 Category ID
           )
           relationResults.push({ type: 'CategoryCase', success: true, data: categoryResult2 })
           
-          if (categoryResult.data.isDefault) {
-            console.log('✅ 預設類型，記錄但不建立 CategoryCase 關聯')
-          } else {
-            console.log('✅ 自定義類型，CategoryCase 關聯建立成功')
-          }
+          console.log('✅ CategoryCase 關聯建立成功，Category ID:', categoryResult.data.id)
         } catch (error) {
           console.warn('建立類別關聯失敗:', error)
           relationResults.push({ type: 'CategoryCase', success: false, error: error.message })
@@ -1181,17 +1217,74 @@ export class CaseService {
   }
 
   /**
-   * 處理聯絡人（建立或查找 Voter）
+   * 處理聯絡人（建立或查找 Voter）- 加入住址資訊
    * @param {Object} contact - 聯絡人資料
+   * @param {Object} dropdownOptions - 下拉選單選項（用於地址轉換）
+   * @param {string} homeDistrictId - 住家行政區 ID
    * @returns {Promise<Object>} 處理結果
    */
-  static async handleContact(contact) {
+  static async handleContact(contact, dropdownOptions = {}, homeDistrictId = null) {
     try {
       if (!contact.name || !contact.phone) {
         return { success: false, error: '聯絡人姓名和電話必填' }
       }
 
-      console.log('處理聯絡人:', contact)
+      console.log('處理聯絡人:', contact, '住家行政區ID:', homeDistrictId)
+
+      // 建立住址字串
+      let addressString = ''
+      
+      // 優先使用完整的縣市+行政區組合
+      if (homeDistrictId && dropdownOptions.homeDistricts && dropdownOptions.homeDistricts.length > 0) {
+        console.log('嘗試使用完整縣市+行政區組合...')
+        console.log('homeDistrictId:', homeDistrictId)
+        console.log('available homeDistricts:', dropdownOptions.homeDistricts)
+        
+        // 從 homeDistricts 中找到對應的行政區
+        const district = dropdownOptions.homeDistricts.find(d => d.id === homeDistrictId)
+        console.log('找到的行政區:', district)
+        
+        if (district) {
+          let countyName = ''
+          
+          // 嘗試從下拉選單選項中取得縣市資訊
+          if (dropdownOptions.selectedCountyId && dropdownOptions.counties) {
+            const county = dropdownOptions.counties.find(c => c.id === dropdownOptions.selectedCountyId)
+            if (county) {
+              countyName = county.name
+              console.log('找到縣市:', county.name)
+            }
+          }
+          
+          if (countyName) {
+            addressString = `${countyName}${district.name}`
+          } else {
+            addressString = district.name
+          }
+          
+          console.log('組合的住址字串:', addressString)
+        }
+      } 
+      // 如果沒有行政區資料，但有縣市資料，就只記錄縣市
+      else if (dropdownOptions.selectedCountyId && dropdownOptions.counties) {
+        console.log('行政區資料不足，嘗試只使用縣市資料...')
+        console.log('selectedCountyId:', dropdownOptions.selectedCountyId)
+        
+        const county = dropdownOptions.counties.find(c => c.id === dropdownOptions.selectedCountyId)
+        if (county) {
+          addressString = county.name
+          console.log('只使用縣市名稱作為住址:', addressString)
+        }
+      }
+      
+      if (!addressString) {
+        console.log('無法組合住址字串，條件不足:', {
+          homeDistrictId: !!homeDistrictId,
+          counties: !!dropdownOptions.counties,
+          homeDistricts: !!dropdownOptions.homeDistricts,
+          selectedCountyId: !!dropdownOptions.selectedCountyId
+        })
+      }
 
       // 先檢查是否已存在
       const { data: existingVoters, error: searchError } = await supabase
@@ -1206,15 +1299,31 @@ export class CaseService {
         const existingVoter = existingVoters[0]
         console.log('找到已存在的選民:', existingVoter)
         
-        // 更新姓名和 updated_at（如果不同）
-        if (existingVoter.name !== contact.name) {
+        // 檢查是否需要更新姓名或住址
+        const needsUpdate = existingVoter.name !== contact.name || 
+                           (addressString && existingVoter.address !== addressString)
+        
+        if (needsUpdate) {
           try {
+            const updateData = { 
+              updated_at: new Date().toISOString()
+            }
+            
+            // 如果姓名不同，更新姓名
+            if (existingVoter.name !== contact.name) {
+              updateData.name = contact.name
+            }
+            
+            // 如果有住址且不同，更新住址
+            if (addressString && existingVoter.address !== addressString) {
+              updateData.address = addressString
+            }
+            
+            console.log('更新選民資料:', updateData)
+            
             const { data: updatedVoter, error: updateError } = await supabase
               .from('Voter')
-              .update({ 
-                name: contact.name,
-                updated_at: new Date().toISOString()
-              })
+              .update(updateData)
               .eq('id', existingVoter.id)
               .select()
               .single()
@@ -1224,6 +1333,7 @@ export class CaseService {
               return { success: true, data: existingVoter }
             }
 
+            console.log('選民資料更新成功:', updatedVoter)
             return { success: true, data: updatedVoter }
           } catch (updateError) {
             console.error('更新選民資料異常:', updateError)
@@ -1236,13 +1346,22 @@ export class CaseService {
 
       // 建立新選民
       console.log('建立新選民:', contact)
+      const newVoterData = {
+        name: contact.name,
+        phone: contact.phone,
+        created_at: new Date().toISOString()
+      }
+      
+      // 如果有住址，加入住址
+      if (addressString) {
+        newVoterData.address = addressString
+      }
+      
+      console.log('新選民資料:', newVoterData)
+      
       const { data: newVoter, error: createError } = await supabase
         .from('Voter')
-        .insert([{
-          name: contact.name,
-          phone: contact.phone,
-          created_at: new Date().toISOString()
-        }])
+        .insert([newVoterData])
         .select()
         .single()
 
@@ -1281,25 +1400,14 @@ export class CaseService {
   }
 
   /**
-   * 建立 CategoryCase 關聯 - 修改版
+   * 建立 CategoryCase 關聯 - 重要修正版：所有案件都建立關聯
    * @param {string} caseId - 案件 ID
-   * @param {string} categoryId - 類別 ID 或名稱
-   * @param {boolean} isDefault - 是否為預設類型
+   * @param {string} categoryId - 類別 ID（來自 Category 表的真實 ID）
    * @returns {Promise<Object>} 建立結果
    */
-  static async createCategoryCaseRelation(caseId, categoryId, isDefault = false) {
-    // 如果是預設類型，不建立 CategoryCase 關聯
-    // 因為預設類型不存在於 Category 表格中
-    if (isDefault) {
-      console.log('預設類型不建立 CategoryCase 關聯:', categoryId)
-      return { 
-        id: `default_${categoryId}`,
-        case_id: caseId, 
-        category_id: categoryId,
-        note: '預設類型，未存入關聯表'
-      }
-    }
-
+  static async createCategoryCaseRelation(caseId, categoryId) {
+    console.log('建立 CategoryCase 關聯:', { caseId, categoryId })
+    
     const { data, error } = await supabase
       .from('CategoryCase')
       .insert([{ case_id: caseId, category_id: categoryId }])
@@ -1310,6 +1418,7 @@ export class CaseService {
       throw error
     }
 
+    console.log('CategoryCase 關聯建立成功:', data)
     return data
   }
 
@@ -1543,7 +1652,7 @@ export class CaseService {
   }
 
   /**
-   * 輔助方法：將類別 ID 轉換為類別名稱
+   * 輔助方法：將類別 ID 轉換為類別名稱 - 新增法律諮詢
    * @param {string} categoryId - 類別 ID
    * @returns {string} 類別名稱
    */
@@ -1552,7 +1661,8 @@ export class CaseService {
       'traffic': '交通問題',
       'environment': '環境問題',
       'security': '治安問題',
-      'public_service': '民生服務'
+      'public_service': '民生服務',
+      'legal_consultation': '法律諮詢'
     }
     return categoryMap[categoryId] || categoryId
   }
