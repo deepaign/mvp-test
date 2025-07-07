@@ -1,4 +1,4 @@
-// services/caseService.js - 修正版
+// services/caseService.js - 修正版：使用 AcceptanceCase 記錄受理人員
 import { supabase } from '../supabase'
 
 export class CaseService {
@@ -96,7 +96,7 @@ export class CaseService {
   }
 
   /**
-   * 取得案件列表（支援篩選和分頁）- 修正日期篩選和多重篩選交集
+   * 取得案件列表（支援篩選和分頁）- 修正查詢以包含 AcceptanceCase
    * @param {Object} options - 查詢選項
    * @param {string} options.groupId - 團隊 ID
    * @param {string} options.status - 案件狀態 (all, pending, processing, completed)
@@ -128,7 +128,7 @@ export class CaseService {
         }
       }
 
-      // 建立基礎查詢 - 修正 InChargeCase 的查詢
+      // 建立基礎查詢 - 修正查詢以包含 AcceptanceCase
       let query = supabase
         .from('Case')
         .select(`
@@ -140,6 +140,13 @@ export class CaseService {
             )
           ),
           InChargeCase (
+            member_id,
+            Member (
+              id,
+              name
+            )
+          ),
+          AcceptanceCase (
             member_id,
             Member (
               id,
@@ -486,7 +493,7 @@ export class CaseService {
   }
 
   /**
-   * 取得案件詳細資訊
+   * 取得案件詳細資訊 - 修正查詢以包含 AcceptanceCase
    * @param {string} caseId - 案件 ID
    * @param {string} groupId - 團隊 ID（用於權限驗證）
    * @returns {Promise<Object>} 案件詳細資訊
@@ -516,6 +523,14 @@ export class CaseService {
             )
           ),
           InChargeCase (
+            member_id,
+            Member (
+              id,
+              name,
+              email
+            )
+          ),
+          AcceptanceCase (
             member_id,
             Member (
               id,
@@ -589,7 +604,7 @@ export class CaseService {
   }
 
   /**
-   * 刪除案件及其所有關聯資料
+   * 刪除案件及其所有關聯資料 - 修正刪除邏輯以包含 AcceptanceCase
    * @param {string} caseId - 案件 ID
    * @param {string} groupId - 團隊 ID（用於權限驗證）
    * @returns {Promise<Object>} 刪除結果
@@ -671,7 +686,25 @@ export class CaseService {
         deletionResults.push({ type: 'CaseMember', success: false, error: error.message })
       }
 
-      // 3. 刪除 CategoryCase 關聯
+      // 3. 刪除 AcceptanceCase 關聯（新增）
+      try {
+        const { error: acceptanceCaseError } = await supabase
+          .from('AcceptanceCase')
+          .delete()
+          .eq('case_id', caseId)
+
+        if (acceptanceCaseError) {
+          console.warn('刪除 AcceptanceCase 關聯失敗:', acceptanceCaseError)
+          deletionResults.push({ type: 'AcceptanceCase', success: false, error: acceptanceCaseError.message })
+        } else {
+          deletionResults.push({ type: 'AcceptanceCase', success: true })
+        }
+      } catch (error) {
+        console.warn('刪除 AcceptanceCase 關聯異常:', error)
+        deletionResults.push({ type: 'AcceptanceCase', success: false, error: error.message })
+      }
+
+      // 4. 刪除 CategoryCase 關聯
       try {
         const { error: categoryCaseError } = await supabase
           .from('CategoryCase')
@@ -689,7 +722,7 @@ export class CaseService {
         deletionResults.push({ type: 'CategoryCase', success: false, error: error.message })
       }
 
-      // 4. 刪除 InChargeCase 關聯
+      // 5. 刪除 InChargeCase 關聯
       try {
         const { error: inChargeCaseError } = await supabase
           .from('InChargeCase')
@@ -707,7 +740,7 @@ export class CaseService {
         deletionResults.push({ type: 'InChargeCase', success: false, error: error.message })
       }
 
-      // 5. 刪除 DistrictCase 關聯
+      // 6. 刪除 DistrictCase 關聯
       try {
         const { error: districtCaseError } = await supabase
           .from('DistrictCase')
@@ -725,7 +758,7 @@ export class CaseService {
         deletionResults.push({ type: 'DistrictCase', success: false, error: error.message })
       }
 
-      // 6. 最後刪除案件本身
+      // 7. 最後刪除案件本身
       const { error: caseDeleteError } = await supabase
         .from('Case')
         .delete()
@@ -999,7 +1032,7 @@ export class CaseService {
   }
 
   /**
-   * 建立案件及相關關聯（完整流程）- 重要修正版
+   * 建立案件及相關關聯（完整流程）- 修正版：使用 AcceptanceCase 記錄受理人員
    * @param {Object} options - 建立選項
    * @param {Object} options.formData - 表單資料
    * @param {string} options.teamId - 團隊 ID
@@ -1132,15 +1165,25 @@ export class CaseService {
         })
       }
 
-      // 4.3 受理人員關聯（記錄在 CaseMember）
+      // 4.3 受理人員關聯（修正：使用 AcceptanceCase 記錄受理人員）
       if (formData.receiver) {
         try {
-          const receiverResult = await this.createCaseMemberRelation(newCase.id, formData.receiver, 'receiver')
-          relationResults.push({ type: 'CaseMember', success: true, data: receiverResult })
-          console.log('✅ CaseMember 受理人員關聯建立成功')
+          const acceptanceResult = await this.createAcceptanceCaseRelation(newCase.id, formData.receiver)
+          relationResults.push({ type: 'AcceptanceCase', success: true, data: acceptanceResult })
+          console.log('✅ AcceptanceCase 受理人員關聯建立成功')
         } catch (error) {
           console.warn('建立受理人關聯失敗:', error)
-          relationResults.push({ type: 'CaseMember', success: false, error: error.message })
+          relationResults.push({ type: 'AcceptanceCase', success: false, error: error.message })
+        }
+
+        // 同時在 CaseMember 中也記錄受理人員（保持雙重記錄）
+        try {
+          const caseMemberResult = await this.createCaseMemberRelation(newCase.id, formData.receiver, 'receiver')
+          relationResults.push({ type: 'CaseMember-Receiver', success: true, data: caseMemberResult })
+          console.log('✅ CaseMember 受理人員關聯建立成功')
+        } catch (error) {
+          console.warn('建立 CaseMember 受理人關聯失敗:', error)
+          relationResults.push({ type: 'CaseMember-Receiver', success: false, error: error.message })
         }
       }
 
@@ -1151,6 +1194,16 @@ export class CaseService {
         
         if (formData.handler) {
           console.log('✅ InChargeCase 承辦人員關聯建立成功')
+          
+          // 同時在 CaseMember 中也記錄承辦人員（保持雙重記錄）
+          try {
+            const caseMemberHandlerResult = await this.createCaseMemberRelation(newCase.id, formData.handler, 'handler')
+            relationResults.push({ type: 'CaseMember-Handler', success: true, data: caseMemberHandlerResult })
+            console.log('✅ CaseMember 承辦人員關聯建立成功')
+          } catch (error) {
+            console.warn('建立 CaseMember 承辦人關聯失敗:', error)
+            relationResults.push({ type: 'CaseMember-Handler', success: false, error: error.message })
+          }
         } else {
           console.log('✅ InChargeCase 記錄建立成功（承辦人員為空）')
         }
@@ -1423,6 +1476,29 @@ export class CaseService {
   }
 
   /**
+   * 建立 AcceptanceCase 關聯（新增：受理人員專用）
+   * @param {string} caseId - 案件 ID
+   * @param {string} memberId - 成員 ID
+   * @returns {Promise<Object>} 建立結果
+   */
+  static async createAcceptanceCaseRelation(caseId, memberId) {
+    console.log('建立 AcceptanceCase 關聯:', { caseId, memberId })
+    
+    const { data, error } = await supabase
+      .from('AcceptanceCase')
+      .insert([{ case_id: caseId, member_id: memberId }])
+      .select()
+
+    if (error) {
+      console.error('建立 AcceptanceCase 關聯失敗:', error)
+      throw error
+    }
+
+    console.log('AcceptanceCase 關聯建立成功:', data)
+    return data
+  }
+
+  /**
    * 建立 DistrictCase 關聯
    * @param {string} caseId - 案件 ID
    * @param {string} districtId - 行政區 ID
@@ -1481,7 +1557,7 @@ export class CaseService {
   }
 
   /**
-   * 建立 CaseMember 關聯（受理人員）
+   * 建立 CaseMember 關聯（受理人員或承辦人員）
    * @param {string} caseId - 案件 ID
    * @param {string} memberId - 成員 ID
    * @param {string} role - 角色 (receiver, handler 等)
@@ -1756,7 +1832,7 @@ export class CaseService {
   }
 
   /**
-   * 輔助方法：從案件資料中提取關鍵資訊
+   * 輔助方法：從案件資料中提取關鍵資訊 - 修正版：支援 AcceptanceCase
    * @param {Object} caseData - 案件資料
    * @returns {Object} 提取的關鍵資訊
    */
@@ -1771,9 +1847,13 @@ export class CaseService {
     const categories = caseData.CategoryCase || []
     const primaryCategory = categories.length > 0 ? categories[0].Category : null
 
-    // 提取負責人資訊 - 修正這裡
+    // 提取承辦人員資訊（從 InChargeCase）
     const inCharge = caseData.InChargeCase || []
     const primaryHandler = inCharge.length > 0 && inCharge[0].Member ? inCharge[0].Member : null
+
+    // 提取受理人員資訊（從 AcceptanceCase）
+    const acceptance = caseData.AcceptanceCase || []
+    const primaryReceiver = acceptance.length > 0 && acceptance[0].Member ? acceptance[0].Member : null
 
     // 提取地點資訊
     const districts = caseData.DistrictCase || []
@@ -1803,6 +1883,10 @@ export class CaseService {
       handler: primaryHandler ? {
         id: primaryHandler.id,
         name: primaryHandler.name
+      } : null,
+      receiver: primaryReceiver ? {
+        id: primaryReceiver.id,
+        name: primaryReceiver.name
       } : null,
       district: primaryDistrict ? {
         id: primaryDistrict.id,
