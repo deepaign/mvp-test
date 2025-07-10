@@ -1897,14 +1897,436 @@ export class CaseService {
   }
 
   /**
-   * 輔助方法：從描述中提取案件編號
+   * 從案件描述中提取案件編號
    * @param {string} description - 案件描述
    * @returns {string} 案件編號
    */
   static extractCaseNumber(description) {
     if (!description) return ''
     
-    const match = description.match(/案件編號[：:]\s*([^\n]+)/)
+    const match = description.match(/案件編號[：:]\s*([^\n\r]+)/)
     return match ? match[1].trim() : ''
+  }
+
+  /**
+   * 從案件描述中提取事發地點
+   * @param {string} description - 案件描述
+   * @returns {string} 事發地點
+   */
+  static extractIncidentLocation(description) {
+    if (!description) return ''
+    
+    const match = description.match(/事發地點[：:]\s*([^\n\r]+)/)
+    return match ? match[1].trim() : ''
+  }
+
+  /**
+   * 更新案件及其所有關聯資料
+   * @param {Object} options - 更新選項
+   * @param {Object} options.caseData - 案件資料
+   * @param {Object} options.originalData - 原始資料（用於比較變更）
+   * @param {string} options.teamId - 團隊 ID
+   * @param {Object} options.dropdownOptions - 下拉選單選項（用於地點名稱轉換）
+   * @returns {Promise<Object>} 更新結果
+   */
+  static async updateCaseWithRelations({ caseData, originalData, teamId, dropdownOptions = {} }) {
+    try {
+      console.log('=== CaseService.updateCaseWithRelations ===')
+      console.log('更新資料:', caseData)
+      console.log('原始資料:', originalData)
+      console.log('團隊 ID:', teamId)
+
+      if (!teamId || !caseData || !originalData || !caseData.id) {
+        return {
+          success: false,
+          error: '團隊 ID、案件資料、原始資料和案件 ID 必填',
+          data: null
+        }
+      }
+
+      const updateResults = []
+      const now = new Date().toISOString()
+
+      // 1. 檢查並更新主要案件資料
+      const caseNeedsUpdate = this.checkCaseDataChanges(caseData, originalData)
+      if (caseNeedsUpdate) {
+        console.log('案件主要資料有變更，執行更新')
+        
+        const updatedCaseData = {
+          title: caseData.title,
+          description: this.buildDescription(caseData, dropdownOptions),
+          start_date: this.formatToTimetz(caseData.receivedDate, caseData.receivedTime),
+          end_date: caseData.closedDate && caseData.closedTime ? 
+            this.formatToTimetz(caseData.closedDate, caseData.closedTime) : null,
+          status: caseData.processingStatus || 'pending',
+          contact_type: caseData.contactMethod || 'phone',
+          priority: caseData.priority || 'normal',
+          updated_at: now
+        }
+
+        const { data: updatedCase, error: caseError } = await supabase
+          .from('Case')
+          .update(updatedCaseData)
+          .eq('id', caseData.id)
+          .eq('group_id', teamId)
+          .select()
+          .single()
+
+        if (caseError) {
+          console.error('更新案件失敗:', caseError)
+          return {
+            success: false,
+            error: `更新案件失敗: ${caseError.message}`,
+            data: null
+          }
+        }
+
+        updateResults.push({ type: 'Case', success: true, data: updatedCase })
+      }
+
+      // 2. 處理聯絡人更新
+      await this.updateContacts(caseData, originalData, updateResults, dropdownOptions)
+
+      // 3. 處理案件類別更新
+      await this.updateCaseCategory(caseData, originalData, updateResults)
+
+      // 4. 處理受理人員更新
+      await this.updateAcceptanceMember(caseData, originalData, updateResults)
+
+      // 5. 處理承辦人員更新
+      await this.updateInChargeMember(caseData, originalData, updateResults)
+
+      // 6. 處理事發地點更新
+      await this.updateIncidentLocation(caseData, originalData, updateResults)
+
+      // 7. 處理住家里別更新
+      await this.updateHomeDistrict(caseData, originalData, updateResults, dropdownOptions)
+
+      console.log('所有更新完成:', updateResults)
+
+      const successCount = updateResults.filter(r => r.success).length
+      const failCount = updateResults.filter(r => !r.success).length
+
+      return {
+        success: true,
+        data: {
+          caseId: caseData.id,
+          updateResults,
+          summary: {
+            updated: successCount,
+            failed: failCount,
+            total: updateResults.length
+          }
+        },
+        error: null
+      }
+
+    } catch (error) {
+      console.error('CaseService.updateCaseWithRelations 發生錯誤:', error)
+      return {
+        success: false,
+        error: error.message,
+        data: null
+      }
+    }
+  }
+
+  /**
+   * 檢查案件主要資料是否有變更
+   * @param {Object} newData - 新資料
+   * @param {Object} originalData - 原始資料
+   * @returns {boolean} 是否有變更
+   */
+  static checkCaseDataChanges(newData, originalData) {
+    const fieldsToCheck = [
+      'title', 'description', 'receivedDate', 'receivedTime',
+      'closedDate', 'closedTime', 'processingStatus', 'contactMethod', 'priority'
+    ]
+
+    return fieldsToCheck.some(field => {
+      const newValue = newData[field] || ''
+      const originalValue = originalData[field] || ''
+      return newValue !== originalValue
+    })
+  }
+
+  /**
+   * 更新聯絡人資訊
+   */
+  static async updateContacts(caseData, originalData, updateResults, dropdownOptions) {
+    try {
+      // 檢查聯絡人1是否有變更
+      if (this.contactNeedsUpdate(caseData, originalData, 1)) {
+        console.log('聯絡人1有變更，執行更新')
+        
+        const contact1Result = await this.handleContact({
+          name: caseData.contact1Name,
+          phone: caseData.contact1Phone
+        }, {
+          ...dropdownOptions,
+          selectedCountyId: caseData.homeCounty
+        }, caseData.homeDistrict)
+
+        if (contact1Result.success) {
+          updateResults.push({ type: 'Contact1', success: true, data: contact1Result.data })
+        } else {
+          updateResults.push({ type: 'Contact1', success: false, error: contact1Result.error })
+        }
+      }
+
+      // 檢查聯絡人2是否有變更
+      if (this.contactNeedsUpdate(caseData, originalData, 2)) {
+        console.log('聯絡人2有變更，執行更新')
+        
+        if (caseData.contact2Name && caseData.contact2Phone) {
+          const contact2Result = await this.handleContact({
+            name: caseData.contact2Name,
+            phone: caseData.contact2Phone
+          }, dropdownOptions, null)
+
+          if (contact2Result.success) {
+            updateResults.push({ type: 'Contact2', success: true, data: contact2Result.data })
+          } else {
+            updateResults.push({ type: 'Contact2', success: false, error: contact2Result.error })
+          }
+        }
+      }
+
+    } catch (error) {
+      console.error('更新聯絡人失敗:', error)
+      updateResults.push({ type: 'Contacts', success: false, error: error.message })
+    }
+  }
+
+  /**
+   * 檢查聯絡人是否需要更新
+   */
+  static contactNeedsUpdate(newData, originalData, contactNumber) {
+    const nameField = `contact${contactNumber}Name`
+    const phoneField = `contact${contactNumber}Phone`
+    
+    return newData[nameField] !== originalData[nameField] || 
+           newData[phoneField] !== originalData[phoneField]
+  }
+
+  /**
+   * 更新案件類別
+   */
+  static async updateCaseCategory(caseData, originalData, updateResults) {
+    try {
+      if (caseData.category !== originalData.category) {
+        console.log('案件類別有變更，執行更新')
+        
+        // 先刪除舊的類別關聯
+        await supabase
+          .from('CategoryCase')
+          .delete()
+          .eq('case_id', caseData.id)
+
+        // 如果有新類別，建立新關聯
+        if (caseData.category) {
+          const categoryResult = await this.handleCategory(caseData.category)
+          
+          if (categoryResult.success) {
+            await this.createCategoryCaseRelation(caseData.id, categoryResult.data.id)
+            updateResults.push({ type: 'CategoryCase', success: true, data: categoryResult.data })
+          } else {
+            updateResults.push({ type: 'CategoryCase', success: false, error: categoryResult.error })
+          }
+        }
+      }
+    } catch (error) {
+      console.error('更新案件類別失敗:', error)
+      updateResults.push({ type: 'CategoryCase', success: false, error: error.message })
+    }
+  }
+
+  /**
+   * 更新受理人員
+   */
+  static async updateAcceptanceMember(caseData, originalData, updateResults) {
+    try {
+      if (caseData.receiver !== originalData.receiver) {
+        console.log('受理人員有變更，執行更新')
+        
+        const now = new Date().toISOString()
+
+        // 更新 AcceptanceCase
+        const { error: acceptanceError } = await supabase
+          .from('AcceptanceCase')
+          .update({ 
+            member_id: caseData.receiver,
+            updated_at: now
+          })
+          .eq('case_id', caseData.id)
+
+        if (acceptanceError) {
+          updateResults.push({ type: 'AcceptanceCase', success: false, error: acceptanceError.message })
+        } else {
+          updateResults.push({ type: 'AcceptanceCase', success: true })
+        }
+
+        // 同時更新 CaseMember
+        const { error: caseMemberError } = await supabase
+          .from('CaseMember')
+          .update({ 
+            member_id: caseData.receiver,
+            updated_at: now
+          })
+          .eq('case_id', caseData.id)
+          .eq('role', 'receiver')
+
+        if (caseMemberError) {
+          updateResults.push({ type: 'CaseMember-Receiver', success: false, error: caseMemberError.message })
+        } else {
+          updateResults.push({ type: 'CaseMember-Receiver', success: true })
+        }
+      }
+    } catch (error) {
+      console.error('更新受理人員失敗:', error)
+      updateResults.push({ type: 'AcceptanceCase', success: false, error: error.message })
+    }
+  }
+
+  /**
+   * 更新承辦人員
+   */
+  static async updateInChargeMember(caseData, originalData, updateResults) {
+    try {
+      if (caseData.handler !== originalData.handler) {
+        console.log('承辦人員有變更，執行更新')
+        
+        const now = new Date().toISOString()
+
+        // 更新 InChargeCase
+        const { error: inChargeError } = await supabase
+          .from('InChargeCase')
+          .update({ 
+            member_id: caseData.handler || null,
+            updated_at: now
+          })
+          .eq('case_id', caseData.id)
+
+        if (inChargeError) {
+          updateResults.push({ type: 'InChargeCase', success: false, error: inChargeError.message })
+        } else {
+          updateResults.push({ type: 'InChargeCase', success: true })
+        }
+
+        // 同時更新 CaseMember（如果有承辦人員）
+        if (caseData.handler) {
+          // 先刪除舊的承辦人員記錄
+          await supabase
+            .from('CaseMember')
+            .delete()
+            .eq('case_id', caseData.id)
+            .eq('role', 'handler')
+
+          // 建立新的承辦人員記錄
+          const { error: caseMemberError } = await supabase
+            .from('CaseMember')
+            .insert([{
+              case_id: caseData.id,
+              member_id: caseData.handler,
+              role: 'handler',
+              created_at: now
+            }])
+
+          if (caseMemberError) {
+            updateResults.push({ type: 'CaseMember-Handler', success: false, error: caseMemberError.message })
+          } else {
+            updateResults.push({ type: 'CaseMember-Handler', success: true })
+          }
+        }
+      }
+    } catch (error) {
+      console.error('更新承辦人員失敗:', error)
+      updateResults.push({ type: 'InChargeCase', success: false, error: error.message })
+    }
+  }
+
+  /**
+   * 更新事發地點關聯
+   */
+  static async updateIncidentLocation(caseData, originalData, updateResults) {
+    try {
+      if (caseData.incidentDistrict !== originalData.incidentDistrict) {
+        console.log('事發地點有變更，執行更新')
+        
+        // 先刪除舊的地點關聯
+        await supabase
+          .from('DistrictCase')
+          .delete()
+          .eq('case_id', caseData.id)
+
+        // 如果有新地點，建立新關聯
+        if (caseData.incidentDistrict) {
+          const { error: districtError } = await supabase
+            .from('DistrictCase')
+            .insert([{
+              case_id: caseData.id,
+              district_id: caseData.incidentDistrict,
+              created_at: new Date().toISOString()
+            }])
+
+          if (districtError) {
+            updateResults.push({ type: 'DistrictCase', success: false, error: districtError.message })
+          } else {
+            updateResults.push({ type: 'DistrictCase', success: true })
+          }
+        }
+      }
+    } catch (error) {
+      console.error('更新事發地點失敗:', error)
+      updateResults.push({ type: 'DistrictCase', success: false, error: error.message })
+    }
+  }
+
+  /**
+   * 更新住家里別關聯
+   */
+  static async updateHomeDistrict(caseData, originalData, updateResults, dropdownOptions) {
+    try {
+      if (caseData.homeDistrict !== originalData.homeDistrict) {
+        console.log('住家里別有變更，執行更新')
+        
+        // 需要先找到聯絡人1的 voter_id
+        const { data: voterCases } = await supabase
+          .from('VoterCase')
+          .select('voter_id')
+          .eq('case_id', caseData.id)
+          .limit(1)
+
+        if (voterCases && voterCases.length > 0) {
+          const voterId = voterCases[0].voter_id
+
+          // 先刪除舊的住家里別關聯
+          await supabase
+            .from('VoterDistrict')
+            .delete()
+            .eq('voter_id', voterId)
+
+          // 如果有新的住家里別，建立新關聯
+          if (caseData.homeDistrict) {
+            const { error: voterDistrictError } = await supabase
+              .from('VoterDistrict')
+              .insert([{
+                voter_id: voterId,
+                district_id: caseData.homeDistrict,
+                created_at: new Date().toISOString()
+              }])
+
+            if (voterDistrictError) {
+              updateResults.push({ type: 'VoterDistrict', success: false, error: voterDistrictError.message })
+            } else {
+              updateResults.push({ type: 'VoterDistrict', success: true })
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('更新住家里別失敗:', error)
+      updateResults.push({ type: 'VoterDistrict', success: false, error: error.message })
+    }
   }
 }

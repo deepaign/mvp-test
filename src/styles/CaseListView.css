@@ -1,0 +1,428 @@
+/* CaseListView.css - 統一字體風格為 Dashboard 和網頁設計風格 */
+.case-list-container {
+  width: 100%;
+  background: white;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  font-weight: 400; /* 統一基礎字重 */
+  color: #333; /* 統一基礎顏色 */
+}
+
+.case-list-wrapper {
+  overflow-x: auto;
+  min-height: 400px;
+}
+
+.case-list-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem; /* 調整基礎字體大小 */
+}
+
+/* 表格標題 - 統一 Dashboard 字體風格 */
+.case-list-header th {
+  background: #f8f9fa;
+  border-bottom: 2px solid #e9ecef;
+  padding: 10px 8px;
+  text-align: left;
+  font-weight: 500; /* 與 Dashboard 標題一致 */
+  color: #333; /* 與 Dashboard 保持一致的深色 */
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  font-size: 0.85rem; /* 調整為適中大小，與整體風格一致 */
+  font-family: inherit;
+  vertical-align: middle; /* 修正：確保表頭垂直對齊 */
+}
+
+/* 各個表頭的寬度控制 */
+.header-case-number {
+  width: 100px;
+  min-width: 100px;
+}
+
+.header-received-date {
+  width: 90px;
+  min-width: 90px;
+}
+
+.header-title {
+  width: 180px;
+  min-width: 180px;
+}
+
+.header-category {
+  width: 90px;
+  min-width: 90px;
+}
+
+.header-location {
+  width: 140px;
+  min-width: 140px;
+}
+
+.header-contact {
+  width: 90px;
+  min-width: 90px;
+}
+
+.header-phone {
+  width: 110px;
+  min-width: 110px;
+}
+
+.header-handler {
+  width: 90px;
+  min-width: 90px;
+}
+
+.header-priority {
+  width: 80px;
+  min-width: 80px;
+}
+
+.header-status {
+  width: 90px;
+  min-width: 90px;
+}
+
+.header-action {
+  width: 100px;
+  min-width: 100px;
+  text-align: center;
+}
+
+/* 表格內容 - 統一字體風格 */
+.case-list-body td {
+  padding: 10px 8px;
+  border-bottom: 1px solid #f1f3f4;
+  vertical-align: middle; /* 修正：確保所有表格內容垂直對齊 */
+  font-size: 0.85rem; /* 與標題協調的大小 */
+  font-weight: 400; /* 統一字體粗細 */
+  color: #333; /* 統一文字顏色 */
+  font-family: inherit;
+}
+
+.case-list-row {
+  transition: background-color 0.2s ease;
+}
+
+.case-list-row:hover {
+  background: #f8f9ff;
+}
+
+/* 案件編號欄位 - 統一字體風格 */
+.case-number-cell {
+  color: #333;
+  width: 100px;
+  font-family: inherit; /* 改為統一字體，不用 Courier New */
+  font-size: 0.8rem;
+  font-weight: 500; /* 稍微突出但保持協調 */
+}
+
+/* 受理日期欄位 - 統一風格 */
+.case-date-cell {
+  color: #666;
+  width: 90px;
+  font-size: 0.8rem;
+  font-weight: 400;
+  font-family: inherit;
+}
+
+/* 案件標題 - 修正對齊問題 */
+.case-title-cell {
+  font-weight: 500;
+  color: #333;
+  width: 180px;
+  font-size: 0.85rem; /* 與其他欄位協調 */
+  line-height: 1.4;
+  max-width: 180px;
+  word-wrap: break-word;
+  white-space: normal; /* 允許換行 */
+  font-family: inherit;
+  vertical-align: middle; /* 修正：確保垂直對齊 */
+  position: relative; /* 添加相對定位 */
+}
+
+/* 案件標題內容容器 - 使用內部元素處理文字截斷 */
+.case-title-content {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  width: 100%;
+  max-height: calc(1.4em * 2); /* 確保最大高度為2行 */
+}
+
+/* 案件類別 */
+.case-category-cell {
+  color: #666;
+  width: 90px;
+  font-size: 0.8rem;
+  font-weight: 400;
+  font-family: inherit;
+}
+
+/* 事發地點 */
+.case-location-cell {
+  width: 140px;
+}
+
+.location-district {
+  font-size: 0.8rem;
+  color: #333;
+  font-weight: 500;
+  margin-bottom: 2px;
+  font-family: inherit;
+}
+
+.location-address {
+  font-size: 0.75rem;
+  color: #666;
+  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: inherit;
+}
+
+/* 聯絡人 */
+.case-contact-cell {
+  color: #333;
+  width: 90px;
+  font-size: 0.8rem;
+  font-weight: 400;
+  font-family: inherit;
+}
+
+/* 聯絡電話 */
+.case-phone-cell {
+  font-family: inherit; /* 改為統一字體 */
+  color: #666;
+  width: 110px;
+  font-size: 0.8rem;
+  font-weight: 400;
+}
+
+/* 承辦人員 */
+.case-handler-cell {
+  color: #333;
+  width: 90px;
+  font-size: 0.8rem;
+  font-weight: 400;
+  font-family: inherit;
+}
+
+/* 優先順序欄位 */
+.case-priority-cell {
+  width: 80px;
+}
+
+/* 狀態欄位 */
+.case-status-cell {
+  width: 90px;
+}
+
+/* 操作按鈕欄位 */
+.case-action-cell {
+  text-align: center;
+  width: 100px;
+}
+
+/* 狀態和優先順序標籤 - 參考表單行事曆通知按鈕顏色 */
+.priority-badge,
+.status-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-align: center;
+  min-width: 45px;
+  border: 1px solid;
+  line-height: 1.2;
+  font-family: inherit;
+}
+
+/* 優先順序樣式 - 參考表單按鈕顏色 */
+.priority-urgent {
+  background: #fee2e2;
+  color: #dc2626;
+  border-color: #fca5a5;
+}
+
+.priority-normal {
+  background: #fef9e7; /* 參考通知按鈕的黃色 */
+  color: #f39c12;
+  border-color: #ffeaa7;
+}
+
+.priority-low {
+  background: #e8f5e8; /* 參考行事曆按鈕的綠色 */
+  color: #27ae60;
+  border-color: #86efac;
+}
+
+/* 狀態樣式 - 紅黃綠對應 */
+.status-pending {
+  background: #fee2e2;
+  color: #dc2626;
+  border-color: #fca5a5;
+}
+
+.status-processing {
+  background: #fef9e7;
+  color: #f39c12;
+  border-color: #ffeaa7;
+}
+
+.status-completed {
+  background: #e8f5e8;
+  color: #27ae60;
+  border-color: #86efac;
+}
+
+/* 操作按鈕 - 完全匹配新增案件按鈕樣式 */
+.action-btn {
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 14px; /* 與 add-case-btn 完全一致 */
+  font-size: 0.8rem; /* 與 add-case-btn 完全一致 */
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  font-family: inherit;
+  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.2); /* 與 add-case-btn 一致 */
+}
+
+.action-btn:hover {
+  background: #5a6fd8; /* 與 add-case-btn 一致 */
+  transform: translateY(-1px);
+  box-shadow: 0 3px 6px rgba(102, 126, 234, 0.3); /* 與 add-case-btn 一致 */
+}
+
+.action-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.2); /* 與 add-case-btn 一致 */
+}
+
+/* 載入和空狀態 */
+.case-list-loading,
+.case-list-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  text-align: center;
+  color: #666;
+  font-family: inherit;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f4f6;
+  border-top: 4px solid #667eea;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.empty-icon {
+  font-size: 3rem;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.case-list-empty h3 {
+  margin: 0 0 8px 0;
+  color: #374151;
+  font-family: inherit;
+}
+
+.case-list-empty p {
+  margin: 0;
+  color: #6b7280;
+  font-family: inherit;
+}
+
+/* 響應式設計 */
+@media (max-width: 1400px) {
+  .case-list-table {
+    font-size: 0.75rem;
+  }
+  
+  .case-list-header th {
+    padding: 8px 6px;
+    font-size: 0.7rem;
+  }
+  
+  .case-list-body td {
+    padding: 8px 6px;
+    font-size: 0.75rem;
+  }
+  
+  .action-btn {
+    padding: 5px 12px; /* 與 add-case-btn 響應式樣式一致 */
+    font-size: 0.75rem; /* 與 add-case-btn 響應式樣式一致 */
+  }
+}
+
+@media (max-width: 1200px) {
+  .case-list-wrapper {
+    overflow-x: scroll;
+  }
+  
+  .case-list-table {
+    min-width: 1000px;
+    font-size: 0.7rem;
+  }
+  
+  .case-list-header th {
+    padding: 6px 4px;
+    font-size: 0.65rem;
+  }
+  
+  .case-list-body td {
+    padding: 6px 4px;
+    font-size: 0.7rem;
+  }
+  
+  .action-btn {
+    padding: 4px 10px; /* 與 add-case-btn 響應式樣式一致 */
+    font-size: 0.7rem; /* 與 add-case-btn 響應式樣式一致 */
+  }
+}
+
+@media (max-width: 768px) {
+  .case-list-table {
+    min-width: 800px;
+  }
+  
+  .case-list-header th {
+    padding: 4px 3px;
+    font-size: 0.6rem;
+  }
+  
+  .case-list-body td {
+    padding: 4px 3px;
+    font-size: 0.65rem;
+  }
+  
+  .action-btn {
+    padding: 3px 8px;
+    font-size: 0.65rem;
+  }
+}

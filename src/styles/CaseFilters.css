@@ -1,18 +1,19 @@
-/* CaseFilters.css */
+/* CaseFilters.css - 更新版本 */
 .case-filters-container {
   background: white;
   padding: 14px 20px;
   border-bottom: 1px solid #e9ecef;
 }
 
-.case-filters-wrapper {
+/* 主要篩選控制列 */
+.case-filters-main-row {
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
   gap: 20px;
 }
 
-.case-filters {
+.case-filters-left {
   display: flex;
   gap: 14px;
   align-items: flex-end;
@@ -25,6 +26,11 @@
   flex-direction: column;
   gap: 4px;
   min-width: 100px;
+}
+
+.filter-group.search-group {
+  min-width: 200px;
+  max-width: 280px;
 }
 
 .filter-label {
@@ -58,6 +64,49 @@
   box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
 }
 
+/* 搜尋框樣式 */
+.search-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-input {
+  width: 100%;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  padding: 6px 30px 6px 10px;
+  font-size: 0.8rem;
+  color: #333;
+  transition: all 0.2s ease;
+}
+
+.search-input:hover {
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+}
+
+.search-input::placeholder {
+  color: #999;
+  font-style: italic;
+}
+
+.search-icon {
+  position: absolute;
+  right: 8px;
+  color: #666;
+  pointer-events: none;
+  font-size: 0.9rem;
+}
+
+/* 重置按鈕 */
 .reset-filters-btn {
   background: #f8f9fa;
   border: 1px solid #ddd;
@@ -129,18 +178,34 @@
   box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
 }
 
+/* 篩選摘要 */
+.filter-summary {
+  margin: 16px 0 0 0;
+  padding: 8px 12px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: #666;
+  border-left: 3px solid #667eea;
+}
+
 /* 響應式設計 */
 @media (max-width: 1200px) {
-  .case-filters-wrapper {
+  .case-filters-main-row {
     gap: 12px;
   }
   
-  .case-filters {
+  .case-filters-left {
     gap: 12px;
   }
   
   .filter-group {
     min-width: 90px;
+  }
+  
+  .filter-group.search-group {
+    min-width: 180px;
+    max-width: 220px;
   }
   
   .filter-select {
@@ -155,13 +220,13 @@
     padding: 12px 16px;
   }
   
-  .case-filters-wrapper {
+  .case-filters-main-row {
     flex-direction: column;
     align-items: stretch;
     gap: 12px;
   }
   
-  .case-filters {
+  .case-filters-left {
     gap: 10px;
   }
   
@@ -169,11 +234,16 @@
     min-width: 80px;
   }
   
-  .filter-select {
+  .filter-group.search-group {
+    min-width: auto;
+    max-width: none;
+    flex: 1;
+  }
+  
+  .filter-select,
+  .search-input {
     padding: 5px 8px;
     font-size: 0.7rem;
-    min-width: 70px;
-    max-width: 100px;
   }
   
   .reset-filters-btn {
@@ -183,7 +253,7 @@
 }
 
 @media (max-width: 768px) {
-  .case-filters {
+  .case-filters-left {
     flex-direction: column;
     align-items: stretch;
     gap: 10px;
@@ -194,7 +264,8 @@
     width: 100%;
   }
   
-  .filter-select {
+  .filter-select,
+  .search-input {
     width: 100%;
     min-width: auto;
     max-width: none;
@@ -227,6 +298,7 @@
   }
   
   .filter-select,
+  .search-input,
   .date-input {
     font-size: 0.65rem;
     padding: 4px 6px;
@@ -235,5 +307,10 @@
   .reset-filters-btn {
     font-size: 0.65rem;
     padding: 4px 6px;
+  }
+  
+  .filter-summary {
+    font-size: 0.8rem;
+    padding: 6px 10px;
   }
 }

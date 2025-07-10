@@ -1,0 +1,259 @@
+/* CasePagination.css */
+.case-pagination-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 20px;
+  background: white;
+  border-top: 1px solid #e9ecef;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+/* 左側資訊 */
+.pagination-info {
+  font-size: 0.85rem;
+  color: #666;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* 中央控制項 */
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  justify-content: center;
+}
+
+/* 分頁按鈕 */
+.pagination-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 0.8rem;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  min-width: fit-content;
+}
+
+.pagination-btn:hover:not(.disabled) {
+  background: #f8f9ff;
+  border-color: #667eea;
+  color: #667eea;
+}
+
+.pagination-btn.disabled {
+  background: #f5f5f5;
+  border-color: #e0e0e0;
+  color: #ccc;
+  cursor: not-allowed;
+}
+
+.pagination-icon {
+  font-size: 1rem;
+  font-weight: bold;
+  line-height: 1;
+}
+
+.pagination-text {
+  font-size: 0.8rem;
+}
+
+/* 頁數選擇器 */
+.page-selector {
+  margin: 0 8px;
+}
+
+.page-select {
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 0.8rem;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 100px;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 16px;
+  padding-right: 32px;
+}
+
+.page-select:hover {
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
+.page-select:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+}
+
+/* 右側摘要 */
+.pagination-summary {
+  font-size: 0.85rem;
+  color: #666;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* 響應式設計 */
+@media (max-width: 992px) {
+  .case-pagination-container {
+    padding: 10px 16px;
+    gap: 12px;
+  }
+  
+  .pagination-btn {
+    padding: 6px 10px;
+    font-size: 0.75rem;
+  }
+  
+  .pagination-text {
+    font-size: 0.75rem;
+  }
+  
+  .page-select {
+    padding: 6px 10px;
+    padding-right: 28px;
+    font-size: 0.75rem;
+    min-width: 90px;
+  }
+  
+  .pagination-info,
+  .pagination-summary {
+    font-size: 0.8rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .case-pagination-container {
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px 12px;
+  }
+  
+  .pagination-controls {
+    order: 1;
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .pagination-info {
+    order: 2;
+    text-align: center;
+  }
+  
+  .pagination-summary {
+    order: 3;
+    text-align: center;
+  }
+  
+  .pagination-btn {
+    flex: 1;
+    justify-content: center;
+    max-width: 100px;
+  }
+  
+  .page-selector {
+    margin: 0 4px;
+  }
+  
+  .page-select {
+    min-width: 80px;
+  }
+}
+
+@media (max-width: 576px) {
+  .case-pagination-container {
+    padding: 6px 8px;
+  }
+  
+  .pagination-btn {
+    padding: 4px 8px;
+    font-size: 0.7rem;
+  }
+  
+  .pagination-text {
+    display: none; /* 在小螢幕隱藏文字，只顯示圖標 */
+  }
+  
+  .pagination-icon {
+    font-size: 0.9rem;
+  }
+  
+  .page-select {
+    padding: 4px 6px;
+    padding-right: 24px;
+    font-size: 0.7rem;
+    min-width: 70px;
+  }
+  
+  .pagination-info,
+  .pagination-summary {
+    font-size: 0.75rem;
+  }
+}
+
+/* 無資料狀態 */
+.pagination-empty {
+  display: none;
+}
+
+/* 動畫效果 */
+.pagination-btn:active:not(.disabled) {
+  transform: translateY(1px);
+}
+
+.page-select:active {
+  transform: translateY(1px);
+}
+
+/* 深色模式支援（如果需要） */
+@media (prefers-color-scheme: dark) {
+  .case-pagination-container {
+    background: #1a1a1a;
+    border-top-color: #404040;
+  }
+  
+  .pagination-btn {
+    background: #2d2d2d;
+    border-color: #404040;
+    color: #d1d5db;
+  }
+  
+  .pagination-btn:hover:not(.disabled) {
+    background: #374151;
+    border-color: #667eea;
+    color: #667eea;
+  }
+  
+  .pagination-btn.disabled {
+    background: #1a1a1a;
+    border-color: #2d2d2d;
+    color: #6b7280;
+  }
+  
+  .page-select {
+    background: #2d2d2d;
+    border-color: #404040;
+    color: #d1d5db;
+  }
+  
+  .pagination-info,
+  .pagination-summary {
+    color: #9ca3af;
+  }
+}

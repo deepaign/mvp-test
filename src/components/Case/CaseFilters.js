@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react'
+// src/components/Case/CaseFilters.js - 修復篩選摘要顯示版本
+import React, { useState, useEffect, useCallback } from 'react'
 import { CaseService } from '../../services/caseService'
-import CaseSearch from './CaseSearch'
 import '../../styles/CaseFilters.css'
 
-function CaseFilters({ team, onFiltersChange, onSearch }) {
+function CaseFilters({ team, onFiltersChange, onSearch, onReset }) {
   const [filters, setFilters] = useState({
     category: 'all',
     dateRange: 'all',
@@ -23,22 +23,14 @@ function CaseFilters({ team, onFiltersChange, onSearch }) {
 
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
 
-  // 載入篩選選項
-  useEffect(() => {
-    loadFilterOptions()
-  }, [team.id])
-
-  // 當篩選條件變更時通知父組件
-  useEffect(() => {
-    const filterParams = buildFilterParams()
-    onFiltersChange(filterParams)
-  }, [filters, customDateRange])
-
-  const loadFilterOptions = async () => {
+  // 使用 useCallback 包裝 loadFilterOptions
+  const loadFilterOptions = useCallback(async () => {
+    if (!team?.id) return
+    
     setLoading(true)
     try {
-      // 同時載入類別和成員
       const [categoriesResult, membersResult] = await Promise.all([
         CaseService.getCategories(team.id),
         CaseService.getTeamMembers(team.id)
@@ -61,7 +53,6 @@ function CaseFilters({ team, onFiltersChange, onSearch }) {
 
     } catch (error) {
       console.error('載入篩選選項失敗:', error)
-      // 設定預設值以防止錯誤
       setFilterOptions({
         categories: [],
         members: []
@@ -69,9 +60,10 @@ function CaseFilters({ team, onFiltersChange, onSearch }) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [team?.id])
 
-  const buildFilterParams = () => {
+  // 使用 useCallback 包裝 buildFilterParams
+  const buildFilterParams = useCallback(() => {
     const params = {
       category: filters.category,
       priority: filters.priority,
@@ -112,7 +104,20 @@ function CaseFilters({ team, onFiltersChange, onSearch }) {
     }
 
     return params
-  }
+  }, [filters, customDateRange])
+
+  // 載入篩選選項
+  useEffect(() => {
+    loadFilterOptions()
+  }, [loadFilterOptions])
+
+  // 當篩選條件變更時通知父組件
+  useEffect(() => {
+    const filterParams = buildFilterParams()
+    if (onFiltersChange) {
+      onFiltersChange(filterParams)
+    }
+  }, [buildFilterParams, onFiltersChange])
 
   const handleFilterChange = (filterType, value) => {
     setFilters(prev => ({
@@ -148,20 +153,87 @@ function CaseFilters({ team, onFiltersChange, onSearch }) {
       endDate: ''
     })
     setShowDatePicker(false)
+    setSearchTerm('')
+    
+    // 通知父組件重置
+    if (onReset) {
+      onReset()
+    }
   }
 
-  const handleSearch = (searchTerm) => {
-    console.log('搜尋案件:', searchTerm)
+  const handleSearchChange = (value) => {
+    setSearchTerm(value)
     if (onSearch) {
-      onSearch(searchTerm)
+      onSearch(value)
     }
+  }
+
+  // 取得承辦人員名稱的函數 - 修復版本
+  const getAssigneeName = useCallback((assigneeId) => {
+    if (assigneeId === 'all') return '全部'
+    if (assigneeId === 'unassigned') return '尚未指派'
+    
+    // 從 members 陣列中找到對應的成員
+    const member = filterOptions.members.find(m => m.id === assigneeId)
+    return member ? member.name : `ID:${assigneeId}` // 如果找不到名稱，顯示 ID
+  }, [filterOptions.members])
+
+  // 取得案件類別名稱的函數
+  const getCategoryDisplayName = useCallback((categoryId) => {
+    if (categoryId === 'all') return '全部'
+    
+    // 先檢查是否為預設類型
+    const categoryName = CaseService.getCategoryName(categoryId)
+    if (categoryName !== categoryId) {
+      return categoryName // 是預設類型，返回轉換後的名稱
+    }
+    
+    // 不是預設類型，查找自定義類型
+    const category = filterOptions.categories.find(c => c.id === categoryId)
+    return category ? category.name : categoryId
+  }, [filterOptions.categories])
+
+  // 篩選摘要顯示函數 - 修復版本
+  const getFilterSummary = () => {
+    const activeFilters = []
+    
+    if (filters.category && filters.category !== 'all') {
+      const categoryName = getCategoryDisplayName(filters.category)
+      activeFilters.push(`類型: ${categoryName}`)
+    }
+    if (filters.dateRange && filters.dateRange !== 'all') {
+      let dateLabel = filters.dateRange
+      if (dateLabel === 'today') dateLabel = '本日'
+      else if (dateLabel === 'week') dateLabel = '本週'
+      else if (dateLabel === 'month') dateLabel = '本月'
+      else if (dateLabel === 'custom') dateLabel = '自定義範圍'
+      activeFilters.push(`日期: ${dateLabel}`)
+    }
+    if (filters.priority && filters.priority !== 'all') {
+      const priorityLabel = CaseService.getPriorityLabel(filters.priority)
+      activeFilters.push(`優先順序: ${priorityLabel}`)
+    }
+    if (filters.assignee && filters.assignee !== 'all') {
+      const assigneeName = getAssigneeName(filters.assignee)
+      activeFilters.push(`承辦人員: ${assigneeName}`)
+    }
+    if (searchTerm.trim()) {
+      activeFilters.push(`搜尋: "${searchTerm}"`)
+    }
+
+    return activeFilters.length > 0 ? (
+      <div className="filter-summary">
+        目前篩選: {activeFilters.join(' | ')}
+      </div>
+    ) : null
   }
 
   return (
     <div className="case-filters-container">
-      <div className="case-filters-wrapper">
-        <div className="case-filters">
-          {/* 案件類型篩選 */}
+      {/* 主要篩選控制列 */}
+      <div className="case-filters-main-row">
+        <div className="case-filters-left">
+          {/* 篩選條件 */}
           <div className="filter-group">
             <label className="filter-label">案件類型</label>
             <select 
@@ -178,7 +250,6 @@ function CaseFilters({ team, onFiltersChange, onSearch }) {
             </select>
           </div>
 
-          {/* 日期篩選 */}
           <div className="filter-group">
             <label className="filter-label">日期</label>
             <select 
@@ -194,7 +265,6 @@ function CaseFilters({ team, onFiltersChange, onSearch }) {
             </select>
           </div>
 
-          {/* 優先程度篩選 */}
           <div className="filter-group">
             <label className="filter-label">優先程度</label>
             <select 
@@ -209,7 +279,6 @@ function CaseFilters({ team, onFiltersChange, onSearch }) {
             </select>
           </div>
 
-          {/* 承辦人員篩選 */}
           <div className="filter-group">
             <label className="filter-label">承辦人員</label>
             <select 
@@ -227,6 +296,21 @@ function CaseFilters({ team, onFiltersChange, onSearch }) {
             </select>
           </div>
 
+          {/* 搜尋框 */}
+          <div className="filter-group search-group">
+            <label className="filter-label">搜尋</label>
+            <div className="search-wrapper">
+              <input
+                type="text"
+                className="search-input"
+                placeholder="搜尋案件標題或內容..."
+                value={searchTerm}
+                onChange={(e) => handleSearchChange(e.target.value)}
+              />
+              <div className="search-icon">🔍</div>
+            </div>
+          </div>
+
           {/* 重置按鈕 */}
           <div className="filter-group">
             <button 
@@ -239,12 +323,6 @@ function CaseFilters({ team, onFiltersChange, onSearch }) {
             </button>
           </div>
         </div>
-
-        {/* 搜尋框 */}
-        <CaseSearch 
-          onSearchChange={handleSearch}
-          placeholder="搜尋案件標題或內容..."
-        />
       </div>
 
       {/* 自定義日期範圍選擇器 */}
@@ -270,6 +348,9 @@ function CaseFilters({ team, onFiltersChange, onSearch }) {
           </div>
         </div>
       )}
+
+      {/* 篩選摘要顯示 */}
+      {getFilterSummary()}
     </div>
   )
 }
