@@ -1,4 +1,4 @@
-// src/components/Case/CaseManagement.js - 修正日期篩選功能
+// src/components/Case/CaseManagement.js - 完整整合版本
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import CaseTabs from './CaseTabs'
 import CaseFilters from './CaseFilters'
@@ -7,6 +7,7 @@ import CaseModal from './CaseModal/CaseModal'
 import CaseListView from './CaseTables/CaseListView'
 import CaseCardView from './CaseTables/CaseCardView'
 import CasePagination from './CaseTables/CasePagination'
+import CaseEditModal from './CaseTables/CaseEditModal'
 import { CaseService } from '../../services/caseService'
 import { PermissionService } from '../../services/permissionService'
 
@@ -23,6 +24,10 @@ function CaseManagement({ member, team }) {
   const [viewMode, setViewMode] = useState('card')
   const [showCaseModal, setShowCaseModal] = useState(false)
   
+  // 編輯案件相關狀態
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [editingCase, setEditingCase] = useState(null)
+  
   // 案件資料狀態
   const [allCases, setAllCases] = useState([])
   const [filteredCases, setFilteredCases] = useState([])
@@ -33,7 +38,7 @@ function CaseManagement({ member, team }) {
     byPriority: { urgent: 0, normal: 0, low: 0 }
   })
 
-  // 分頁狀態 (移除排序狀態)
+  // 分頁狀態
   const [currentPage, setCurrentPage] = useState(0)
   const [pageSize, setPageSize] = useState(20)
 
@@ -63,8 +68,8 @@ function CaseManagement({ member, team }) {
       })
 
       if (result.success) {
-        setAllCases(result.data)
-        console.log(`載入成功，共 ${result.data.length} 筆案件`)
+        setAllCases(result.data || [])
+        console.log(`載入成功，共 ${result.data?.length || 0} 筆案件`)
       } else {
         console.error('載入案件失敗:', result.error)
         setAllCases([])
@@ -87,7 +92,11 @@ function CaseManagement({ member, team }) {
       const result = await CaseService.getCaseStats(team.id)
       
       if (result.success) {
-        setStats(result.data)
+        setStats(result.data || {
+          total: 0,
+          byStatus: { pending: 0, processing: 0, completed: 0 },
+          byPriority: { urgent: 0, normal: 0, low: 0 }
+        })
       } else {
         console.error('載入統計失敗:', result.error)
       }
@@ -196,9 +205,25 @@ function CaseManagement({ member, team }) {
     if (search && search.trim()) {
       const searchLower = search.toLowerCase()
       filtered = filtered.filter(caseItem => {
-        const title = (caseItem.title || '').toLowerCase()
-        const description = (caseItem.description || '').toLowerCase()
-        return title.includes(searchLower) || description.includes(searchLower)
+        // 搜尋標題
+        if ((caseItem.title || '').toLowerCase().includes(searchLower)) return true
+        
+        // 搜尋描述
+        if ((caseItem.description || '').toLowerCase().includes(searchLower)) return true
+        
+        // 搜尋案件編號
+        const caseNumber = CaseService.extractCaseNumber(caseItem.description)
+        if (caseNumber?.toLowerCase().includes(searchLower)) return true
+        
+        // 搜尋事發地點
+        const location = CaseService.extractIncidentLocation(caseItem.description)
+        if (location?.toLowerCase().includes(searchLower)) return true
+        
+        // 搜尋聯絡人姓名
+        const voterCases = caseItem.VoterCase || []
+        if (voterCases.some(vc => vc.Voter?.name?.toLowerCase().includes(searchLower))) return true
+        
+        return false
       })
     }
 
@@ -398,9 +423,37 @@ function CaseManagement({ member, team }) {
     setShowCaseModal(true)
   }
 
+  // 編輯案件相關 - 替換原本的開發中提示
   const handleCaseEdit = (caseItem) => {
-    console.log('編輯案件:', caseItem)
-    alert('案件編輯功能開發中...')
+    console.log('=== 開始編輯案件 ===', caseItem)
+    setEditingCase(caseItem)
+    setShowEditModal(true)
+  }
+
+  const handleCaseUpdated = async (updatedCase) => {
+    console.log('=== 案件更新成功 ===', updatedCase)
+    
+    try {
+      // 更新本地案件列表
+      setAllCases(prevCases => 
+        prevCases.map(caseItem => 
+          caseItem.id === updatedCase.id ? { ...caseItem, ...updatedCase } : caseItem
+        )
+      )
+      
+      // 重新載入統計資料（如果狀態有變更）
+      await loadStats()
+      
+      console.log('✅ 本地資料已更新')
+      
+    } catch (error) {
+      console.error('❌ 更新本地資料失敗:', error)
+    }
+  }
+
+  const handleCloseEditModal = () => {
+    setShowEditModal(false)
+    setEditingCase(null)
   }
 
   const handleCaseCreated = async () => {
@@ -434,6 +487,28 @@ function CaseManagement({ member, team }) {
     }
 
     const currentPageCases = getCurrentPageCases()
+
+    if (filteredCases.length === 0) {
+      return (
+        <div style={{ 
+          padding: '40px', 
+          textAlign: 'center',
+          minHeight: '400px',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'center'
+        }}>
+          <div style={{ fontSize: '2rem', marginBottom: '16px' }}>📝</div>
+          <h3 style={{ color: '#333', marginBottom: '12px' }}>沒有找到案件</h3>
+          <p style={{ color: '#666' }}>
+            {searchTerm ? '請嘗試調整搜尋條件' : 
+             activeTab === 'all' ? '目前沒有任何案件' : 
+             `目前沒有${getTabDisplayName(activeTab)}的案件`}
+          </p>
+        </div>
+      )
+    }
 
     return (
       <>
@@ -471,6 +546,16 @@ function CaseManagement({ member, team }) {
         )}
       </>
     )
+  }
+
+  // 輔助函數：取得標籤顯示名稱
+  const getTabDisplayName = (tab) => {
+    const tabNames = {
+      'pending': '待處理',
+      'processing': '處理中', 
+      'completed': '已完成'
+    }
+    return tabNames[tab] || tab
   }
 
   return (
@@ -512,6 +597,15 @@ function CaseManagement({ member, team }) {
           onClose={handleCloseModal}
           team={team}
           onCaseCreated={handleCaseCreated}
+        />
+
+        {/* 編輯案件彈窗 */}
+        <CaseEditModal
+          isOpen={showEditModal}
+          onClose={handleCloseEditModal}
+          caseData={editingCase}
+          team={team}
+          onCaseUpdated={handleCaseUpdated}
         />
       </div>
     </div>

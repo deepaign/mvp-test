@@ -1,0 +1,158 @@
+/* src/styles/CaseUnsavedChangesModal.css */
+
+/* 確認彈窗遮罩 */
+.unsaved-changes-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100; /* 比主彈窗更高 */
+  padding: 20px;
+}
+
+/* 確認彈窗容器 */
+.unsaved-changes-modal {
+  background: white;
+  border-radius: 8px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+  animation: unsavedModalFadeIn 0.2s ease-out;
+}
+
+@keyframes unsavedModalFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* 標題區域 */
+.unsaved-changes-modal-header {
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.unsaved-changes-modal-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #333;
+  text-align: center;
+}
+
+/* 內容區域 */
+.unsaved-changes-modal-content {
+  padding: 16px 24px 20px;
+}
+
+.unsaved-changes-modal-content p {
+  margin: 0;
+  color: #666;
+  line-height: 1.5;
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+/* 按鈕區域 */
+.unsaved-changes-modal-actions {
+  display: flex;
+  gap: 12px;
+  padding: 0 24px 24px;
+}
+
+/* 放棄修改按鈕 */
+.unsaved-changes-modal-discard {
+  flex: 1;
+  padding: 10px 16px;
+  border: 2px solid #dc3545;
+  background: #dc3545;
+  color: white;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.unsaved-changes-modal-discard:hover {
+  background: #c82333;
+  border-color: #c82333;
+  transform: translateY(-1px);
+}
+
+.unsaved-changes-modal-discard:active {
+  transform: translateY(0);
+}
+
+/* 返回表單按鈕 */
+.unsaved-changes-modal-return {
+  flex: 1;
+  padding: 10px 16px;
+  border: 2px solid #007bff;
+  background: white;
+  color: #007bff;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.unsaved-changes-modal-return:hover {
+  background: #007bff;
+  color: white;
+  transform: translateY(-1px);
+}
+
+.unsaved-changes-modal-return:active {
+  transform: translateY(0);
+}
+
+/* 響應式設計 */
+@media (max-width: 480px) {
+  .unsaved-changes-modal-overlay {
+    padding: 15px;
+  }
+  
+  .unsaved-changes-modal {
+    max-width: 100%;
+  }
+  
+  .unsaved-changes-modal-header {
+    padding: 16px 20px 12px;
+  }
+  
+  .unsaved-changes-modal-header h3 {
+    font-size: 1rem;
+  }
+  
+  .unsaved-changes-modal-content {
+    padding: 12px 20px 16px;
+  }
+  
+  .unsaved-changes-modal-content p {
+    font-size: 0.85rem;
+  }
+  
+  .unsaved-changes-modal-actions {
+    padding: 0 20px 20px;
+    gap: 10px;
+  }
+  
+  .unsaved-changes-modal-discard,
+  .unsaved-changes-modal-return {
+    padding: 8px 12px;
+    font-size: 0.85rem;
+  }
+}
