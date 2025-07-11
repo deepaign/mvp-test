@@ -10,6 +10,27 @@ import CaseUnsavedChangesModal from './CaseUnsavedChangesModal'
 import { CaseService } from '../../../services/caseService'
 import '../../../styles/CaseEditModal.css'
 
+// 輔助函數：確保回傳有效陣列
+function getValidArray(promiseResult, dataType) {
+  if (promiseResult.status === 'rejected') {
+    console.error(`${dataType} Promise 被拒絕:`, promiseResult.reason)
+    return []
+  }
+
+  const result = promiseResult.value
+  if (!result || typeof result !== 'object') {
+    console.error(`${dataType} 回應格式錯誤:`, result)
+    return []
+  }
+
+  if (result.success && Array.isArray(result.data)) {
+    return result.data
+  }
+
+  console.warn(`${dataType} 資料無效，使用空陣列:`, result)
+  return []
+}
+
 // 編輯專用的表單組件
 const EditableCaseForm = ({ team, initialData, onDataChange, onSubmit, onCancel, isSubmitting, hasChanges }) => {
   const [formData, setFormData] = useState(initialData || {})
@@ -26,25 +47,46 @@ const EditableCaseForm = ({ team, initialData, onDataChange, onSubmit, onCancel,
   useEffect(() => {
     const loadDropdownData = async () => {
       if (!team?.id) {
+        console.warn('團隊 ID 不存在，無法載入下拉選單資料')
         setLoading(false)
         return
       }
 
       try {
-        const [membersResult, categoriesResult, countiesResult] = await Promise.all([
-          CaseService.getTeamMembers(team.id),
-          CaseService.getCategories(team.id),
-          CaseService.getCounties()
-        ])
+        console.log('開始載入下拉選單資料，團隊ID:', team.id)
 
-        // 🔧 修正：確保所有資料都是陣列，防止 iterable 錯誤
+        // 🔧 使用 Promise.allSettled 替代 Promise.all 來防止單一失敗影響全部
+        const promises = [
+          CaseService.getTeamMembers(team.id).catch(err => {
+            console.error('載入團隊成員失敗:', err)
+            return { success: false, data: [], error: err.message }
+          }),
+          CaseService.getCategories(team.id).catch(err => {
+            console.error('載入類別失敗:', err)
+            return { success: false, data: [], error: err.message }
+          }),
+          CaseService.getCounties().catch(err => {
+            console.error('載入縣市失敗:', err)
+            return { success: false, data: [], error: err.message }
+          })
+        ]
+
+        const [membersResult, categoriesResult, countiesResult] = await Promise.allSettled(promises)
+
+        // 🔧 關鍵修正：確保所有資料都是陣列，防止 iterable 錯誤
         const newDropdownOptions = {
-          members: (membersResult.success && Array.isArray(membersResult.data)) ? membersResult.data : [],
-          categories: (categoriesResult.success && Array.isArray(categoriesResult.data)) ? categoriesResult.data : [],
-          counties: (countiesResult.success && Array.isArray(countiesResult.data)) ? countiesResult.data : [],
+          members: getValidArray(membersResult, 'members'),
+          categories: getValidArray(categoriesResult, 'categories'),
+          counties: getValidArray(countiesResult, 'counties'),
           homeDistricts: [],
           incidentDistricts: []
         }
+
+        console.log('下拉選單資料載入結果:', {
+          members: newDropdownOptions.members.length,
+          categories: newDropdownOptions.categories.length,
+          counties: newDropdownOptions.counties.length
+        })
 
         setDropdownOptions(newDropdownOptions)
 
@@ -71,11 +113,14 @@ const EditableCaseForm = ({ team, initialData, onDataChange, onSubmit, onCancel,
           }
 
           setFormData(updatedFormData)
-          onDataChange(updatedFormData)
+          if (typeof onDataChange === 'function') {
+            onDataChange(updatedFormData)
+          }
         }
+
       } catch (error) {
-        console.error('載入下拉選單失敗:', error)
-        // 🔧 修正：發生錯誤時設定空陣列，避免後續 iterable 錯誤
+        console.error('載入下拉選單發生嚴重錯誤:', error)
+        // 🔧 發生錯誤時設定空陣列，避免後續 iterable 錯誤
         setDropdownOptions({
           members: [],
           categories: [],
@@ -89,16 +134,15 @@ const EditableCaseForm = ({ team, initialData, onDataChange, onSubmit, onCancel,
     }
 
     loadDropdownData()
-  }, [team?.id, initialData, onDataChange])
+  }, [team?.id, initialData?.id]) // 移除 onDataChange 依賴以避免無限循環
 
   // 當初始資料變更時更新表單資料
   useEffect(() => {
-    // 🔧 修正：更安全的條件檢查
-    if (initialData && (!dropdownOptions.counties || dropdownOptions.counties.length === 0)) {
+    if (initialData && Object.keys(initialData).length > 0) {
       console.log('EditableCaseForm 接收到初始資料:', initialData)
       setFormData(initialData)
     }
-  }, [initialData, dropdownOptions.counties])
+  }, [initialData])
 
   // 處理表單輸入變更
   const handleInputChange = (field, value) => {
@@ -121,13 +165,17 @@ const EditableCaseForm = ({ team, initialData, onDataChange, onSubmit, onCancel,
     }
 
     setFormData(newFormData)
-    onDataChange(newFormData)
+    if (typeof onDataChange === 'function') {
+      onDataChange(newFormData)
+    }
   }
 
   // 處理表單提交
   const handleSubmit = (e) => {
     e.preventDefault()
-    onSubmit(formData)
+    if (typeof onSubmit === 'function') {
+      onSubmit(formData)
+    }
   }
 
   if (loading) {
@@ -238,7 +286,7 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
       try {
         console.log('=== 開始準備編輯資料 ===')
 
-        // 🔧 修正：確保 caseService 方法存在
+        // 🔧 修正：確保 caseService 方法存在，使用安全檢查
         const rawIncidentLocation = (CaseService.extractIncidentLocation && typeof CaseService.extractIncidentLocation === 'function') 
           ? CaseService.extractIncidentLocation(caseData.description) || ''
           : ''
@@ -254,134 +302,44 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
 
         // 🔧 修正：安全的陣列處理
         const voterCases = Array.isArray(caseData.VoterCase) ? caseData.VoterCase : []
-        console.log('VoterCase 資料:', voterCases)
-        
-        let contactPerson = {}
-        if (voterCases.length > 0 && voterCases[0]?.Voter) {
-          contactPerson = voterCases[0].Voter
-        }
-        console.log('聯絡人資料:', contactPerson)
-        
-        // 解析聯絡人住家地址
-        const homeAddressParsed = parseAddress(contactPerson.address || '')
+        const categoryCase = Array.isArray(caseData.CategoryCase) ? caseData.CategoryCase : []
+        const inChargeCase = Array.isArray(caseData.InChargeCase) ? caseData.InChargeCase : []
+        const acceptanceCase = Array.isArray(caseData.AcceptanceCase) ? caseData.AcceptanceCase : []
 
-        // 🔧 修正：安全的陣列處理
-        const inChargeCases = Array.isArray(caseData.InChargeCase) ? caseData.InChargeCase : []
-        console.log('InChargeCase 資料:', inChargeCases)
-        
-        let handler = ''
-        if (inChargeCases.length > 0 && inChargeCases[0]) {
-          handler = inChargeCases[0].member_id || ''
-        }
-        console.log('承辦人員 member_id:', handler)
-
-        // 🔧 修正：安全的陣列處理
-        const acceptanceCases = Array.isArray(caseData.AcceptanceCase) ? caseData.AcceptanceCase : []
-        console.log('AcceptanceCase 資料:', acceptanceCases)
-        
-        let receiver = ''
-        if (acceptanceCases.length > 0 && acceptanceCases[0]) {
-          receiver = acceptanceCases[0].member_id || ''
-        }
-        console.log('受理人員 member_id:', receiver)
-
-        // 🔧 修正：安全的陣列處理
-        const categoryCases = Array.isArray(caseData.CategoryCase) ? caseData.CategoryCase : []
-        console.log('CategoryCase 資料:', categoryCases)
-        
-        let category = ''
-        if (categoryCases.length > 0 && categoryCases[0]?.Category) {
-          category = categoryCases[0].Category.name || ''
-        }
-        console.log('案件類別名稱 (category):', category)
-
-        // 提取受理時間
-        const receivedDateTimeMatch = caseData.description?.match(/受理時間：(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})/)
-        let receivedDate = ''
-        let receivedTime = ''
-        
-        if (receivedDateTimeMatch) {
-          receivedDate = receivedDateTimeMatch[1]
-          receivedTime = receivedDateTimeMatch[2]
-          console.log('從 description 提取的時間:', { receivedDate, receivedTime })
-        } else if (caseData.created_at) {
-          const createdAt = new Date(caseData.created_at)
-          receivedDate = createdAt.toISOString().split('T')[0]
-          receivedTime = createdAt.toTimeString().split(' ')[0].substring(0, 5)
-          console.log('從 created_at 轉換的時間:', { receivedDate, receivedTime })
-        }
-
-        // 處理結束時間
-        let closedDate = ''
-        let closedTime = ''
-        
-        if (caseData.end_date) {
-          const endDate = new Date(caseData.end_date)
-          closedDate = endDate.toISOString().split('T')[0]
-          closedTime = endDate.toTimeString().split(' ')[0].substring(0, 5)
-          console.log('結束時間:', { closedDate, closedTime })
-        }
-
-        // 🔧 修正：清理 description，移除已經提取到專用欄位的內容
-        let cleanDescription = caseData.description || ''
-        
-        // 移除事發地點
-        cleanDescription = cleanDescription.replace(/事發地點：[^\n\r]+/g, '')
-        
-        // 移除受理時間
-        cleanDescription = cleanDescription.replace(/受理時間：[^\n\r]+/g, '')
-        
-        // 移除案件編號
-        cleanDescription = cleanDescription.replace(/案件編號：[^\n\r]+/g, '')
-        
-        // 移除通知設定
-        cleanDescription = cleanDescription.replace(/通知設定：[\s\S]*?(?=\n\n|\n[^\-\s]|$)/g, '')
-        
-        // 清理多餘的換行和空白
-        cleanDescription = cleanDescription
-          .replace(/\n{3,}/g, '\n\n')  // 多個換行變成兩個
-          .replace(/^\s+|\s+$/g, '')   // 移除前後空白
-        
-        console.log('清理後的描述:', cleanDescription)
-
-        // 格式化為表單資料
+        // 🔧 修正：格式化編輯資料，確保所有必要欄位都存在
         const editData = {
           // === BasicInfoSection 欄位 ===
           caseNumber: caseNumber,
           contactMethod: caseData.contact_type || 'phone',
-          receivedDate: receivedDate,
-          receivedTime: receivedTime,
-          closedDate: closedDate,
-          closedTime: closedTime,
-          receiver: receiver,                                      // member_id
-          handler: handler,                                        // member_id
-          category: category,                                      // 🔧 使用類別名稱
-          
-          // 🔧 解析住家地址的縣市和行政區
-          homeCounty: '',                                          // 暫時留空，等下拉選單載入後再設定
-          homeDistrict: '',                                        // 暫時留空
-          homeCountyName: homeAddressParsed.county,                // 儲存縣市名稱用於後續匹配
-          homeDistrictName: homeAddressParsed.district,            // 儲存行政區名稱
-          
+          receivedDate: caseData.received_at ? new Date(caseData.received_at).toISOString().split('T')[0] : '',
+          receivedTime: caseData.received_at ? new Date(caseData.received_at).toLocaleTimeString('en-GB', { hour12: false }).slice(0, 5) : '',
+          closedDate: caseData.closed_at ? new Date(caseData.closed_at).toISOString().split('T')[0] : '',
+          closedTime: caseData.closed_at ? new Date(caseData.closed_at).toLocaleTimeString('en-GB', { hour12: false }).slice(0, 5) : '',
+          receiver: acceptanceCase.length > 0 ? acceptanceCase[0].Member?.id || '' : '',
+          handler: inChargeCase.length > 0 ? inChargeCase[0].Member?.id || '' : '',
+          category: categoryCase.length > 0 ? categoryCase[0].Category?.name || '' : '',
+          homeCounty: '',
+          homeDistrict: '',
+          homeCountyName: voterCases.length > 0 ? parseAddress(voterCases[0].Voter?.address || '').county : '',
+          homeDistrictName: voterCases.length > 0 ? parseAddress(voterCases[0].Voter?.address || '').district : '',
           priority: caseData.priority || 'normal',
           hasAttachment: 'none',
           
           // === ContactInfoSection 欄位 ===
-          contact1Name: contactPerson.name || '',
-          contact1Phone: contactPerson.phone || '',
-          contact2Name: '',
-          contact2Phone: '',
+          contact1Name: voterCases.length > 0 ? voterCases[0].Voter?.name || '' : '',
+          contact1Phone: voterCases.length > 0 ? voterCases[0].Voter?.phone || '' : '',
+          contact2Name: voterCases.length > 1 ? voterCases[1].Voter?.name || '' : '',
+          contact2Phone: voterCases.length > 1 ? voterCases[1].Voter?.phone || '' : '',
           
           // === CaseContentSection 欄位 ===
           title: caseData.title || '',
-          description: cleanDescription,                           // 🔧 使用清理後的描述
-          
-          // 🔧 解析事發地點的縣市和行政區
-          incidentCounty: '',                                      // 暫時留空，等下拉選單載入後再設定
-          incidentDistrict: '',                                    // 暫時留空
-          incidentCountyName: incidentAddressParsed.county,        // 儲存縣市名稱用於後續匹配
-          incidentDistrictName: incidentAddressParsed.district,    // 儲存行政區名稱
-          incidentLocation: incidentAddressParsed.detailAddress,   // 🔧 只保留詳細地址部分
+          description: caseData.description || '',
+          incidentCounty: '',
+          incidentDistrict: '',
+          incidentCountyName: incidentAddressParsed.county,
+          incidentDistrictName: incidentAddressParsed.district,
+          incidentLocation: incidentAddressParsed.detailAddress,
+          processingStatus: caseData.status || 'pending',
           
           // === NotificationSection 欄位 ===
           notificationMethod: caseData.contact_type || 'phone',
@@ -408,32 +366,17 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
 
   /**
    * 檢查資料是否有變更
-   * 🔧 修正：確保欄位名稱與 updateCaseWithRelations 一致
    */
   const checkForChanges = (formData) => {
     if (!originalData || !formData) return false
     
-    // 🔧 修正：使用與 CaseService 中 checkCaseDataChanges 一致的欄位名稱
     const importantFields = [
-      // 主要案件資料欄位
       'title', 'description', 'priority', 'contactMethod',
       'receivedDate', 'receivedTime', 'closedDate', 'closedTime',
-      
-      // 聯絡人欄位
       'contact1Name', 'contact1Phone', 'contact2Name', 'contact2Phone',
-      
-      // 人員指派欄位（重要！）
-      'handler', 'receiver',
-      
-      // 案件類別欄位
-      'category',
-      
-      // 地點欄位
+      'handler', 'receiver', 'category',
       'incidentLocation', 'homeCounty', 'homeDistrict',
-      'incidentCounty', 'incidentDistrict',
-      
-      // 通知欄位
-      'notificationMethod'
+      'incidentCounty', 'incidentDistrict', 'notificationMethod'
     ]
     
     for (const field of importantFields) {
@@ -441,10 +384,7 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
       const currentValue = formData[field] || ''
       
       if (originalValue !== currentValue) {
-        console.log(`🔄 欄位 ${field} 有變更:`, {
-          原始: originalValue,
-          現在: currentValue
-        })
+        console.log(`欄位 ${field} 有變更: "${originalValue}" → "${currentValue}"`)
         return true
       }
     }
@@ -453,83 +393,28 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
   }
 
   /**
-   * 表單資料變更處理
-   * 🔧 新增：詳細日誌輸出，便於除錯
-   */
-  const handleFormDataChange = (formData) => {
-    console.log('📝 表單資料變更:', formData)
-    setCurrentFormData(formData)
-    
-    const hasDataChanged = checkForChanges(formData)
-    setHasChanges(hasDataChanged)
-    console.log('✅ 是否有變更:', hasDataChanged)
-    
-    // 🔧 新增：輸出關鍵欄位的值，便於除錯
-    console.log('🔍 關鍵欄位值:', {
-      handler: formData.handler,
-      receiver: formData.receiver,
-      category: formData.category,
-      title: formData.title
-    })
-  }
-
-  /**
-   * 驗證必填欄位（與新增案件相同的驗證邏輯）
+   * 表單驗證
    */
   const validateForm = (formData) => {
-    const requiredFields = [
-      'title',
-      'contact1Name', 
-      'contact1Phone',
-      'receiver',
-      'category',
-      'receivedDate',
-      'receivedTime'
-    ]
+    if (!formData.title || formData.title.trim() === '') {
+      setError('案件標題為必填欄位')
+      return false
+    }
 
-    for (const field of requiredFields) {
-      const value = formData[field]
-      
-      if (!value || !value.toString().trim()) {
-        const fieldNames = {
-          title: '案件標題',
-          contact1Name: '聯絡人1姓名',
-          contact1Phone: '聯絡人1電話',
-          receiver: '受理人員',
-          category: '案件類別',
-          receivedDate: '受理日期',
-          receivedTime: '受理時間'
-        }
-        
-        setError(`請填寫 ${fieldNames[field]}`)
-        return false
-      }
-    }
-    
-    // 檢查電話格式
-    const phoneRegex = /^[0-9+\-\s()]{8,15}$/
-    if (!phoneRegex.test(formData.contact1Phone)) {
-      setError('聯絡人1電話格式不正確，請輸入有效的電話號碼')
+    if (!formData.contact1Name || formData.contact1Name.trim() === '') {
+      setError('聯絡人1為必填欄位')
       return false
     }
-    
-    // 檢查結案日期時間的一致性
-    if (formData.closedDate && !formData.closedTime) {
-      setError('請設定結案時間')
-      return false
-    }
-    
+
     return true
   }
 
   /**
    * 儲存案件修改
-   * 🔧 修正：確保資料格式與 CaseService 期望一致，加強除錯
    */
   const handleSave = async (formData) => {
-    setError('') // 清除之前的錯誤訊息
+    setError('')
     
-    // 🔧 修正：先驗證必填欄位
     if (!validateForm(formData)) {
       return
     }
@@ -547,32 +432,25 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
       console.log('📊 原始資料:', originalData)
       console.log('📝 新資料:', formData)
 
-      // 🔧 修正：準備正確的更新資料格式，確保包含處理狀態
       const updateData = {
         ...formData,
-        id: caseData.id,  // 確保包含案件 ID
-        
-        // 🔧 重要：確保狀態欄位名稱正確
+        id: caseData.id,
         processingStatus: formData.processingStatus || caseData.status || 'pending',
-        
-        // 🔧 確保這些欄位有值
         priority: formData.priority || 'normal',
         contactMethod: formData.contactMethod || 'phone',
       }
 
       console.log('📋 準備發送的更新資料:', updateData)
 
-      // 🔧 修正：檢查 CaseService 方法是否存在
       if (!CaseService.updateCaseWithRelations || typeof CaseService.updateCaseWithRelations !== 'function') {
         throw new Error('CaseService.updateCaseWithRelations 方法不存在')
       }
 
-      // 🔧 修正：使用正確的參數格式調用 updateCaseWithRelations
       const result = await CaseService.updateCaseWithRelations({
         caseData: updateData,
         originalData: originalData,
         teamId: team?.id || '',
-        dropdownOptions: {} // 如果需要縣市行政區轉換，這裡可以傳入
+        dropdownOptions: {}
       })
 
       console.log('📤 API 呼叫完成')
@@ -580,129 +458,105 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
 
       if (result.success) {
         console.log('✅ 案件更新成功')
-        console.log('📈 更新摘要:', result.data?.summary)
-        console.log('🔄 更新詳情:', result.data?.updateResults)
         
-        // 呼叫父組件的回調函數
         if (onCaseUpdated) {
           console.log('🔄 呼叫 onCaseUpdated 回調')
           onCaseUpdated(result.data)
         }
         
-        // 關閉彈窗
-        closeModal()
-        
+        onClose()
       } else {
         console.error('❌ 案件更新失敗:', result.error)
-        setError(result.error || '更新案件失敗')
+        setError(result.error || '更新失敗')
       }
 
     } catch (error) {
-      console.error('💥 儲存案件時發生錯誤:', error)
-      setError(error.message || '儲存時發生未知錯誤')
+      console.error('❌ 儲存案件時發生錯誤:', error)
+      setError('儲存失敗：' + error.message)
     } finally {
       setSaving(false)
     }
   }
 
   /**
-   * 關閉彈窗處理
-   * 🔧 修正：確保彈窗關閉後清理所有狀態
+   * 處理表單資料變更
    */
-  const handleCloseModal = () => {
+  const handleFormDataChange = (newFormData) => {
+    setCurrentFormData(newFormData)
+    setHasChanges(checkForChanges(newFormData))
+  }
+
+  /**
+   * 處理關閉
+   */
+  const handleClose = () => {
     if (hasChanges) {
-      // 有未儲存的變更，顯示確認彈窗
       setShowUnsavedModal(true)
     } else {
-      // 沒有變更，直接關閉
-      closeModal()
+      onClose()
     }
-  }
-
-  /**
-   * 實際關閉彈窗
-   * 🔧 修正：確保所有狀態都被正確重置
-   */
-  const closeModal = () => {
-    console.log('🔒 關閉編輯彈窗')
-    setShowUnsavedModal(false)
-    setHasChanges(false)
-    setOriginalData(null)
-    setCurrentFormData(null)
-    setError('')
-    setSaving(false)  // 🔧 新增：確保儲存狀態被重置
-    onClose()
-  }
-
-  /**
-   * 放棄修改
-   */
-  const handleDiscardChanges = () => {
-    console.log('使用者選擇放棄修改')
-    closeModal()
-  }
-
-  /**
-   * 返回表單
-   */
-  const handleReturnToForm = () => {
-    console.log('使用者選擇返回表單')
-    setShowUnsavedModal(false)
   }
 
   if (!isOpen) return null
 
   return (
     <>
-      {/* 主編輯彈窗 */}
-      <div className="case-edit-modal-overlay">
-        <div className="case-edit-modal">
-          {/* 標題列 */}
+      <div className="case-edit-modal-overlay" onClick={handleClose}>
+        <div className="case-edit-modal-content" onClick={(e) => e.stopPropagation()}>
           <div className="case-edit-modal-header">
-            <h2>修改案件</h2>
-            <button 
-              className="case-edit-modal-close"
-              onClick={handleCloseModal}
+            <h2>編輯案件</h2>
+            <button
+              onClick={handleClose}
+              className="close-btn"
               disabled={saving}
             >
-              ✕
+              ×
             </button>
           </div>
 
-          {/* 錯誤訊息 */}
-          {error && (
-            <div className="case-edit-modal-error">
-              ❌ {error}
-            </div>
-          )}
+          <div className="case-edit-modal-body">
+            {error && (
+              <div className="error-message" style={{ 
+                background: '#ffebee', 
+                color: '#c62828', 
+                padding: '10px', 
+                borderRadius: '4px', 
+                marginBottom: '15px' 
+              }}>
+                {error}
+              </div>
+            )}
 
-          {/* 表單內容 */}
-          <div className="case-edit-modal-content">
             {currentFormData ? (
               <EditableCaseForm
                 team={team}
                 initialData={currentFormData}
                 onDataChange={handleFormDataChange}
                 onSubmit={handleSave}
-                onCancel={handleCloseModal}
+                onCancel={handleClose}
                 isSubmitting={saving}
                 hasChanges={hasChanges}
               />
             ) : (
-              <div className="case-edit-modal-loading">
-                載入中...
+              <div style={{ padding: '40px', textAlign: 'center', color: '#666' }}>
+                準備編輯資料中...
               </div>
             )}
           </div>
         </div>
       </div>
 
-      {/* 未儲存變更確認彈窗 */}
-      <CaseUnsavedChangesModal
-        isOpen={showUnsavedModal}
-        onDiscard={handleDiscardChanges}
-        onReturn={handleReturnToForm}
-      />
+      {showUnsavedModal && (
+        <CaseUnsavedChangesModal
+          isOpen={showUnsavedModal}
+          onClose={() => setShowUnsavedModal(false)}
+          onDiscard={() => {
+            setShowUnsavedModal(false)
+            onClose()
+          }}
+          onKeepEditing={() => setShowUnsavedModal(false)}
+        />
+      )}
     </>
   )
 }
