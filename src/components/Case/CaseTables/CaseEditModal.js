@@ -1,5 +1,5 @@
 // src/components/Case/CaseTables/CaseEditModal.js - 完整修正版
-// 包含：案件類別修正 + 住家縣市顯示 + 事發地點顯示 + ESLint 警告修正
+// 包含：案件類別修正 + 住家縣市顯示 + 事發地點顯示 + 純描述內容提取 + ESLint 警告修正
 import React, { useState, useEffect, useCallback } from 'react'
 import { 
   BasicInfoSection, 
@@ -260,18 +260,35 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
 
   /**
    * 將案件資料轉換為表單可用的格式
-   * 修正案件類別顯示問題 + 住家縣市顯示問題 + 事發地點顯示問題
+   * 修正案件類別顯示問題 + 住家縣市顯示問題 + 事發地點顯示問題 + 純描述內容提取
    */
   const prepareEditData = useCallback((caseData) => {
     try {
       console.log('=== 開始準備編輯資料 ===')
       console.log('原始案件資料:', caseData)
 
-      // 提取事發地點和案件編號
+      // 提取各種元數據
       const fullIncidentLocation = CaseService.extractIncidentLocation(caseData.description) || ''
       const caseNumber = CaseService.extractCaseNumber(caseData.description) || ''
       
-      console.log('提取的特殊欄位:', { fullIncidentLocation, caseNumber })
+      // **新增：提取純描述內容**
+      const pureDescription = CaseService.extractPureDescription(caseData.description) || ''
+      
+      // **新增：提取時間資訊（優先使用 description 中的資料）**
+      const receivedDateTime = CaseService.extractReceivedDateTime(caseData.description)
+      const closedDateTime = CaseService.extractClosedDateTime(caseData.description)
+      
+      // **新增：提取通知設定**
+      const notificationSettings = CaseService.extractNotificationSettings(caseData.description)
+      
+      console.log('提取的特殊欄位:', { 
+        fullIncidentLocation, 
+        caseNumber, 
+        pureDescription,
+        receivedDateTime,
+        closedDateTime,
+        notificationSettings
+      })
 
       // === 解析事發地點 ===
       const incidentLocationInfo = parseIncidentLocation(fullIncidentLocation)
@@ -354,32 +371,34 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
       
       console.log('最終案件類別值 (category):', category)
 
-      // 提取受理時間（從 description 或使用 created_at）
-      const receivedDateTimeMatch = caseData.description?.match(/受理時間：(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})/)
-      let receivedDate = ''
-      let receivedTime = ''
+      // **修改：處理受理時間，優先使用從 description 提取的時間**
+      let receivedDate = receivedDateTime.date
+      let receivedTime = receivedDateTime.time
       
-      if (receivedDateTimeMatch) {
-        receivedDate = receivedDateTimeMatch[1]
-        receivedTime = receivedDateTimeMatch[2]
-        console.log('從 description 提取的時間:', { receivedDate, receivedTime })
-      } else if (caseData.created_at) {
-        // 如果沒有從 description 提取到，使用 created_at
+      // 如果 description 中沒有受理時間，則使用 start_date 作為備選
+      if (!receivedDate && caseData.start_date) {
+        const startDate = new Date(caseData.start_date)
+        receivedDate = startDate.toISOString().split('T')[0]
+        receivedTime = startDate.toTimeString().split(' ')[0].substring(0, 5)
+        console.log('從 start_date 轉換的時間:', { receivedDate, receivedTime })
+      } else if (!receivedDate && caseData.created_at) {
+        // 如果都沒有，最後使用 created_at
         const createdAt = new Date(caseData.created_at)
         receivedDate = createdAt.toISOString().split('T')[0]
         receivedTime = createdAt.toTimeString().split(' ')[0].substring(0, 5)
         console.log('從 created_at 轉換的時間:', { receivedDate, receivedTime })
       }
 
-      // 處理結束時間
-      let closedDate = ''
-      let closedTime = ''
+      // **新增：處理結案時間，優先使用從 description 提取的時間**
+      let closedDate = closedDateTime.date
+      let closedTime = closedDateTime.time
       
-      if (caseData.end_date) {
+      // 如果 description 中沒有結案時間，則使用 end_date 作為備選
+      if (!closedDate && caseData.end_date) {
         const endDate = new Date(caseData.end_date)
         closedDate = endDate.toISOString().split('T')[0]
         closedTime = endDate.toTimeString().split(' ')[0].substring(0, 5)
-        console.log('結束時間:', { closedDate, closedTime })
+        console.log('從 end_date 轉換的時間:', { closedDate, closedTime })
       }
 
       // 格式化為表單資料 - 確保欄位名稱與 FormSections 組件完全匹配
@@ -407,17 +426,17 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
         
         // === CaseContentSection 欄位 ===
         title: caseData.title || '',                            // 案件標題
-        description: caseData.description || '',                // 詳細描述
+        description: pureDescription,                           // **修改：使用純描述內容**
         incidentCounty: '',                                      // 事發縣市（稍後處理）
         incidentDistrict: '',                                    // 事發行政區（暫時空白，因為沒有 District 資料）
         incidentLocation: incidentLocationInfo.detailAddress,    // 事發地點詳細地址（解析後的結果）
         
         // === NotificationSection 欄位 ===
-        notificationMethod: caseData.contact_type || 'phone',   // 通知方式
-        googleCalendarSync: false,                              // Google 日曆同步
-        sendNotification: false,                                // 發送通知
-        multipleReminders: false,                               // 多次提醒
-        reminderDate: '',                                       // 提醒日期
+        notificationMethod: notificationSettings.method || caseData.contact_type || 'phone', // **修改：優先使用提取的通知方式**
+        googleCalendarSync: false,
+        sendNotification: false,
+        multipleReminders: notificationSettings.multipleReminders, // **新增：多次提醒設定**
+        reminderDate: notificationSettings.reminderDate,       // **新增：提醒日期**
         
         // === 內部使用的輔助欄位 ===
         _voterCountyName: voterCountyName,                       // 暫存住家縣市名稱

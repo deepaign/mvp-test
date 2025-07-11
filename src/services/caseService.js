@@ -2345,4 +2345,105 @@ static async getCases(options = {}) {
       updateResults.push({ type: 'VoterDistrict', success: false, error: error.message })
     }
   }
+
+  // 在 src/services/caseService.js 中新增以下方法
+
+  /**
+   * 從完整的 description 中提取純描述內容（移除系統自動生成的元數據）
+   * @param {string} description - 完整的案件描述
+   * @returns {string} 純描述內容
+   */
+  static extractPureDescription(description) {
+    if (!description) return ''
+  
+    let pureDescription = description
+  
+    // 移除事發地點行
+    pureDescription = pureDescription.replace(/事發地點[：:]\s*[^\n\r]+[\n\r]*/g, '')
+  
+    // 移除受理時間行
+    pureDescription = pureDescription.replace(/受理時間[：:]\s*[^\n\r]+[\n\r]*/g, '')
+  
+    // 移除結案時間行
+    pureDescription = pureDescription.replace(/結案時間[：:]\s*[^\n\r]+[\n\r]*/g, '')
+  
+    // 移除案件編號行
+    pureDescription = pureDescription.replace(/案件編號[：:]\s*[^\n\r]+[\n\r]*/g, '')
+  
+    // 移除通知設定區塊（包含多行）
+    pureDescription = pureDescription.replace(/通知設定[：:]\s*[\n\r]*(?:- [^\n\r]+[\n\r]*)+/g, '')
+  
+    // 清理多餘的空行（連續的換行符號）
+    pureDescription = pureDescription.replace(/\n\s*\n+/g, '\n').trim()
+  
+    return pureDescription
+  }
+
+  /**
+   * 從完整的 description 中提取受理時間
+   * @param {string} description - 完整的案件描述
+   * @returns {Object} 包含 date 和 time 的對象
+   */
+  static extractReceivedDateTime(description) {
+    if (!description) return { date: '', time: '' }
+  
+    const match = description.match(/受理時間[：:]\s*(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})/)
+    if (match) {
+      return {
+        date: match[1],
+        time: match[2]
+      }
+    }
+  
+    return { date: '', time: '' }
+  }
+
+  /**
+   * 從完整的 description 中提取結案時間
+   * @param {string} description - 完整的案件描述
+   * @returns {Object} 包含 date 和 time 的對象
+   */
+  static extractClosedDateTime(description) {
+    if (!description) return { date: '', time: '' }
+  
+    const match = description.match(/結案時間[：:]\s*(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})/)
+    if (match) {
+      return {
+        date: match[1],
+        time: match[2]
+      }
+    }
+  
+    return { date: '', time: '' }
+  }
+
+  /**
+   * 從完整的 description 中提取通知設定
+   * @param {string} description - 完整的案件描述
+   * @returns {Object} 通知設定對象
+   */
+  static extractNotificationSettings(description) {
+    if (!description) return { method: '', reminderDate: '', multipleReminders: false }
+  
+    const result = { method: '', reminderDate: '', multipleReminders: false }
+  
+    // 提取通知方式
+    const methodMatch = description.match(/- 通知方式[：:]\s*([^\n\r]+)/)
+    if (methodMatch) {
+      result.method = methodMatch[1].trim()
+    }
+  
+    // 提取提醒日期
+    const reminderMatch = description.match(/- 提醒日期[：:]\s*([^\n\r]+)/)
+    if (reminderMatch) {
+      result.reminderDate = reminderMatch[1].trim()
+    }
+  
+    // 檢查多次提醒
+    if (description.includes('- 多次提醒：是')) {
+      result.multipleReminders = true
+    }
+  
+    return result
+  }
 }
