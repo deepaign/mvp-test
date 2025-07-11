@@ -1,4 +1,4 @@
-/* src/styles/CaseEditModal.css - 確保模態框正確顯示 */
+/* src/styles/CaseEditModal.css - 修正版：統一新增與編輯表單樣式 */
 
 /* 模態框遮罩層 */
 .modal-overlay {
@@ -87,163 +87,193 @@
   padding: 0;
 }
 
-/* 表單容器 */
+/* 編輯表單容器 - 完全匹配新增表單的樣式 */
 .case-edit-form {
-  padding: 24px;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
+  padding: 32px !important; /* 與 case-form 一致 */
+  gap: 32px !important; /* 與 case-form 一致 */
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+  background: white !important;
+  border-radius: 0 !important; /* 編輯表單在模態框內，不需要圓角 */
+  box-shadow: none !important; /* 編輯表單在模態框內，不需要陰影 */
+  max-width: none !important;
+  width: 100% !important;
+  overflow: visible !important;
 }
 
-/* 表單區段 */
-.form-section {
-  margin-bottom: 24px;
-  padding: 20px;
-  background: #f8f9fa;
-  border-radius: 8px;
-  border: 1px solid #e9ecef;
+/* 表單區段 - 完全匹配新增表單 */
+.case-edit-form .form-section {
+  margin-bottom: 24px !important; /* 與 case-form 一致 */
+  padding: 20px !important; /* 與 case-form 一致 */
+  background: #f8f9fa !important; /* 與 case-form 一致 */
+  border-radius: 8px !important; /* 與 case-form 一致 */
+  border: 1px solid #e9ecef !important; /* 與 case-form 一致 */
 }
 
-.form-section h3 {
-  margin: 0 0 16px 0;
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: #333;
-  border-bottom: 2px solid #667eea;
-  padding-bottom: 8px;
+.case-edit-form .form-section h3 {
+  margin: 0 0 16px 0 !important; /* 與 case-form 一致 */
+  font-size: 1.1rem !important; /* 與 case-form 一致 */
+  font-weight: 600 !important; /* 與 case-form 一致 */
+  color: #333 !important; /* 與 case-form 一致 */
+  border-bottom: 2px solid #667eea !important; /* 與 case-form 一致 */
+  padding-bottom: 8px !important; /* 與 case-form 一致 */
 }
 
-/* 表單網格 */
-.form-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 16px;
+/* 表單網格 - 完全匹配新增表單 */
+.case-edit-form .form-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)) !important; /* 與 case-form 一致 */
+  gap: 16px !important; /* 與 case-form 一致 */
 }
 
-.form-field {
-  display: flex;
-  flex-direction: column;
+/* 表單欄位 - 完全匹配新增表單 */
+.case-edit-form .form-field {
+  display: flex !important;
+  flex-direction: column !important;
 }
 
-.form-field.full-width {
-  grid-column: 1 / -1;
+.case-edit-form .form-field.full-width {
+  grid-column: 1 / -1 !important;
 }
 
-.form-field label {
-  font-weight: 500;
-  color: #333;
-  margin-bottom: 4px;
-  font-size: 0.9rem;
+.case-edit-form .form-field label {
+  font-weight: 500 !important; /* 與 case-form 一致 */
+  color: #333 !important; /* 與 case-form 一致 */
+  margin-bottom: 4px !important; /* 與 case-form 一致 */
+  font-size: 0.9rem !important; /* 與 case-form 一致 */
 }
 
-.form-field input,
-.form-field select,
-.form-field textarea {
-  padding: 8px 12px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 0.9rem;
-  transition: border-color 0.2s ease;
+.case-edit-form .form-field input,
+.case-edit-form .form-field select,
+.case-edit-form .form-field textarea {
+  padding: 8px 12px !important; /* 與 case-form 一致 */
+  border: 1px solid #ddd !important; /* 與 case-form 一致 */
+  border-radius: 4px !important; /* 與 case-form 一致 */
+  font-size: 0.9rem !important; /* 與 case-form 一致 */
+  transition: border-color 0.2s ease !important; /* 與 case-form 一致 */
+  background: white !important;
+  color: #333 !important;
+  font-family: inherit !important;
 }
 
-.form-field input:focus,
-.form-field select:focus,
-.form-field textarea:focus {
-  outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+.case-edit-form .form-field input:focus,
+.case-edit-form .form-field select:focus,
+.case-edit-form .form-field textarea:focus {
+  outline: none !important;
+  border-color: #667eea !important; /* 與 case-form 一致 */
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1) !important; /* 與 case-form 一致 */
 }
 
-/* 表單操作按鈕 */
-.form-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 20px 0 0 0;
-  border-top: 1px solid #e9ecef;
-  margin-top: auto;
+/* 特殊處理 textarea 顯示問題 - 防止跳動 */
+.case-edit-form .form-field textarea {
+  min-height: 100px !important; /* 設定最小高度防止跳動 */
+  resize: vertical !important; /* 只允許垂直調整大小 */
+  overflow-y: auto !important; /* 確保垂直滾動 */
+  white-space: pre-wrap !important; /* 保持換行格式 */
+  word-wrap: break-word !important; /* 長單詞自動換行 */
+  line-height: 1.5 !important; /* 設定固定行高 */
+  vertical-align: top !important; /* 頂部對齊 */
+  position: relative !important; /* 相對定位 */
 }
 
-.form-actions .btn {
-  padding: 10px 20px;
-  border-radius: 6px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  border: none;
-  font-size: 0.9rem;
+/* 案件內容 textarea 特殊樣式 */
+.case-edit-form .form-field textarea[id="description"] {
+  min-height: 120px !important; /* 案件內容需要更多空間 */
+  max-height: 300px !important; /* 防止過高 */
 }
 
-.form-actions .btn-secondary {
-  background: #6c757d;
-  color: white;
+/* 確保 placeholder 樣式一致 */
+.case-edit-form .form-field input::placeholder,
+.case-edit-form .form-field textarea::placeholder {
+  color: #999 !important;
+  opacity: 1 !important;
 }
 
-.form-actions .btn-secondary:hover:not(:disabled) {
-  background: #5a6268;
+/* 表單操作按鈕區 - 完全匹配新增表單 */
+.case-edit-form .form-actions {
+  display: flex !important;
+  justify-content: flex-end !important;
+  gap: 12px !important;
+  padding: 20px 0 0 0 !important; /* 與 case-form 一致 */
+  border-top: 1px solid #e9ecef !important; /* 與 case-form 一致 */
+  margin-top: auto !important;
 }
 
-.form-actions .btn-primary {
-  background: #667eea;
-  color: white;
+/* 表單按鈕樣式 - 完全匹配新增表單 */
+.case-edit-form .form-actions .btn {
+  padding: 6px 14px !important; /* 與新增表單按鈕一致 */
+  font-size: 0.8rem !important; /* 與新增表單按鈕一致 */
+  font-weight: 500 !important;
+  border-radius: 6px !important;
+  border: none !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  white-space: nowrap !important;
+  font-family: inherit !important;
 }
 
-.form-actions .btn-primary:hover:not(:disabled) {
-  background: #5a6fd8;
+.case-edit-form .form-actions .btn-primary {
+  background: #667eea !important; /* 與新增表單按鈕一致 */
+  color: white !important;
+  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.2) !important; /* 與新增表單按鈕一致 */
 }
 
-.form-actions .btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+.case-edit-form .form-actions .btn-primary:hover {
+  background: #5a6fd8 !important; /* 與新增表單按鈕一致 */
+  transform: translateY(-1px) !important;
+  box-shadow: 0 3px 6px rgba(102, 126, 234, 0.3) !important; /* 與新增表單按鈕一致 */
 }
 
-/* 載入狀態 */
-.loading-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 40px;
-  color: #666;
+.case-edit-form .form-actions .btn-primary:disabled {
+  background: #ccc !important;
+  color: #666 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+  box-shadow: none !important;
 }
 
-.loading-spinner {
-  width: 32px;
-  height: 32px;
-  border: 3px solid #e9ecef;
-  border-top: 3px solid #667eea;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin-bottom: 16px;
+.case-edit-form .form-actions .btn-secondary {
+  background: white !important;
+  color: #666 !important;
+  border: 1px solid #ddd !important;
 }
 
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+.case-edit-form .form-actions .btn-secondary:hover {
+  background: #f8f9fa !important;
+  color: #333 !important;
+  border-color: #bbb !important;
 }
 
 /* 響應式設計 */
-@media (max-width: 768px) {
+@media (max-width: 1200px) {
   .modal-content.case-edit-modal-large {
-    width: 100%;
-    height: 100vh;
-    max-height: 100vh;
-    border-radius: 0;
-  }
-  
-  .modal-overlay {
-    padding: 0;
-  }
-  
-  .form-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .modal-header {
-    padding: 16px 20px;
+    width: 95vw;
+    height: 85vh;
   }
   
   .case-edit-form {
-    padding: 20px;
+    padding: 24px !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .case-edit-form {
+    padding: 20px !important;
+    gap: 24px !important;
+  }
+  
+  .case-edit-form .form-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+  
+  .case-edit-form .form-actions {
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+  
+  .case-edit-form .form-actions .btn {
+    width: 100% !important;
   }
 }
