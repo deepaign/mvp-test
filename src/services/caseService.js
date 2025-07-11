@@ -1,4 +1,4 @@
-// src/services/caseService.js - 完整修正版本 (2100+ 行)
+// src/services/caseService.js
 import { supabase } from '../supabase'
 
 export class CaseService {
