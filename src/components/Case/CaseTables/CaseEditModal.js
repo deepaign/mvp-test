@@ -128,23 +128,21 @@ const EditableCaseForm = ({ team, initialData, onDataChange, onSubmit, onCancel,
         
         {/* 自定義的表單底部 */}
         <div className="form-footer">
-          <div className="footer-buttons">
-            <button
-              type="button"
-              onClick={onCancel}
-              className="btn-cancel"
-              disabled={isSubmitting}
-            >
-              取消
-            </button>
-            <button
-              type="submit"
-              className="btn-submit"
-              disabled={isSubmitting || !hasChanges}
-            >
-              {isSubmitting ? '儲存中...' : '修改內容'}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="cancel-btn"
+            disabled={isSubmitting}
+          >
+            取消
+          </button>
+          <button
+            type="submit"
+            className="submit-btn"
+            disabled={isSubmitting || !hasChanges}
+          >
+            {isSubmitting ? '儲存中...' : '修改內容'}
+          </button>
         </div>
       </form>
     </div>
