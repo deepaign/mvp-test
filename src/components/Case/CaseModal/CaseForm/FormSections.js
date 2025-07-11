@@ -1,20 +1,30 @@
-// src/components/Case/CaseModal/CaseForm/FormSections.js
-import React from 'react'
+// src/components/Case/CaseModal/CaseForm/FormSections.js - 修正版：解決案件內容顯示問題
+import React, { useState, useEffect, useCallback } from 'react'
 import CategoryAutoComplete from './CategoryAutoComplete'
 
-// 確保下拉選單選項是安全的陣列
-const ensureSafeOptions = (dropdownOptions) => {
+// 輔助函數：確保選項安全
+const ensureSafeOptions = (options) => {
+  if (!options || typeof options !== 'object') {
+    return {
+      members: [],
+      categories: [],
+      counties: [],
+      homeDistricts: [],
+      incidentDistricts: []
+    }
+  }
+
   return {
-    members: Array.isArray(dropdownOptions?.members) ? dropdownOptions.members : [],
-    categories: Array.isArray(dropdownOptions?.categories) ? dropdownOptions.categories : [],
-    counties: Array.isArray(dropdownOptions?.counties) ? dropdownOptions.counties : [],
-    homeDistricts: Array.isArray(dropdownOptions?.homeDistricts) ? dropdownOptions.homeDistricts : [],
-    incidentDistricts: Array.isArray(dropdownOptions?.incidentDistricts) ? dropdownOptions.incidentDistricts : []
+    members: Array.isArray(options.members) ? options.members : [],
+    categories: Array.isArray(options.categories) ? options.categories : [],
+    counties: Array.isArray(options.counties) ? options.counties : [],
+    homeDistricts: Array.isArray(options.homeDistricts) ? options.homeDistricts : [],
+    incidentDistricts: Array.isArray(options.incidentDistricts) ? options.incidentDistricts : []
   }
 }
 
+// 基本資訊區段
 export const BasicInfoSection = ({ formData, dropdownOptions, onChange }) => {
-  // 🔧 確保所有下拉選單選項都是安全的陣列
   const safeOptions = ensureSafeOptions(dropdownOptions)
 
   return (
@@ -22,15 +32,13 @@ export const BasicInfoSection = ({ formData, dropdownOptions, onChange }) => {
       <h3 className="section-title">基本資訊</h3>
       <div className="form-grid">
         <div className="form-field">
-          <label htmlFor="caseNumber">案件編號 <span className="required">*</span></label>
+          <label htmlFor="caseNumber">案件編號</label>
           <input
             id="caseNumber"
             type="text"
             value={formData.caseNumber || ''}
             onChange={(e) => onChange('caseNumber', e.target.value)}
-            placeholder="自動產生"
-            readOnly
-            style={{ backgroundColor: '#f5f5f5' }}
+            placeholder="系統自動產生或手動輸入"
           />
         </div>
 
@@ -46,63 +54,63 @@ export const BasicInfoSection = ({ formData, dropdownOptions, onChange }) => {
             <option value="email">電子郵件</option>
             <option value="line">LINE</option>
             <option value="facebook">Facebook</option>
-            <option value="visit">親訪</option>
-            <option value="letter">信件</option>
+            <option value="visit">現場拜訪</option>
+            <option value="other">其他</option>
           </select>
         </div>
 
         <div className="form-field">
-          <label htmlFor="receivedDate">收件日期 <span className="required">*</span></label>
-          <input
-            id="receivedDate"
-            type="date"
-            value={formData.receivedDate || ''}
-            onChange={(e) => onChange('receivedDate', e.target.value)}
-            required
-          />
-        </div>
-
-        <div className="form-field">
-          <label htmlFor="receivedTime">收件時間</label>
-          <input
-            id="receivedTime"
-            type="time"
-            value={formData.receivedTime || ''}
-            onChange={(e) => onChange('receivedTime', e.target.value)}
-          />
+          <label htmlFor="receivedDate">受理日期 <span className="required">*</span></label>
+          <div className="datetime-group">
+            <input
+              id="receivedDate"
+              type="date"
+              className="date-input"
+              value={formData.receivedDate || ''}
+              onChange={(e) => onChange('receivedDate', e.target.value)}
+              required
+            />
+            <input
+              id="receivedTime"
+              type="time"
+              className="time-input"
+              value={formData.receivedTime || ''}
+              onChange={(e) => onChange('receivedTime', e.target.value)}
+            />
+          </div>
         </div>
 
         <div className="form-field">
           <label htmlFor="closedDate">結案日期</label>
-          <input
-            id="closedDate"
-            type="date"
-            value={formData.closedDate || ''}
-            onChange={(e) => onChange('closedDate', e.target.value)}
-          />
+          <div className="datetime-group">
+            <input
+              id="closedDate"
+              type="date"
+              className="date-input"
+              value={formData.closedDate || ''}
+              onChange={(e) => onChange('closedDate', e.target.value)}
+            />
+            <input
+              id="closedTime"
+              type="time"
+              className="time-input"
+              value={formData.closedTime || ''}
+              onChange={(e) => onChange('closedTime', e.target.value)}
+              disabled={!formData.closedDate}
+            />
+          </div>
         </div>
 
         <div className="form-field">
-          <label htmlFor="closedTime">結案時間</label>
-          <input
-            id="closedTime"
-            type="time"
-            value={formData.closedTime || ''}
-            onChange={(e) => onChange('closedTime', e.target.value)}
-            disabled={!formData.closedDate}
-          />
-        </div>
-
-        <div className="form-field">
-          <label htmlFor="receiver">收件人員</label>
+          <label htmlFor="receiver">受理人員</label>
           <select
             id="receiver"
             value={formData.receiver || ''}
             onChange={(e) => onChange('receiver', e.target.value)}
           >
-            <option value="">請選擇收件人員</option>
+            <option value="">請選擇受理人員</option>
             {safeOptions.members.map(member => (
-              <option key={member.id || member.name || Math.random()} value={member.id}>
+              <option key={member.id || Math.random()} value={member.id}>
                 {member.name || '未命名成員'}
               </option>
             ))}
@@ -110,15 +118,15 @@ export const BasicInfoSection = ({ formData, dropdownOptions, onChange }) => {
         </div>
 
         <div className="form-field">
-          <label htmlFor="handler">承辦人員</label>
+          <label htmlFor="assignee">承辦人員</label>
           <select
-            id="handler"
-            value={formData.handler || ''}
-            onChange={(e) => onChange('handler', e.target.value)}
+            id="assignee"
+            value={formData.assignee || ''}
+            onChange={(e) => onChange('assignee', e.target.value)}
           >
             <option value="">請選擇承辦人員</option>
             {safeOptions.members.map(member => (
-              <option key={member.id || member.name || Math.random()} value={member.id}>
+              <option key={member.id || Math.random()} value={member.id}>
                 {member.name || '未命名成員'}
               </option>
             ))}
@@ -126,25 +134,36 @@ export const BasicInfoSection = ({ formData, dropdownOptions, onChange }) => {
         </div>
 
         <div className="form-field">
-          <label>案件類別 <span className="required">*</span></label>
+          <label htmlFor="category">案件類別</label>
           <CategoryAutoComplete
             value={formData.category || ''}
             onChange={(value) => onChange('category', value)}
             categories={safeOptions.categories}
-            placeholder="請輸入或選擇案件類型"
-            required
+            placeholder="請選擇或輸入案件類別"
           />
         </div>
 
         <div className="form-field">
-          <label>住家里別</label>
-          <div className="district-selector">
+          <label htmlFor="priority">優先順序</label>
+          <select
+            id="priority"
+            value={formData.priority || 'normal'}
+            onChange={(e) => onChange('priority', e.target.value)}
+          >
+            <option value="low">低</option>
+            <option value="normal">一般</option>
+            <option value="urgent">緊急</option>
+          </select>
+        </div>
+
+        <div className="form-field full-width">
+          <label>戶籍地址</label>
+          <div className="address-group">
             <select
               id="homeCounty"
               value={formData.homeCounty || ''}
               onChange={(e) => onChange('homeCounty', e.target.value)}
               className="county-select"
-              aria-label="住家縣市"
             >
               <option value="">請選擇縣市</option>
               {safeOptions.counties.map(county => (
@@ -159,13 +178,12 @@ export const BasicInfoSection = ({ formData, dropdownOptions, onChange }) => {
               onChange={(e) => onChange('homeDistrict', e.target.value)}
               disabled={!formData.homeCounty}
               className="district-select"
-              aria-label="住家行政區"
             >
               <option value="">
                 {!formData.homeCounty 
                   ? '請先選擇縣市' 
                   : safeOptions.homeDistricts.length === 0 
-                    ? '該縣市暫無行政區資料' 
+                    ? '無可用行政區' 
                     : '請選擇行政區'
                 }
               </option>
@@ -179,29 +197,16 @@ export const BasicInfoSection = ({ formData, dropdownOptions, onChange }) => {
         </div>
 
         <div className="form-field">
-          <label htmlFor="priority">優先等級 <span className="required">*</span></label>
-          <select
-            id="priority"
-            value={formData.priority || 'normal'}
-            onChange={(e) => onChange('priority', e.target.value)}
-            required
-          >
-            <option value="urgent">緊急</option>
-            <option value="normal">一般</option>
-            <option value="low">低</option>
-          </select>
-        </div>
-
-        <div className="form-field">
-          <label htmlFor="hasAttachment">是否有附件</label>
+          <label htmlFor="hasAttachment">檔案附件</label>
           <select
             id="hasAttachment"
             value={formData.hasAttachment || 'none'}
             onChange={(e) => onChange('hasAttachment', e.target.value)}
           >
-            <option value="none">無</option>
-            <option value="has">有</option>
-            <option value="pending">待補</option>
+            <option value="none">無附件</option>
+            <option value="image">圖片</option>
+            <option value="document">文件</option>
+            <option value="both">圖片+文件</option>
           </select>
         </div>
       </div>
@@ -209,6 +214,7 @@ export const BasicInfoSection = ({ formData, dropdownOptions, onChange }) => {
   )
 }
 
+// 聯絡資訊區段
 export const ContactInfoSection = ({ formData, onChange }) => (
   <div className="form-section">
     <h3 className="section-title">聯絡資訊</h3>
@@ -262,9 +268,23 @@ export const ContactInfoSection = ({ formData, onChange }) => (
   </div>
 )
 
+// 案件內容區段 - 修正版
 export const CaseContentSection = ({ formData, dropdownOptions, onChange }) => {
-  // 🔧 確保所有下拉選單選項都是安全的陣列
   const safeOptions = ensureSafeOptions(dropdownOptions)
+
+  // 🔧 處理 textarea 值變更，確保正確處理換行和特殊字符
+  const handleDescriptionChange = useCallback((e) => {
+    const value = e.target.value
+    console.log('案件描述變更:', value)
+    onChange('description', value)
+  }, [onChange])
+
+  // 🔧 處理 textarea 的 blur 事件，確保內容保存
+  const handleDescriptionBlur = useCallback((e) => {
+    const value = e.target.value
+    console.log('案件描述失去焦點，確保保存:', value)
+    onChange('description', value)
+  }, [onChange])
 
   return (
     <div className="form-section">
@@ -287,9 +307,17 @@ export const CaseContentSection = ({ formData, dropdownOptions, onChange }) => {
           <textarea
             id="description"
             value={formData.description || ''}
-            onChange={(e) => onChange('description', e.target.value)}
+            onChange={handleDescriptionChange}
+            onBlur={handleDescriptionBlur}
             placeholder="請詳細描述陳情內容"
             rows={4}
+            style={{
+              minHeight: '120px',
+              resize: 'vertical',
+              lineHeight: '1.5',
+              whiteSpace: 'pre-wrap',
+              wordWrap: 'break-word'
+            }}
           />
         </div>
 
@@ -323,8 +351,8 @@ export const CaseContentSection = ({ formData, dropdownOptions, onChange }) => {
                   {!formData.incidentCounty 
                     ? '請先選擇縣市' 
                     : safeOptions.incidentDistricts.length === 0 
-                      ? '該縣市暫無行政區資料' 
-                      : '請選擇事發行政區'
+                      ? '無可用行政區' 
+                      : '請選擇行政區'
                   }
                 </option>
                 {safeOptions.incidentDistricts.map(district => (
@@ -339,95 +367,158 @@ export const CaseContentSection = ({ formData, dropdownOptions, onChange }) => {
               type="text"
               value={formData.incidentLocation || ''}
               onChange={(e) => onChange('incidentLocation', e.target.value)}
-              placeholder="請輸入詳細地點描述"
-              style={{ marginTop: '8px' }}
-              aria-label="詳細地點描述"
+              placeholder="請輸入詳細地址"
+              className="address-input"
             />
           </div>
-        </div>
-
-        <div className="form-field">
-          <label htmlFor="processingStatus">處理狀態</label>
-          <select
-            id="processingStatus"
-            value={formData.processingStatus || 'pending'}
-            onChange={(e) => onChange('processingStatus', e.target.value)}
-          >
-            <option value="pending">待處理</option>
-            <option value="processing">處理中</option>
-            <option value="completed">已完成</option>
-          </select>
         </div>
       </div>
     </div>
   )
 }
 
-export const NotificationSection = ({ formData, onChange }) => (
-  <div className="form-section">
-    <h3 className="section-title">通知與行事曆設定</h3>
-    <div className="calendar-notification-container">
-      {/* 通知設定行 */}
-      <div className="notification-row">
-        <div className="notification-field">
-          <label htmlFor="notificationMethod">通知方式</label>
-          <select
-            id="notificationMethod"
-            value={formData.notificationMethod || 'phone'}
-            onChange={(e) => onChange('notificationMethod', e.target.value)}
-            className="notification-select"
-          >
-            <option value="phone">電話</option>
-            <option value="sms">簡訊</option>
-            <option value="email">Email</option>
-            <option value="line">Line</option>
-            <option value="other">其他</option>
-          </select>
-        </div>
+// 通知設定區段
+export const NotificationSection = ({ formData, onChange }) => {
+  const [localNotificationDate, setLocalNotificationDate] = useState('')
+  const [localNotificationTime, setLocalNotificationTime] = useState('')
+  const [localCalendarDate, setLocalCalendarDate] = useState('')
+  const [localCalendarTime, setLocalCalendarTime] = useState('')
 
-        <div className="notification-field">
-          <label htmlFor="reminderDate">提醒時間</label>
-          <input
-            id="reminderDate"
-            type="datetime-local"
-            value={formData.reminderDate ? 
-              new Date(formData.reminderDate).toISOString().slice(0, 16) : 
-              ''
-            }
-            onChange={(e) => onChange('reminderDate', e.target.value)}
-            className="datetime-input"
-          />
+  // 同步外部資料到本地狀態
+  useEffect(() => {
+    setLocalNotificationDate(formData.notificationDate || '')
+    setLocalNotificationTime(formData.notificationTime || '')
+    setLocalCalendarDate(formData.calendarDate || '')
+    setLocalCalendarTime(formData.calendarTime || '')
+  }, [formData.notificationDate, formData.notificationTime, formData.calendarDate, formData.calendarTime])
+
+  const handleNotificationToggle = (checked) => {
+    onChange('shouldNotify', checked)
+    if (!checked) {
+      onChange('notificationDate', '')
+      onChange('notificationTime', '')
+      setLocalNotificationDate('')
+      setLocalNotificationTime('')
+    }
+  }
+
+  const handleCalendarToggle = (checked) => {
+    onChange('shouldAddToCalendar', checked)
+    if (!checked) {
+      onChange('calendarDate', '')
+      onChange('calendarTime', '')
+      setLocalCalendarDate('')
+      setLocalCalendarTime('')
+    }
+  }
+
+  const handleNotificationDateChange = (value) => {
+    setLocalNotificationDate(value)
+    onChange('notificationDate', value)
+  }
+
+  const handleNotificationTimeChange = (value) => {
+    setLocalNotificationTime(value)
+    onChange('notificationTime', value)
+  }
+
+  const handleCalendarDateChange = (value) => {
+    setLocalCalendarDate(value)
+    onChange('calendarDate', value)
+  }
+
+  const handleCalendarTimeChange = (value) => {
+    setLocalCalendarTime(value)
+    onChange('calendarTime', value)
+  }
+
+  return (
+    <div className="form-section">
+      <h3 className="section-title">通知設定</h3>
+      
+      {/* 通知提醒 */}
+      <div className="notification-row">
+        <div className="notification-toggle">
+          <label className="toggle-label">
+            <input
+              type="checkbox"
+              checked={formData.shouldNotify || false}
+              onChange={(e) => handleNotificationToggle(e.target.checked)}
+              className="toggle-checkbox"
+            />
+            <span className="toggle-text">設定通知提醒</span>
+          </label>
         </div>
+        
+        {formData.shouldNotify && (
+          <div className="notification-datetime">
+            <input
+              type="date"
+              value={localNotificationDate}
+              onChange={(e) => handleNotificationDateChange(e.target.value)}
+              className="datetime-input"
+            />
+            <input
+              type="time"
+              value={localNotificationTime}
+              onChange={(e) => handleNotificationTimeChange(e.target.value)}
+              className="datetime-input"
+            />
+          </div>
+        )}
 
         <div className="notification-actions">
           <button
             type="button"
-            className={`action-btn calendar-btn ${formData.googleCalendarSync ? 'active' : ''}`}
-            onClick={() => onChange('googleCalendarSync', !formData.googleCalendarSync)}
-            title="同步至 Google 日曆"
+            className="action-btn notification-btn"
+            disabled={!formData.shouldNotify}
           >
-            📅 同步日曆
+            📱 建立通知
           </button>
+        </div>
+      </div>
 
+      {/* 行事曆提醒 */}
+      <div className="notification-row">
+        <div className="notification-toggle">
+          <label className="toggle-label">
+            <input
+              type="checkbox"
+              checked={formData.shouldAddToCalendar || false}
+              onChange={(e) => handleCalendarToggle(e.target.checked)}
+              className="toggle-checkbox"
+            />
+            <span className="toggle-text">加入行事曆</span>
+          </label>
+        </div>
+        
+        {formData.shouldAddToCalendar && (
+          <div className="notification-datetime">
+            <input
+              type="date"
+              value={localCalendarDate}
+              onChange={(e) => handleCalendarDateChange(e.target.value)}
+              className="datetime-input"
+            />
+            <input
+              type="time"
+              value={localCalendarTime}
+              onChange={(e) => handleCalendarTimeChange(e.target.value)}
+              className="datetime-input"
+            />
+          </div>
+        )}
+
+        <div className="notification-actions">
           <button
             type="button"
-            className={`action-btn notification-btn ${formData.sendNotification ? 'active' : ''}`}
-            onClick={() => onChange('sendNotification', !formData.sendNotification)}
-            title="發送通知"
+            className="action-btn calendar-btn"
+            disabled={!formData.shouldAddToCalendar}
           >
-            🔔 發送通知
-          </button>
-
-          <button
-            type="button"
-            className={`action-btn reminder-btn ${formData.multipleReminders ? 'active' : ''}`}
-            onClick={() => onChange('multipleReminders', !formData.multipleReminders)}
-            title="多次提醒"
-          >
-            ⏰ 多次提醒
+            📅 加入行事曆
           </button>
         </div>
       </div>
     </div>
-  </div>
-)
+  )
+}

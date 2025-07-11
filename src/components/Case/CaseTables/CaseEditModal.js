@@ -1,4 +1,4 @@
-// src/components/Case/CaseTables/CaseEditModal.js - 修正 ESLint 警告的完整版本
+// src/components/Case/CaseTables/CaseEditModal.js - 修正語法錯誤版本
 import React, { useState, useEffect, useCallback } from 'react'
 import { 
   BasicInfoSection, 
@@ -99,8 +99,10 @@ function convertCaseDataToFormData(caseData) {
     // 案件 ID（用於更新）
     id: caseData.id,
 
-    // === BasicInfoSection 欄位 ===
-    caseNumber: CaseService.extractCaseNumber ? CaseService.extractCaseNumber(caseData.description) : '',
+    // BasicInfoSection 欄位
+    caseNumber: CaseService.extractCaseNumber ? 
+      CaseService.extractCaseNumber(caseData.description) : 
+      (caseData.case_number || ''),
     contactMethod: caseData.contact_type || 'phone',
     receivedDate: safeFormatDate(caseData.start_date),
     receivedTime: safeFormatTime(caseData.start_date),
@@ -116,34 +118,52 @@ function convertCaseDataToFormData(caseData) {
     priority: caseData.priority || 'normal',
     hasAttachment: 'none',
     
-    // === ContactInfoSection 欄位 ===
+    // ContactInfoSection 欄位
     contact1Name: voterCases.length > 0 ? voterCases[0].Voter?.name || '' : '',
     contact1Phone: voterCases.length > 0 ? voterCases[0].Voter?.phone || '' : '',
     contact2Name: voterCases.length > 1 ? voterCases[1].Voter?.name || '' : '',
     contact2Phone: voterCases.length > 1 ? voterCases[1].Voter?.phone || '' : '',
 
-    // === CaseContentSection 欄位 ===
+    // CaseContentSection 欄位
     title: caseData.title || '',
-    incidentLocation: CaseService.extractIncidentLocation ? 
-      CaseService.extractIncidentLocation(caseData.description) : '',
     description: caseData.description || '',
     
-    // === NotificationSection 欄位 ===
-    enableNotifications: false,
-    notificationMethod: 'phone',
-    reminderCount: 1,
-    enableCalendarSync: false,
-
-    // === 處理狀態 ===
-    processingStatus: caseData.status || 'pending'
+    // 事發地點相關
+    incidentLocation: CaseService.extractIncidentLocation ? 
+      CaseService.extractIncidentLocation(caseData.description) : 
+      (caseData.incident_location || ''),
+    incidentCounty: '',
+    incidentDistrict: '',
+    
+    // 提取事發地點的縣市和行政區
+    incidentCountyName: caseData.incident_location ? 
+      parseAddress(caseData.incident_location).county : '',
+    incidentDistrictName: caseData.incident_location ? 
+      parseAddress(caseData.incident_location).district : '',
+    
+    // NotificationSection 欄位
+    shouldNotify: false,
+    notificationDate: '',
+    notificationTime: '',
+    shouldAddToCalendar: false,
+    calendarDate: '',
+    calendarTime: '',
+    
+    // 其他欄位
+    status: caseData.status || 'pending',
+    processingStatus: caseData.status || 'pending',
+    notes: caseData.notes || '',
+    
+    // 保留原始資料以便比較
+    _originalData: caseData
   }
 
   console.log('轉換後的表單資料:', formData)
   return formData
 }
 
-// 編輯專用的表單組件
-const EditableCaseForm = ({ team, initialData, onDataChange, onSubmit, onCancel, isSubmitting, hasChanges }) => {
+// 編輯表單組件
+function EditableCaseForm({ team, initialData, onDataChange, onSubmit, onCancel, isSubmitting, hasChanges }) {
   const [formData, setFormData] = useState(initialData || {})
   const [dropdownOptions, setDropdownOptions] = useState({
     members: [],
@@ -154,47 +174,35 @@ const EditableCaseForm = ({ team, initialData, onDataChange, onSubmit, onCancel,
   })
   const [loading, setLoading] = useState(true)
 
-  // 🔧 穩定的 onDataChange 包裝器
-  const stableOnDataChange = useCallback((data) => {
-    if (typeof onDataChange === 'function') {
-      onDataChange(data)
-    }
-  }, [onDataChange])
+  // 穩定的資料變更回調函數
+  const stableOnDataChange = useCallback(onDataChange, [onDataChange])
 
-  // 載入行政區資料
+  // 載入行政區資料的函數
   const loadDistricts = useCallback(async (countyId, type) => {
-    if (!countyId) {
-      console.warn(`${type}縣市ID為空，無法載入行政區`)
-      return
-    }
+    if (!countyId) return
 
     try {
-      console.log(`開始載入${type}行政區，縣市ID:`, countyId)
-      
+      console.log(`載入${type}行政區資料:`, countyId)
       const result = await CaseService.getDistricts(countyId)
       
-      if (result.success) {
-        const validDistricts = Array.isArray(result.data) ? result.data : []
-        
+      if (result.success && Array.isArray(result.data)) {
         setDropdownOptions(prev => ({
           ...prev,
-          [type === 'home' ? 'homeDistricts' : 'incidentDistricts']: validDistricts
+          [`${type}Districts`]: result.data
         }))
-        
-        console.log(`${type}行政區載入成功:`, validDistricts.length, '筆')
+        console.log(`${type}行政區載入成功:`, result.data)
       } else {
-        console.error(`載入${type}行政區失敗:`, result.error)
+        console.warn(`載入${type}行政區失敗:`, result.error)
         setDropdownOptions(prev => ({
           ...prev,
-          [type === 'home' ? 'homeDistricts' : 'incidentDistricts']: []
+          [`${type}Districts`]: []
         }))
       }
-
     } catch (error) {
-      console.error(`載入${type}行政區發生錯誤:`, error)
+      console.error(`載入${type}行政區錯誤:`, error)
       setDropdownOptions(prev => ({
         ...prev,
-        [type === 'home' ? 'homeDistricts' : 'incidentDistricts']: []
+        [`${type}Districts`]: []
       }))
     }
   }, [])
@@ -202,84 +210,36 @@ const EditableCaseForm = ({ team, initialData, onDataChange, onSubmit, onCancel,
   // 載入下拉選單資料
   const loadDropdownData = useCallback(async () => {
     if (!team?.id) {
-      console.warn('團隊 ID 不存在，無法載入下拉選單資料')
+      console.warn('無效的 team ID，無法載入下拉選單選項')
       setLoading(false)
       return
     }
 
     try {
-      console.log('開始載入下拉選單資料，團隊ID:', team.id)
+      console.log('載入編輯表單的下拉選單選項...')
+      
+      const [membersResult, categoriesResult, countiesResult] = await Promise.allSettled([
+        CaseService.getTeamMembers(team.id),
+        CaseService.getCategories(team.id),
+        CaseService.getCounties()
+      ])
 
-      // 🔧 使用 Promise.allSettled 替代 Promise.all 來防止單一失敗影響全部
-      const promises = [
-        CaseService.getTeamMembers(team.id).catch(err => {
-          console.error('載入團隊成員失敗:', err)
-          return { success: false, data: [], error: err.message }
-        }),
-        CaseService.getCategories(team.id).catch(err => {
-          console.error('載入類別失敗:', err)
-          return { success: false, data: [], error: err.message }
-        }),
-        CaseService.getCounties().catch(err => {
-          console.error('載入縣市失敗:', err)
-          return { success: false, data: [], error: err.message }
-        })
-      ]
+      const members = getValidArray(membersResult, '團隊成員')
+      const categories = getValidArray(categoriesResult, '案件類別')
+      const counties = getValidArray(countiesResult, '縣市資料')
 
-      const [membersResult, categoriesResult, countiesResult] = await Promise.allSettled(promises)
+      console.log('載入的下拉選單選項:', { members, categories, counties })
 
-      // 🔧 關鍵修正：確保所有資料都是陣列，防止 iterable 錯誤
-      const newDropdownOptions = {
-        members: getValidArray(membersResult, 'members'),
-        categories: getValidArray(categoriesResult, 'categories'),
-        counties: getValidArray(countiesResult, 'counties'),
+      setDropdownOptions({
+        members,
+        categories,
+        counties,
         homeDistricts: [],
         incidentDistricts: []
-      }
-
-      console.log('下拉選單資料載入結果:', {
-        members: newDropdownOptions.members.length,
-        categories: newDropdownOptions.categories.length,
-        counties: newDropdownOptions.counties.length
       })
 
-      setDropdownOptions(newDropdownOptions)
-
-      // 🔧 修正：確保初始資料存在且 counties 資料可用
-      if (initialData && newDropdownOptions.counties.length > 0) {
-        let updatedFormData = { ...initialData }
-
-        // 設定住家縣市 - 加入安全檢查
-        if (initialData.homeCountyName) {
-          const homeCounty = newDropdownOptions.counties.find(c => c.name === initialData.homeCountyName)
-          if (homeCounty) {
-            updatedFormData.homeCounty = homeCounty.id
-            console.log('設定住家縣市:', homeCounty.name, '→', homeCounty.id)
-            
-            // 載入住家行政區
-            await loadDistricts(homeCounty.id, 'home')
-          }
-        }
-
-        // 設定事發地點縣市 - 加入安全檢查
-        if (initialData.incidentCountyName) {
-          const incidentCounty = newDropdownOptions.counties.find(c => c.name === initialData.incidentCountyName)
-          if (incidentCounty) {
-            updatedFormData.incidentCounty = incidentCounty.id
-            console.log('設定事發地點縣市:', incidentCounty.name, '→', incidentCounty.id)
-            
-            // 載入事發地點行政區
-            await loadDistricts(incidentCounty.id, 'incident')
-          }
-        }
-
-        setFormData(updatedFormData)
-        stableOnDataChange(updatedFormData)
-      }
-
     } catch (error) {
-      console.error('載入下拉選單發生嚴重錯誤:', error)
-      // 🔧 發生錯誤時設定空陣列，避免後續 iterable 錯誤
+      console.error('載入下拉選單選項失敗:', error)
       setDropdownOptions({
         members: [],
         categories: [],
@@ -290,9 +250,9 @@ const EditableCaseForm = ({ team, initialData, onDataChange, onSubmit, onCancel,
     } finally {
       setLoading(false)
     }
-  }, [team?.id, initialData, stableOnDataChange, loadDistricts])
+  }, [team?.id])
 
-  // 🔧 修正：使用 useCallback 包裝 useEffect 內的邏輯
+  // 使用 useCallback 包裝初始資料更新邏輯
   const updateFormDataFromInitial = useCallback(() => {
     if (initialData && Object.keys(initialData).length > 0) {
       console.log('EditableCaseForm 接收到初始資料:', initialData)
@@ -300,12 +260,12 @@ const EditableCaseForm = ({ team, initialData, onDataChange, onSubmit, onCancel,
     }
   }, [initialData])
 
-  // 載入下拉選單資料 - 修正依賴問題
+  // 載入下拉選單資料
   useEffect(() => {
     loadDropdownData()
   }, [loadDropdownData])
 
-  // 當初始資料變更時更新表單資料 - 修正依賴問題
+  // 當初始資料變更時更新表單資料
   useEffect(() => {
     updateFormDataFromInitial()
   }, [updateFormDataFromInitial])
@@ -316,7 +276,6 @@ const EditableCaseForm = ({ team, initialData, onDataChange, onSubmit, onCancel,
       console.log('住家縣市變更，載入行政區:', formData.homeCounty)
       loadDistricts(formData.homeCounty, 'home')
     } else {
-      // 清空住家行政區
       setDropdownOptions(prev => ({
         ...prev,
         homeDistricts: []
@@ -329,7 +288,6 @@ const EditableCaseForm = ({ team, initialData, onDataChange, onSubmit, onCancel,
       console.log('事發縣市變更，載入行政區:', formData.incidentCounty)
       loadDistricts(formData.incidentCounty, 'incident')
     } else {
-      // 清空事發行政區
       setDropdownOptions(prev => ({
         ...prev,
         incidentDistricts: []
@@ -337,13 +295,19 @@ const EditableCaseForm = ({ team, initialData, onDataChange, onSubmit, onCancel,
     }
   }, [formData.incidentCounty, loadDistricts])
 
-  // 處理表單輸入變更
+  // 處理輸入變更
   const handleInputChange = useCallback((field, value) => {
-    console.log(`表單欄位變更: ${field} = ${value}`)
+    console.log(`欄位變更: ${field} = ${value}`)
     
     const newFormData = {
       ...formData,
       [field]: value
+    }
+
+    // 特殊處理：確保 textarea 值正確設定
+    if (field === 'description') {
+      newFormData.description = value || ''
+      console.log('案件描述已更新:', value)
     }
 
     // 特殊處理邏輯
@@ -372,7 +336,12 @@ const EditableCaseForm = ({ team, initialData, onDataChange, onSubmit, onCancel,
 
   if (loading) {
     return (
-      <div className="loading-container">
+      <div className="loading-container" style={{ 
+        padding: '40px', 
+        textAlign: 'center',
+        fontSize: '0.9rem',
+        color: '#666'
+      }}>
         <div className="loading-spinner"></div>
         <p>載入編輯表單中...</p>
       </div>
@@ -443,15 +412,26 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
     }
   }, [caseData, isOpen])
 
-  // 檢查是否有變更
+  // 改進變更檢查邏輯
   const checkForChanges = useCallback((currentData, originalData) => {
-    const hasChanges = JSON.stringify(currentData) !== JSON.stringify(originalData)
+    const importantFields = [
+      'title', 'description', 'category', 'priority', 'status', 'processingStatus',
+      'contact1Name', 'contact1Phone', 'contact2Name', 'contact2Phone',
+      'receivedDate', 'receivedTime', 'closedDate', 'closedTime',
+      'receiver', 'assignee', 'incidentLocation', 'contactMethod'
+    ]
+    
+    const hasChanges = importantFields.some(field => 
+      (currentData[field] || '') !== (originalData[field] || '')
+    )
+    
     setHasChanges(hasChanges)
     console.log('檢查變更:', hasChanges)
   }, [])
 
   // 處理表單資料變更
   const handleDataChange = useCallback((newData) => {
+    console.log('表單資料變更:', newData)
     setFormData(newData)
     checkForChanges(newData, originalData)
   }, [originalData, checkForChanges])
@@ -472,7 +452,6 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
     try {
       console.log('提交編輯表單:', submitData)
 
-      // 驗證必填欄位
       const validation = CaseService.validateRequiredFields(submitData)
       if (!validation.isValid) {
         alert('表單驗證失敗：\n' + validation.errors.join('\n'))
@@ -483,7 +462,7 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
         caseData: submitData,
         originalData: originalData,
         teamId: team.id,
-        dropdownOptions: {} // 可以傳入下拉選單選項
+        dropdownOptions: {}
       })
 
       if (result.success) {
@@ -558,7 +537,6 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
         </div>
       </div>
 
-      {/* 未儲存變更確認模態框 */}
       {showUnsavedModal && (
         <CaseUnsavedChangesModal
           isOpen={showUnsavedModal}
