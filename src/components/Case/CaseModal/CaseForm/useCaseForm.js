@@ -1,11 +1,9 @@
-// src/components/Case/CaseModal/CaseForm/useCaseForm.js - 修正版本
-import { useState, useEffect, useCallback } from 'react'
+// src/components/Case/CaseModal/CaseForm/useCaseForm.js - 修正 ESLint 錯誤版本
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { CaseService } from '../../../../services/caseService'
 
-export const useCaseForm = (team, onSubmit) => {
-  // 所有原本的 state
+export function useCaseForm({ team, onSubmit }) {
   const [formData, setFormData] = useState({
-    // 基本資訊
     caseNumber: '',
     contactMethod: 'phone',
     receivedDate: new Date().toISOString().split('T')[0],
@@ -14,32 +12,25 @@ export const useCaseForm = (team, onSubmit) => {
     closedTime: '',
     receiver: '',
     handler: '',
+    title: '',
     category: '',
     homeCounty: '',
     homeDistrict: '',
+    homeAddress: '',
+    incidentCounty: '',
+    incidentDistrict: '',
+    incidentLocation: '',
     priority: 'normal',
     hasAttachment: 'none',
-    
-    // 聯絡資訊
     contact1Name: '',
     contact1Phone: '',
     contact2Name: '',
     contact2Phone: '',
-    
-    // 陳情內容
-    title: '',
     description: '',
-    incidentLocation: '',
-    incidentCounty: '',
-    incidentDistrict: '',
-    processingStatus: 'pending',
-    
-    // 行事曆與通知
+    enableNotifications: false,
     notificationMethod: 'phone',
-    reminderDate: '',
-    googleCalendarSync: false,
-    sendNotification: false,
-    multipleReminders: false
+    reminderCount: 1,
+    enableCalendarSync: false
   })
 
   const [dropdownOptions, setDropdownOptions] = useState({
@@ -50,41 +41,32 @@ export const useCaseForm = (team, onSubmit) => {
     incidentDistricts: []
   })
 
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // 🔧 輔助函數：確保陣列安全
-  const ensureArray = useCallback((data, errorContext = '資料') => {
+  // 🔧 輔助函數：確保陣列是安全的
+  const ensureArray = useCallback((data, dataType) => {
     if (Array.isArray(data)) {
       return data
     }
     
-    if (data === null || data === undefined) {
-      console.warn(`${errorContext}: 值為 null 或 undefined`)
-      return []
-    }
-    
-    console.warn(`${errorContext}: 值不是陣列`, typeof data, data)
+    console.warn(`${dataType} 不是陣列，使用空陣列:`, data)
     return []
   }, [])
 
   // 載入行政區資料
   const loadDistricts = useCallback(async (countyId, type) => {
+    if (!countyId) {
+      console.warn(`${type}縣市ID為空，無法載入行政區`)
+      return
+    }
+
     try {
-      if (!countyId) {
-        setDropdownOptions(prev => ({
-          ...prev,
-          [type === 'home' ? 'homeDistricts' : 'incidentDistricts']: []
-        }))
-        return
-      }
-
-      console.log(`載入 ${type} 行政區，縣市ID:`, countyId)
-
+      console.log(`開始載入${type}行政區，縣市ID:`, countyId)
+      
       const result = await CaseService.getDistricts(countyId)
       
       if (result.success) {
-        // 🔧 確保資料是陣列
         const validDistricts = ensureArray(result.data, `${type}行政區`)
         
         setDropdownOptions(prev => ({
@@ -251,14 +233,14 @@ export const useCaseForm = (team, onSubmit) => {
 
     // 電話格式檢查
     if (data.contact1Phone) {
-      const phoneRegex = /^[\d\-\(\)\+\s]+$/
+      const phoneRegex = /^[\d\-()+ \s]+$/
       if (!phoneRegex.test(data.contact1Phone)) {
         errors.push('聯絡人1電話格式不正確')
       }
     }
 
     if (data.contact2Phone && data.contact2Phone.trim() !== '') {
-      const phoneRegex = /^[\d\-\(\)\+\s]+$/
+      const phoneRegex = /^[\d\-()+ \s]+$/
       if (!phoneRegex.test(data.contact2Phone)) {
         errors.push('聯絡人2電話格式不正確')
       }
@@ -323,61 +305,43 @@ export const useCaseForm = (team, onSubmit) => {
           closedTime: '',
           receiver: '',
           handler: '',
+          title: '',
           category: '',
           homeCounty: '',
           homeDistrict: '',
+          homeAddress: '',
+          incidentCounty: '',
+          incidentDistrict: '',
+          incidentLocation: '',
           priority: 'normal',
           hasAttachment: 'none',
           contact1Name: '',
           contact1Phone: '',
           contact2Name: '',
           contact2Phone: '',
-          title: '',
           description: '',
-          incidentLocation: '',
-          incidentCounty: '',
-          incidentDistrict: '',
-          processingStatus: 'pending',
+          enableNotifications: false,
           notificationMethod: 'phone',
-          reminderDate: '',
-          googleCalendarSync: false,
-          sendNotification: false,
-          multipleReminders: false
+          reminderCount: 1,
+          enableCalendarSync: false
         })
 
         // 重新生成案件編號
         generateCaseNumber()
-
+        
+        alert('案件建立成功！')
       } else {
         console.error('❌ 案件建立失敗:', result.error)
-        
-        let errorMessage = '建立案件失敗：'
-        
-        if (result.error.includes('duplicate') || result.error.includes('unique')) {
-          errorMessage += '資料重複，請檢查是否已存在相同案件'
-        } else if (result.error.includes('foreign key') || result.error.includes('constraint')) {
-          errorMessage += '資料關聯錯誤，請檢查選擇的選項是否正確'
-        } else if (result.error.includes('permission')) {
-          errorMessage += '權限不足，請聯繫系統管理員'
-        } else if (result.error.includes('RLS')) {
-          errorMessage += '資料庫權限問題，請聯繫系統管理員'
-        } else {
-          errorMessage += result.error
-        }
-        
-        alert(errorMessage)
+        alert('案件建立失敗：' + result.error)
       }
 
     } catch (error) {
-      console.error('❌ 建立案件時發生錯誤:', error)
+      console.error('❌ 提交表單發生錯誤:', error)
       
-      let errorMessage = '建立案件時發生錯誤：'
-      
-      if (error.message.includes('network')) {
-        errorMessage += '網路連線問題，請檢查網路連線後再試'
-      } else if (error.message.includes('timeout')) {
-        errorMessage += '請求超時，請稍後再試'
-      } else if (error.message.includes('fetch')) {
+      let errorMessage = '提交表單時發生錯誤：\n'
+      if (error.message) {
+        errorMessage += error.message
+      } else if (error.code === 'NETWORK_ERROR') {
         errorMessage += '網路請求失敗，請檢查網路連線'
       } else {
         errorMessage += '系統錯誤，請稍後再試'
@@ -429,7 +393,7 @@ export const useCaseForm = (team, onSubmit) => {
   }, [generateCaseNumber])
 
   // 🔧 確保 dropdownOptions 中的所有陣列都是安全的
-  const safeDropdownOptions = React.useMemo(() => ({
+  const safeDropdownOptions = useMemo(() => ({
     members: ensureArray(dropdownOptions.members, '成員列表'),
     categories: ensureArray(dropdownOptions.categories, '類別列表'),
     counties: ensureArray(dropdownOptions.counties, '縣市列表'),

@@ -1,5 +1,5 @@
-// src/components/Case/CaseManagement.js - 完整修正版本 (610+ 行)
-import React, { useState, useEffect, useCallback, useRef } from 'react'
+// src/components/Case/CaseManagement.js - 修正 ESLint 錯誤版本
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import CaseTabs from './CaseTabs'
 import CaseFilters from './CaseFilters'
 import CaseCard from './CaseCard'
@@ -24,9 +24,6 @@ function CaseManagement({ member, team }) {
   const canDelete = PermissionService.hasPermission(member, 'case_delete') || 
                     member?.is_leader === true
 
-  const canViewAll = PermissionService.hasPermission(member, 'case_view_all') || 
-                     member?.is_leader === true
-
   // 狀態管理
   const [activeTab, setActiveTab] = useState('all')
   const [currentFilters, setCurrentFilters] = useState({})
@@ -41,7 +38,6 @@ function CaseManagement({ member, team }) {
   
   // 批量操作狀態
   const [selectedCases, setSelectedCases] = useState([])
-  const [showBulkActions, setShowBulkActions] = useState(false)
   const [bulkActionLoading, setBulkActionLoading] = useState(false)
   
   // 案件資料狀態
@@ -137,26 +133,16 @@ function CaseManagement({ member, team }) {
     }
   }, [team?.id, sortConfig, updateStats])
 
-  // 載入統計資料
-  const loadStats = useCallback(async () => {
-    if (!team?.id) return
+  // 🔧 計算分頁相關數據 - 使用 useMemo 避免 useCallback 依賴問題
+  const paginatedCases = useMemo(() => {
+    return Array.isArray(filteredCases) 
+      ? filteredCases.slice(currentPage * pageSize, (currentPage + 1) * pageSize)
+      : []
+  }, [filteredCases, currentPage, pageSize])
 
-    try {
-      const result = await CaseService.getCaseStats(team.id)
-      
-      if (result.success) {
-        setStats(result.data || {
-          total: 0,
-          byStatus: { pending: 0, processing: 0, completed: 0, resolved: 0, closed: 0 },
-          byPriority: { urgent: 0, normal: 0, low: 0 }
-        })
-      } else {
-        console.error('載入統計失敗:', result.error)
-      }
-    } catch (error) {
-      console.error('載入統計發生錯誤:', error)
-    }
-  }, [team?.id])
+  const totalPages = useMemo(() => {
+    return Math.ceil((Array.isArray(filteredCases) ? filteredCases.length : 0) / pageSize)
+  }, [filteredCases, pageSize])
 
   // 🔧 安全的日期篩選函數
   const applyDateFilter = useCallback((data, filters) => {
@@ -180,12 +166,10 @@ function CaseManagement({ member, team }) {
       case 'week': {
         // 本週：從週一 00:00:00 到週日 23:59:59
         const currentDay = now.getDay() // 0=週日, 1=週一, ..., 6=週六
-        const mondayOffset = currentDay === 0 ? -6 : 1 - currentDay // 計算到週一的偏移
-        
+        const mondayOffset = currentDay === 0 ? -6 : 1 - currentDay
         const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + mondayOffset)
-        const weekEnd = new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000) // 週一 + 6天 = 週日
+        const weekEnd = new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000)
         weekEnd.setHours(23, 59, 59, 999)
-        
         startDate = weekStart
         endDate = weekEnd
         break
@@ -195,20 +179,18 @@ function CaseManagement({ member, team }) {
         // 本月：從月初 00:00:00 到月底 23:59:59
         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
         const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999)
-        
         startDate = monthStart
         endDate = monthEnd
         break
       }
       
       case 'custom': {
-        // 自定義範圍
-        if (filters.startDate && filters.endDate) {
+        if (filters.startDate) {
           startDate = new Date(filters.startDate)
+        }
+        if (filters.endDate) {
           endDate = new Date(filters.endDate)
-          endDate.setHours(23, 59, 59, 999) // 結束日期設為當天的最後一刻
-        } else {
-          return data // 如果自定義範圍不完整，不進行篩選
+          endDate.setHours(23, 59, 59, 999)
         }
         break
       }
@@ -217,51 +199,47 @@ function CaseManagement({ member, team }) {
         return data
     }
 
-    console.log('日期篩選範圍:', {
-      dateRange: filters.dateRange,
-      startDate: startDate.toISOString(),
-      endDate: endDate.toISOString()
-    })
+    if (!startDate && !endDate) {
+      return data
+    }
 
-    // 篩選資料
-    const filtered = data.filter(caseItem => {
-      if (!caseItem.created_at) return false
+    return data.filter(caseItem => {
+      if (!caseItem || !caseItem.created_at) return false
       
       const caseDate = new Date(caseItem.created_at)
-      const result = caseDate >= startDate && caseDate <= endDate
       
-      return result
+      if (startDate && caseDate < startDate) return false
+      if (endDate && caseDate > endDate) return false
+      
+      return true
     })
-
-    console.log(`日期篩選: ${data.length} -> ${filtered.length}`)
-    return filtered
   }, [])
 
-  // 應用篩選邏輯 - 修正版本，加入日期篩選
-  const applyFilters = useCallback((data, filters, search, status) => {
+  // 🔧 安全的篩選函數
+  const applyFilters = useCallback((data, filters, searchTerm, activeTab) => {
     // 確保 data 是陣列
     let filtered = Array.isArray(data) ? [...data] : []
 
-    // 狀態篩選
-    if (status !== 'all') {
-      filtered = filtered.filter(caseItem => caseItem && caseItem.status === status)
+    // 狀態標籤篩選（activeTab）
+    if (activeTab && activeTab !== 'all') {
+      filtered = filtered.filter(caseItem => caseItem && caseItem.status === activeTab)
     }
 
     // 搜尋篩選
-    if (search && search.trim()) {
-      const searchLower = search.toLowerCase()
+    if (searchTerm && searchTerm.trim()) {
+      const searchLower = searchTerm.toLowerCase().trim()
       filtered = filtered.filter(caseItem => {
         if (!caseItem) return false
         
         try {
           // 搜尋標題
-          if ((caseItem.title || '').toLowerCase().includes(searchLower)) return true
+          if (caseItem.title && caseItem.title.toLowerCase().includes(searchLower)) return true
           
           // 搜尋描述
-          if ((caseItem.description || '').toLowerCase().includes(searchLower)) return true
+          if (caseItem.description && caseItem.description.toLowerCase().includes(searchLower)) return true
           
           // 搜尋案件編號
-          const caseNumber = CaseService.extractCaseNumber && typeof CaseService.extractCaseNumber === 'function' 
+          const caseNumber = CaseService.extractCaseNumber && typeof CaseService.extractCaseNumber === 'function'
             ? CaseService.extractCaseNumber(caseItem.description) 
             : ''
           if (caseNumber && caseNumber.toLowerCase().includes(searchLower)) return true
@@ -337,58 +315,75 @@ function CaseManagement({ member, team }) {
       })
     }
 
-    // 聯絡方式篩選
-    if (filters.contactMethod && filters.contactMethod !== 'all') {
-      filtered = filtered.filter(caseItem => caseItem && caseItem.contact_type === filters.contactMethod)
-    }
-
     return filtered
   }, [applyDateFilter])
 
-  // 排序函數
+  // 🔧 安全的排序函數
   const applySorting = useCallback((data, sortConfig) => {
-    if (!sortConfig.field) return data
+    // 確保 data 是陣列
+    if (!Array.isArray(data) || data.length === 0) {
+      return []
+    }
 
     return [...data].sort((a, b) => {
-      let aValue = a[sortConfig.field]
-      let bValue = b[sortConfig.field]
+      if (!a || !b) return 0
 
-      // 特殊處理日期欄位
-      if (['created_at', 'received_at', 'closed_at', 'updated_at'].includes(sortConfig.field)) {
-        aValue = aValue ? new Date(aValue) : new Date(0)
-        bValue = bValue ? new Date(bValue) : new Date(0)
-      }
+      let aValue, bValue
 
-      // 特殊處理聯絡人姓名
-      if (sortConfig.field === 'contact_name') {
-        aValue = a.VoterCase?.[0]?.Voter?.name || ''
-        bValue = b.VoterCase?.[0]?.Voter?.name || ''
-      }
+      try {
+        switch (sortConfig.field) {
+          case 'created_at':
+          case 'updated_at':
+          case 'start_date':
+          case 'end_date':
+            aValue = a[sortConfig.field] ? new Date(a[sortConfig.field]).getTime() : 0
+            bValue = b[sortConfig.field] ? new Date(b[sortConfig.field]).getTime() : 0
+            break
 
-      // 特殊處理承辦人員
-      if (sortConfig.field === 'handler_name') {
-        aValue = a.InChargeCase?.[0]?.Member?.name || ''
-        bValue = b.InChargeCase?.[0]?.Member?.name || ''
-      }
+          case 'title':
+          case 'status':
+          case 'priority':
+            aValue = a[sortConfig.field] || ''
+            bValue = b[sortConfig.field] || ''
+            break
 
-      // 處理 null 或 undefined 值
-      if (aValue == null && bValue == null) return 0
-      if (aValue == null) return sortConfig.direction === 'asc' ? -1 : 1
-      if (bValue == null) return sortConfig.direction === 'asc' ? 1 : -1
+          case 'contact_name':
+            aValue = a.VoterCase?.[0]?.Voter?.name || ''
+            bValue = b.VoterCase?.[0]?.Voter?.name || ''
+            break
 
-      // 字串比較
-      if (typeof aValue === 'string' && typeof bValue === 'string') {
-        aValue = aValue.toLowerCase()
-        bValue = bValue.toLowerCase()
-      }
+          case 'handler':
+            aValue = a.InChargeCase?.[0]?.Member?.name || ''
+            bValue = b.InChargeCase?.[0]?.Member?.name || ''
+            break
 
-      if (aValue < bValue) {
-        return sortConfig.direction === 'asc' ? -1 : 1
+          default:
+            aValue = a[sortConfig.field] || ''
+            bValue = b[sortConfig.field] || ''
+        }
+
+        // 處理 null 值
+        if (aValue == null && bValue == null) return 0
+        if (aValue == null) return sortConfig.direction === 'asc' ? -1 : 1
+        if (bValue == null) return sortConfig.direction === 'asc' ? 1 : -1
+
+        // 字串比較
+        if (typeof aValue === 'string' && typeof bValue === 'string') {
+          aValue = aValue.toLowerCase()
+          bValue = bValue.toLowerCase()
+        }
+
+        if (aValue < bValue) {
+          return sortConfig.direction === 'asc' ? -1 : 1
+        }
+        if (aValue > bValue) {
+          return sortConfig.direction === 'asc' ? 1 : -1
+        }
+        return 0
+      } catch (error) {
+        console.warn('排序錯誤:', error, { a, b, sortConfig })
+        return 0
       }
-      if (aValue > bValue) {
-        return sortConfig.direction === 'asc' ? 1 : -1
-      }
-      return 0
     })
   }, [])
 
@@ -449,14 +444,14 @@ function CaseManagement({ member, team }) {
     setShowEditModal(true)
   }, [canEdit])
 
-  // 處理刪除案件
+  // 🔧 修正：使用 window.confirm 替代 confirm
   const handleDeleteCase = useCallback(async (caseData) => {
     if (!canDelete) {
       alert('您沒有刪除案件的權限')
       return
     }
 
-    if (!confirm(`確定要刪除案件「${caseData.title}」嗎？此操作無法復原。`)) {
+    if (!window.confirm(`確定要刪除案件「${caseData.title}」嗎？此操作無法復原。`)) {
       return
     }
 
@@ -516,21 +511,21 @@ function CaseManagement({ member, team }) {
 
   // 處理全選/取消全選
   const handleSelectAll = useCallback(() => {
-    if (selectedCases.length === paginatedCases.length) {
+    if (selectedCases.length === paginatedCases.length && paginatedCases.length > 0) {
       setSelectedCases([])
     } else {
       setSelectedCases(paginatedCases.map(c => c.id))
     }
   }, [selectedCases.length, paginatedCases])
 
-  // 處理批量狀態更新
+  // 🔧 修正：使用 window.confirm 替代 confirm
   const handleBulkStatusUpdate = useCallback(async (newStatus) => {
     if (selectedCases.length === 0) {
       alert('請先選擇要更新的案件')
       return
     }
 
-    if (!confirm(`確定要將 ${selectedCases.length} 個案件的狀態更新為「${CaseService.getStatusLabel(newStatus)}」嗎？`)) {
+    if (!window.confirm(`確定要將 ${selectedCases.length} 個案件的狀態更新為「${CaseService.getStatusLabel(newStatus)}」嗎？`)) {
       return
     }
 
@@ -543,7 +538,6 @@ function CaseManagement({ member, team }) {
         console.log('批量狀態更新成功')
         alert(`成功更新 ${result.data.updatedCount} 個案件的狀態`)
         setSelectedCases([])
-        setShowBulkActions(false)
         loadCases()
       } else {
         console.error('批量狀態更新失敗:', result.error)
@@ -576,202 +570,105 @@ function CaseManagement({ member, team }) {
     setCurrentPage(0) // 重置到第一頁
   }, [])
 
-  // 處理匯出
-  const handleExport = useCallback(async (format = 'csv') => {
-    try {
-      console.log('開始匯出案件，格式:', format)
-      
-      const result = await CaseService.exportCases(team.id, currentFilters, format)
-      
-      if (result.success) {
-        // 這裡可以實作實際的檔案下載邏輯
-        console.log('匯出成功:', result.data)
-        alert(`成功匯出 ${result.data.total} 筆案件`)
-      } else {
-        console.error('匯出失敗:', result.error)
-        alert('匯出失敗：' + result.error)
-      }
-    } catch (error) {
-      console.error('匯出時發生錯誤:', error)
-      alert('匯出時發生錯誤：' + error.message)
-    }
-  }, [team.id, currentFilters])
+  // 處理篩選變更
+  const handleFiltersChange = useCallback((newFilters) => {
+    console.log('篩選條件變更:', newFilters)
+    setCurrentFilters(newFilters)
+  }, [])
 
-  // 計算分頁資料
-  const paginatedCases = React.useMemo(() => {
-    // 確保 filteredCases 是陣列
-    const validCases = Array.isArray(filteredCases) ? filteredCases : []
-    const startIndex = currentPage * pageSize
-    const endIndex = startIndex + pageSize
-    return validCases.slice(startIndex, endIndex)
-  }, [filteredCases, currentPage, pageSize])
+  // 處理搜尋
+  const handleSearch = useCallback((newSearchTerm) => {
+    console.log('搜尋條件變更:', newSearchTerm)
+    setSearchTerm(newSearchTerm)
+  }, [])
 
-  // 計算總頁數
-  const totalPages = React.useMemo(() => {
-    const validCases = Array.isArray(filteredCases) ? filteredCases : []
-    return Math.ceil(validCases.length / pageSize)
-  }, [filteredCases, pageSize])
-
-  // 🔧 安全檢查：確保必要的 props 存在
-  if (!team) {
-    return (
-      <div style={{ padding: '20px', textAlign: 'center' }}>
-        <p>請先選擇團隊</p>
-      </div>
-    )
-  }
+  // 處理重置篩選
+  const handleResetFilters = useCallback(() => {
+    console.log('重置篩選條件')
+    setCurrentFilters({})
+    setSearchTerm('')
+    setActiveTab('all')
+  }, [])
 
   return (
     <div className="case-management">
-      {/* 錯誤提示 */}
-      {error && (
-        <div className="error-banner">
-          <span>⚠️ {error}</span>
-          <button onClick={() => setError('')}>✕</button>
-        </div>
-      )}
+      {/* 🔧 加入 CaseCard 統計卡片顯示 */}
+      <CaseCard stats={stats} />
 
-      {/* 案件統計和操作列 */}
-      <div className="case-header">
-        <div className="case-stats">
-          <div className="stat-item">
-            <span className="stat-label">總案件數</span>
-            <span className="stat-value">{stats.total}</span>
-          </div>
-          <div className="stat-item">
-            <span className="stat-label">待處理</span>
-            <span className="stat-value pending">{stats.byStatus.pending}</span>
-          </div>
-          <div className="stat-item">
-            <span className="stat-label">處理中</span>
-            <span className="stat-value processing">{stats.byStatus.processing}</span>
-          </div>
-          <div className="stat-item">
-            <span className="stat-label">已完成</span>
-            <span className="stat-value completed">{stats.byStatus.completed}</span>
-          </div>
-          <div className="stat-item">
-            <span className="stat-label">已結案</span>
-            <span className="stat-value closed">{stats.byStatus.closed}</span>
-          </div>
-        </div>
-
-        <div className="case-actions">
-          {canCreate && (
-            <button
-              onClick={() => setShowCaseModal(true)}
-              className="btn btn-primary"
-              disabled={loading}
-            >
-              + 新增案件
-            </button>
-          )}
-
-          <button
-            onClick={() => handleExport('csv')}
-            className="btn btn-secondary"
-            disabled={loading || filteredCases.length === 0}
-            title="匯出為 CSV"
-          >
-            📊 匯出
-          </button>
-
-          <button
-            onClick={() => loadCases()}
-            className="btn btn-secondary"
-            disabled={loading}
-            title="重新載入"
-          >
-            🔄 重新載入
-          </button>
-          
-          <div className="view-toggle">
-            <button
-              onClick={() => setViewMode('card')}
-              className={`view-btn ${viewMode === 'card' ? 'active' : ''}`}
-              title="卡片檢視"
-            >
-              ⊞
-            </button>
-            <button
-              onClick={() => setViewMode('list')}
-              className={`view-btn ${viewMode === 'list' ? 'active' : ''}`}
-              title="列表檢視"
-            >
-              ☰
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* 批量操作工具列 */}
-      {selectedCases.length > 0 && (
-        <div className="bulk-actions-bar">
-          <div className="bulk-info">
-            <span>已選擇 {selectedCases.length} 個案件</span>
-            <button 
-              onClick={() => setSelectedCases([])}
-              className="btn-clear-selection"
-            >
-              清除選擇
-            </button>
-          </div>
-          <div className="bulk-actions">
-            <button
-              onClick={() => handleBulkStatusUpdate('processing')}
-              className="btn btn-sm"
-              disabled={bulkActionLoading}
-            >
-              標記為處理中
-            </button>
-            <button
-              onClick={() => handleBulkStatusUpdate('completed')}
-              className="btn btn-sm"
-              disabled={bulkActionLoading}
-            >
-              標記為已完成
-            </button>
-            <button
-              onClick={() => handleBulkStatusUpdate('closed')}
-              className="btn btn-sm"
-              disabled={bulkActionLoading}
-            >
-              標記為已結案
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* 案件分頁籤 */}
+      {/* 狀態標籤 */}
       <CaseTabs
         activeTab={activeTab}
         onTabChange={setActiveTab}
-        stats={stats.byStatus}
+        onViewModeChange={setViewMode}
+        onAddCase={() => setShowCaseModal(true)}
+        stats={stats}
       />
 
       {/* 篩選器 */}
       <CaseFilters
+        team={team}
         filters={currentFilters}
-        onFiltersChange={setCurrentFilters}
         searchTerm={searchTerm}
-        onSearchChange={setSearchTerm}
-        teamId={team.id}
-        sortConfig={sortConfig}
-        onSortChange={handleSortChange}
+        onFiltersChange={handleFiltersChange}
+        onSearch={handleSearch}
+        onReset={handleResetFilters}
       />
 
-      {/* 案件列表 */}
-      <div className="case-content">
-        {loading ? (
-          <div className="loading-container">
-            <div className="loading-spinner">載入中...</div>
+      {/* 主要內容區域 */}
+      <div className="main-content">
+        {/* 錯誤顯示 */}
+        {error && (
+          <div className="error-message">
+            <p>⚠️ {error}</p>
+            <button onClick={loadCases} className="btn btn-secondary">
+              重新載入
+            </button>
           </div>
-        ) : paginatedCases.length === 0 ? (
+        )}
+
+        {/* 批量操作工具列 - 只在有選擇時顯示 */}
+        {selectedCases.length > 0 && (
+          <div className="bulk-actions-bar">
+            <div className="bulk-info">
+              <span>已選擇 {selectedCases.length} 個案件</span>
+              <button 
+                onClick={() => setSelectedCases([])}
+                className="btn-clear-selection"
+              >
+                清除選擇
+              </button>
+            </div>
+            <div className="bulk-actions">
+              <button
+                onClick={() => handleBulkStatusUpdate('processing')}
+                className="btn btn-sm"
+                disabled={bulkActionLoading}
+              >
+                標記為處理中
+              </button>
+              <button
+                onClick={() => handleBulkStatusUpdate('completed')}
+                className="btn btn-sm"
+                disabled={bulkActionLoading}
+              >
+                標記為已完成
+              </button>
+              <button
+                onClick={() => handleBulkStatusUpdate('closed')}
+                className="btn btn-sm"
+                disabled={bulkActionLoading}
+              >
+                標記為已結案
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 案件列表或空狀態 */}
+        {(!Array.isArray(filteredCases) || filteredCases.length === 0) && !loading && !error ? (
           <div className="empty-state">
-            <div className="empty-icon">📋</div>
-            <h3>沒有找到案件</h3>
             <p>
-              {filteredCases.length === 0 && allCases.length === 0
+              {Array.isArray(allCases) && allCases.length === 0
                 ? '目前沒有任何案件，點擊「新增案件」開始建立第一個案件'
                 : '沒有符合篩選條件的案件，請調整篩選條件或搜尋關鍵字'
               }
@@ -793,7 +690,7 @@ function CaseManagement({ member, team }) {
               {viewMode === 'card' ? (
                 <CaseCardView
                   cases={paginatedCases}
-                  onEdit={handleEditCase}
+                  onCaseEdit={handleEditCase}
                   onDelete={handleDeleteCase}
                   onStatusChange={handleStatusChange}
                   onSelect={handleSelectCase}
@@ -806,7 +703,7 @@ function CaseManagement({ member, team }) {
               ) : (
                 <CaseListView
                   cases={paginatedCases}
-                  onEdit={handleEditCase}
+                  onCaseEdit={handleEditCase}
                   onDelete={handleDeleteCase}
                   onStatusChange={handleStatusChange}
                   onSelect={handleSelectCase}
