@@ -897,7 +897,7 @@ static async getCases(options = {}) {
     }
     
     if (formData.closedDate && formData.closedTime) {
-      description += `\n結案時間：${formData.closedDate} ${formData.closedTime}`
+      description += `\n\n結案時間：${formData.closedDate} ${formData.closedTime}`
     }
 
     // 添加案件編號
