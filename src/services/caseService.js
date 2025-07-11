@@ -95,212 +95,228 @@ export class CaseService {
     }
   }
 
-  /**
-   * 取得案件列表（支援篩選和分頁）- 修正查詢以包含 AcceptanceCase
-   * @param {Object} options - 查詢選項
-   * @param {string} options.groupId - 團隊 ID
-   * @param {string} options.status - 案件狀態 (all, pending, processing, completed)
-   * @param {Object} options.filters - 篩選條件
-   * @param {string} options.searchTerm - 搜尋關鍵字
-   * @param {number} options.page - 頁碼（從 0 開始）
-   * @param {number} options.limit - 每頁筆數
-   * @returns {Promise<Object>} 查詢結果
-   */
-  static async getCases(options = {}) {
-    try {
-      const {
-        groupId,
-        status = 'all',
-        filters = {},
-        searchTerm = '',
-        page = 0,
-        limit = 20
-      } = options
+// 修正 src/services/caseService.js 中的 getCases 方法
+// 在 VoterCase -> Voter 查詢中新增 address 欄位
 
-      console.log('=== CaseService.getCases ===')
-      console.log('查詢參數:', { groupId, status, filters, searchTerm, page, limit })
+/**
+ * 取得案件列表（含分頁和篩選）- 修正版：包含 Voter.address
+ * @param {Object} options - 查詢選項
+ * @param {string} options.groupId - 團隊 ID
+ * @param {string} options.status - 案件狀態 (all, pending, processing, completed)
+ * @param {Object} options.filters - 篩選條件
+ * @param {string} options.searchTerm - 搜尋關鍵字
+ * @param {number} options.page - 頁碼（從 0 開始）
+ * @param {number} options.limit - 每頁筆數
+ * @returns {Promise<Object>} 查詢結果
+ */
+static async getCases(options = {}) {
+  try {
+    const {
+      groupId,
+      status = 'all',
+      filters = {},
+      searchTerm = '',
+      page = 0,
+      limit = 20
+    } = options
 
-      if (!groupId) {
-        return {
-          success: false,
-          error: '團隊 ID 必填',
-          data: []
-        }
+    console.log('=== CaseService.getCases ===')
+    console.log('查詢參數:', { groupId, status, filters, searchTerm, page, limit })
+
+    if (!groupId) {
+      return {
+        success: false,
+        error: '團隊 ID 必填',
+        data: []
       }
+    }
 
-      // 建立基礎查詢 - 修正查詢以包含 AcceptanceCase
-      let query = supabase
-        .from('Case')
-        .select(`
-          *,
-          CategoryCase (
-            Category (
+    // 建立基礎查詢 - 修正查詢以包含 Voter.address
+    let query = supabase
+      .from('Case')
+      .select(`
+        *,
+        CategoryCase (
+          Category (
+            id,
+            name
+          )
+        ),
+        InChargeCase (
+          member_id,
+          Member (
+            id,
+            name
+          )
+        ),
+        AcceptanceCase (
+          member_id,
+          Member (
+            id,
+            name
+          )
+        ),
+        CaseMember (
+          Member (
+            id,
+            name
+          ),
+          role
+        ),
+        VoterCase (
+          Voter (
+            id,
+            name,
+            phone,
+            address
+          )
+        ),
+        DistrictCase (
+          District (
+            id,
+            name,
+            County (
               id,
               name
-            )
-          ),
-          InChargeCase (
-            member_id,
-            Member (
-              id,
-              name
-            )
-          ),
-          AcceptanceCase (
-            member_id,
-            Member (
-              id,
-              name
-            )
-          ),
-          CaseMember (
-            Member (
-              id,
-              name
-            ),
-            role
-          ),
-          VoterCase (
-            Voter (
-              id,
-              name,
-              phone
-            )
-          ),
-          DistrictCase (
-            District (
-              id,
-              name,
-              County (
-                id,
-                name
-              )
             )
           )
-        `)
-        .eq('group_id', groupId)
+        )
+      `)
+      .eq('group_id', groupId)
 
-      // 狀態篩選 - 在資料庫層級處理
-      if (status !== 'all') {
-        query = query.eq('status', status)
+    // 狀態篩選 - 在資料庫層級處理
+    if (status !== 'all') {
+      query = query.eq('status', status)
+    }
+
+    // 搜尋篩選 - 在資料庫層級處理
+    if (searchTerm && searchTerm.trim()) {
+      query = query.or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`)
+    }
+
+    // 日期篩選 - 在資料庫層級處理（根據 created_at）
+    if (filters.dateRange && filters.dateRange !== 'all') {
+      const dateFilter = this.buildDateFilter(filters.dateRange, filters.startDate, filters.endDate)
+      if (dateFilter.startDate && dateFilter.endDate) {
+        console.log('應用日期篩選:', dateFilter)
+        query = query
+          .gte('created_at', dateFilter.startDate)
+          .lte('created_at', dateFilter.endDate)
       }
+    }
 
-      // 搜尋篩選 - 在資料庫層級處理
-      if (searchTerm && searchTerm.trim()) {
-        query = query.or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`)
-      }
+    // 排序（預設由新到舊）
+    query = query.order('created_at', { ascending: false })
 
-      // 日期篩選 - 在資料庫層級處理（根據 created_at）
-      if (filters.dateRange && filters.dateRange !== 'all') {
-        const dateFilter = this.buildDateFilter(filters.dateRange, filters.startDate, filters.endDate)
-        if (dateFilter.startDate && dateFilter.endDate) {
-          console.log('應用日期篩選:', dateFilter)
-          query = query
-            .gte('created_at', dateFilter.startDate)
-            .lte('created_at', dateFilter.endDate)
-        }
-      }
+    // 分頁
+    if (page >= 0 && limit > 0) {
+      const start = page * limit
+      const end = start + limit - 1
+      query = query.range(start, end)
+    }
 
-      // 排序（預設由新到舊）
-      query = query.order('created_at', { ascending: false })
+    const { data, error } = await query
 
-      // 分頁
-      if (page >= 0 && limit > 0) {
-        const start = page * limit
-        const end = start + limit - 1
-        query = query.range(start, end)
-      }
-
-      const { data, error } = await query
-
-      if (error) {
-        console.error('查詢案件失敗:', error)
-        return {
-          success: false,
-          error: error.message,
-          data: []
-        }
-      }
-
-      console.log(`查詢成功，共 ${data?.length || 0} 筆案件`)
-      
-      // 在前端進行多重篩選（交集邏輯）
-      let filteredData = data || []
-      
-      // 案件類型篩選
-      if (filters.category && filters.category !== 'all') {
-        console.log('應用案件類型篩選:', filters.category)
-        filteredData = filteredData.filter(caseItem => {
-          const categories = caseItem.CategoryCase || []
-          
-          // 檢查預設類型
-          if (['traffic', 'environment', 'security', 'public_service', 'legal_consultation'].includes(filters.category)) {
-            const targetCategoryName = this.getCategoryName(filters.category)
-            return categories.some(cat => cat.Category && cat.Category.name === targetCategoryName)
-          } else {
-            // 檢查自定義類型
-            return categories.some(cat => cat.Category && cat.Category.id === filters.category)
-          }
-        })
-        console.log(`案件類型篩選後，剩餘 ${filteredData.length} 筆案件`)
-      }
-
-      // 優先順序篩選
-      if (filters.priority && filters.priority !== 'all') {
-        console.log('應用優先順序篩選:', filters.priority)
-        filteredData = filteredData.filter(caseItem => caseItem.priority === filters.priority)
-        console.log(`優先順序篩選後，剩餘 ${filteredData.length} 筆案件`)
-      }
-
-      // 承辦人員篩選
-      if (filters.assignee && filters.assignee !== 'all') {
-        console.log('應用承辦人員篩選:', filters.assignee)
-        
-        if (filters.assignee === 'unassigned') {
-          // 篩選尚未指派承辦人員的案件
-          filteredData = filteredData.filter(caseItem => {
-            const inCharge = caseItem.InChargeCase || []
-            
-            if (inCharge.length === 0) {
-              return true // 沒有 InChargeCase 記錄
-            }
-            
-            // 檢查是否所有記錄都沒有有效的 member_id
-            const hasAssignedMember = inCharge.some(ic => ic.member_id !== null && ic.member_id !== undefined)
-            return !hasAssignedMember
-          })
-        } else {
-          // 篩選指定承辦人員的案件
-          filteredData = filteredData.filter(caseItem => {
-            const inCharge = caseItem.InChargeCase || []
-            
-            // 檢查是否有符合指定 member_id 的記錄
-            return inCharge.some(ic => ic.member_id === filters.assignee)
-          })
-        }
-        console.log(`承辦人員篩選後，剩餘 ${filteredData.length} 筆案件`)
-      }
-
-      console.log(`最終篩選結果：${filteredData.length} 筆案件`)
-      
-      return {
-        success: true,
-        data: filteredData,
-        count: filteredData.length,
-        page,
-        limit,
-        error: null
-      }
-
-    } catch (error) {
-      console.error('CaseService.getCases 發生錯誤:', error)
+    if (error) {
+      console.error('查詢案件失敗:', error)
       return {
         success: false,
         error: error.message,
         data: []
       }
     }
+
+    console.log(`查詢成功，共 ${data?.length || 0} 筆案件`)
+    
+    // 驗證是否成功取得 address 資料
+    if (data && data.length > 0) {
+      const firstCase = data[0]
+      if (firstCase.VoterCase && firstCase.VoterCase[0] && firstCase.VoterCase[0].Voter) {
+        console.log('✅ 成功取得 Voter 資料，包含 address:', {
+          name: firstCase.VoterCase[0].Voter.name,
+          phone: firstCase.VoterCase[0].Voter.phone,
+          address: firstCase.VoterCase[0].Voter.address
+        })
+      }
+    }
+    
+    // 在前端進行多重篩選（交集邏輯）
+    let filteredData = data || []
+    
+    // 案件類型篩選
+    if (filters.category && filters.category !== 'all') {
+      console.log('應用案件類型篩選:', filters.category)
+      filteredData = filteredData.filter(caseItem => {
+        const categories = caseItem.CategoryCase || []
+        
+        // 檢查預設類型
+        if (['traffic', 'environment', 'security', 'public_service', 'legal_consultation'].includes(filters.category)) {
+          const targetCategoryName = this.getCategoryName(filters.category)
+          return categories.some(cat => cat.Category && cat.Category.name === targetCategoryName)
+        } else {
+          // 檢查自定義類型
+          return categories.some(cat => cat.Category && cat.Category.id === filters.category)
+        }
+      })
+      console.log(`案件類型篩選後，剩餘 ${filteredData.length} 筆案件`)
+    }
+
+    // 優先順序篩選
+    if (filters.priority && filters.priority !== 'all') {
+      console.log('應用優先順序篩選:', filters.priority)
+      filteredData = filteredData.filter(caseItem => caseItem.priority === filters.priority)
+      console.log(`優先順序篩選後，剩餘 ${filteredData.length} 筆案件`)
+    }
+
+    // 承辦人員篩選
+    if (filters.assignee && filters.assignee !== 'all') {
+      console.log('應用承辦人員篩選:', filters.assignee)
+      
+      if (filters.assignee === 'unassigned') {
+        // 篩選尚未指派承辦人員的案件
+        filteredData = filteredData.filter(caseItem => {
+          const inCharge = caseItem.InChargeCase || []
+          
+          if (inCharge.length === 0) {
+            return true // 沒有 InChargeCase 記錄
+          }
+          
+          // 檢查是否所有記錄都沒有有效的 member_id
+          const hasAssignedMember = inCharge.some(ic => ic.member_id !== null && ic.member_id !== undefined)
+          return !hasAssignedMember
+        })
+      } else {
+        // 篩選指定承辦人員的案件
+        filteredData = filteredData.filter(caseItem => {
+          const inCharge = caseItem.InChargeCase || []
+          
+          // 檢查是否有符合指定 member_id 的記錄
+          return inCharge.some(ic => ic.member_id === filters.assignee)
+        })
+      }
+      console.log(`承辦人員篩選後，剩餘 ${filteredData.length} 筆案件`)
+    }
+
+    console.log(`最終篩選結果：${filteredData.length} 筆案件`)
+    
+    return {
+      success: true,
+      data: filteredData,
+      count: filteredData.length,
+      page,
+      limit,
+      error: null
+    }
+
+  } catch (error) {
+    console.error('CaseService.getCases 發生錯誤:', error)
+    return {
+      success: false,
+      error: error.message,
+      data: []
+    }
   }
+}
 
   /**
    * 建立日期篩選條件 - 新增方法
