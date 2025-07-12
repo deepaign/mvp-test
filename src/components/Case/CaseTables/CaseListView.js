@@ -1,4 +1,4 @@
-// src/components/Case/CaseTables/CaseListView.js - 修正欄位順序對應問題
+// src/components/Case/CaseTables/CaseListView.js - 修正受理日期顯示問題
 import React from 'react'
 import { CaseService } from '../../../services/caseService'
 import '../../../styles/CaseListView.css'
@@ -77,20 +77,32 @@ function CaseListView({
     return '尚未指派'
   }
 
-  // 格式化受理日期
-  const formatCreatedDate = (dateString) => {
-    if (!dateString) return '-'
-    try {
-      const date = new Date(dateString)
-      return date.toLocaleDateString('zh-TW', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit'
-      }).replace(/\//g, '-')
-    } catch (error) {
-      console.error('日期格式化失敗:', error)
-      return '-'
+  // 修正：格式化受理日期 - 從 description 中提取受理時間的日期部分
+  const formatReceivedDate = (caseItem) => {
+    // 使用 CaseService 的 extractReceivedDateTime 方法從 description 中提取受理時間
+    const receivedDateTime = CaseService.extractReceivedDateTime(caseItem.description)
+    
+    // 如果有提取到受理日期，直接使用
+    if (receivedDateTime.date) {
+      return receivedDateTime.date
     }
+    
+    // 如果 description 中沒有受理時間，回退到 created_at
+    if (caseItem.created_at) {
+      try {
+        const date = new Date(caseItem.created_at)
+        return date.toLocaleDateString('zh-TW', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        }).replace(/\//g, '-')
+      } catch (error) {
+        console.error('受理日期格式化失敗:', error)
+        return '-'
+      }
+    }
+    
+    return '-'
   }
 
   // 取得優先順序顯示
@@ -186,7 +198,7 @@ function CaseListView({
                     {getHandlerName(caseItem)}
                   </td>
                   <td className="case-date-cell">
-                    {formatCreatedDate(caseItem.created_at)}
+                    {formatReceivedDate(caseItem)}
                   </td>
                   <td className="case-priority-cell">
                     <span className={`priority-badge ${priorityDisplay.class}`}>
