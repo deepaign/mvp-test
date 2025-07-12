@@ -1,5 +1,5 @@
-// src/components/Case/CaseTables/CaseEditModal.js - 修正版
-// 新增行政區解析和載入邏輯，修正語法錯誤
+// src/components/Case/CaseTables/CaseEditModal.js - 完整修正版
+// 修正：案件編號顯示、時間顯示、案件類別顯示、事發地點記錄
 import React, { useState, useEffect, useCallback } from 'react'
 import { 
   BasicInfoSection, 
@@ -442,7 +442,7 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
   }, [])
 
   /**
-   * 改善的 prepareEditData 函數（包含地址解析）
+   * 改善的 prepareEditData 函數（修正所有問題）
    */
   const prepareEditData = useCallback((caseData) => {
     console.log('=== 開始準備編輯資料 ===')
@@ -459,8 +459,7 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
         voterCases: voterCases.length,
         categories: categories.length,
         acceptance: acceptance.length,
-        inCharge: inCharge.length,
-        note: 'AcceptanceCase 為空是正常情況（早期案件）'
+        inCharge: inCharge.length
       })
 
       // === 安全地提取聯絡人資料和解析住家地址 ===
@@ -500,8 +499,11 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
       }
 
       // === 安全地提取其他資料 ===
-      const categoryId = categories.length > 0 && categories[0].Category ? 
-        categories[0].Category.id : ''
+      // 修正：提取案件類別名稱而非 ID
+      let categoryDisplayValue = ''
+      if (categories.length > 0 && categories[0].Category) {
+        categoryDisplayValue = categories[0].Category.name  // 使用名稱而非 ID
+      }
       
       const receiverId = acceptance.length > 0 && acceptance[0].Member ? 
         acceptance[0].Member.id : ''
@@ -514,9 +516,35 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
       const incidentLocationString = CaseService.extractIncidentLocation(caseData.description) || ''
       const incidentLocationInfo = parseIncidentLocation(incidentLocationString)
 
+      // === 提取時間資訊（修正：優先從 description 提取） ===
+      const receivedDateTime = CaseService.extractReceivedDateTime(caseData.description)
+      const closedDateTime = CaseService.extractClosedDateTime(caseData.description)
+      
+      // 如果 description 中沒有時間，則從 start_date/end_date 提取
+      let receivedDate = receivedDateTime.date
+      let receivedTime = receivedDateTime.time
+      let closedDate = closedDateTime.date
+      let closedTime = closedDateTime.time
+      
+      if (!receivedDate && caseData.start_date) {
+        const startDate = new Date(caseData.start_date)
+        receivedDate = startDate.toISOString().split('T')[0]
+        receivedTime = startDate.toTimeString().split(' ')[0].substring(0, 5)
+      }
+      
+      if (!closedDate && caseData.end_date) {
+        const endDate = new Date(caseData.end_date)
+        closedDate = endDate.toISOString().split('T')[0]
+        closedTime = endDate.toTimeString().split(' ')[0].substring(0, 5)
+      }
+
+      // === 提取案件編號（修正：從 description 提取） ===
+      const caseNumber = CaseService.extractCaseNumber(caseData.description) || ''
+
       // === 構建完整的表單資料 ===
       const formData = {
-        // 基本資訊（從 Case 表，相對安全）
+        // 基本資訊
+        caseNumber: caseNumber,  // 修正：顯示案件編號
         title: caseData.title || '',
         description: pureDescription,
         priority: caseData.priority || 'normal',
@@ -532,7 +560,7 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
         // 案件分工
         receiver: receiverId,
         handler: handlerId,
-        category: categoryId,
+        category: categoryDisplayValue,  // 修正：使用類別名稱
 
         // 地點資訊（初始為空，稍後由 useEffect 處理）
         homeCounty: '',      
@@ -541,11 +569,11 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
         incidentDistrict: '',    
         incidentLocation: incidentLocationInfo.detailAddress,
 
-        // 時間資訊
-        receivedDate: caseData.start_date ? caseData.start_date.split('T')[0] : '',
-        receivedTime: caseData.start_date ? caseData.start_date.split('T')[1]?.substring(0, 5) : '',
-        closedDate: caseData.end_date ? caseData.end_date.split('T')[0] : '',
-        closedTime: caseData.end_date ? caseData.end_date.split('T')[1]?.substring(0, 5) : '',
+        // 時間資訊（修正：正確提取和顯示）
+        receivedDate: receivedDate,
+        receivedTime: receivedTime,
+        closedDate: closedDate,
+        closedTime: closedTime,
 
         // 通知設定
         notificationMethod: caseData.contact_type || 'phone',
@@ -568,6 +596,14 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
         incidentLocation: incidentLocationInfo.detailAddress
       })
       
+      console.log('時間資訊:', {
+        receivedDate,
+        receivedTime,
+        closedDate,
+        closedTime,
+        caseNumber
+      })
+      
       return formData
 
     } catch (error) {
@@ -575,6 +611,7 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
       
       // 回傳最基本的可用表單結構
       return {
+        caseNumber: '',
         title: caseData?.title || '',
         description: '',
         contact1Name: '',
@@ -866,11 +903,18 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
       console.log('原始資料:', originalData)
       console.log('新資料:', formData)
 
+      // 修正：需要確保正確的下拉選單選項傳遞，特別是行政區資料
+      const extendedDropdownOptions = {
+        counties,
+        homeDistricts: [], // 將由後端重新查詢
+        incidentDistricts: [] // 將由後端重新查詢
+      }
+
       const result = await CaseService.updateCaseWithRelations({
         caseData: { ...formData, id: caseData.id },
         originalData,
         teamId: team.id,
-        dropdownOptions: { counties }
+        dropdownOptions: extendedDropdownOptions
       })
 
       console.log('更新結果:', result)
