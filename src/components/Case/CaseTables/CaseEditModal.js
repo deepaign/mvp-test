@@ -1,5 +1,5 @@
-// src/components/Case/CaseTables/CaseEditModal.js - 完整修正版
-// 包含：案件類別修正 + 住家縣市顯示 + 事發地點顯示 + 純描述內容提取 + ESLint 警告修正
+// src/components/Case/CaseTables/CaseEditModal.js - 修正版
+// 新增行政區解析和載入邏輯，修正語法錯誤
 import React, { useState, useEffect, useCallback } from 'react'
 import { 
   BasicInfoSection, 
@@ -12,7 +12,7 @@ import { CaseService } from '../../../services/caseService'
 import '../../../styles/CaseEditModal.css'
 
 // 編輯專用的表單組件
-const EditableCaseForm = ({ team, initialData, onDataChange, onSubmit, onCancel, isSubmitting, hasChanges }) => {
+const EditableCaseForm = ({ team, initialData, onDataChange, onSubmit, onCancel, isSubmitting, hasChanges, dataLoadingState }) => {
   const [formData, setFormData] = useState(initialData || {})
   const [dropdownOptions, setDropdownOptions] = useState({
     members: [],
@@ -22,6 +22,48 @@ const EditableCaseForm = ({ team, initialData, onDataChange, onSubmit, onCancel,
     incidentDistricts: []
   })
   const [loading, setLoading] = useState(true)
+
+  // 載入住家行政區列表
+  const loadHomeDistricts = useCallback(async (countyId) => {
+    try {
+      console.log('載入住家行政區列表，縣市 ID:', countyId)
+      const districtsResult = await CaseService.getDistricts(countyId)
+      if (districtsResult.success) {
+        console.log('住家行政區載入成功:', districtsResult.data.length, '筆')
+        setDropdownOptions(prev => ({
+          ...prev,
+          homeDistricts: districtsResult.data
+        }))
+      } else {
+        console.warn('載入住家行政區失敗:', districtsResult.error)
+        setDropdownOptions(prev => ({ ...prev, homeDistricts: [] }))
+      }
+    } catch (error) {
+      console.warn('載入住家行政區異常:', error)
+      setDropdownOptions(prev => ({ ...prev, homeDistricts: [] }))
+    }
+  }, [])
+
+  // 載入事發地點行政區列表
+  const loadIncidentDistricts = useCallback(async (countyId) => {
+    try {
+      console.log('載入事發地點行政區列表，縣市 ID:', countyId)
+      const districtsResult = await CaseService.getDistricts(countyId)
+      if (districtsResult.success) {
+        console.log('事發地點行政區載入成功:', districtsResult.data.length, '筆')
+        setDropdownOptions(prev => ({
+          ...prev,
+          incidentDistricts: districtsResult.data
+        }))
+      } else {
+        console.warn('載入事發地點行政區失敗:', districtsResult.error)
+        setDropdownOptions(prev => ({ ...prev, incidentDistricts: [] }))
+      }
+    } catch (error) {
+      console.warn('載入事發地點行政區異常:', error)
+      setDropdownOptions(prev => ({ ...prev, incidentDistricts: [] }))
+    }
+  }, [])
 
   // 載入下拉選單資料
   useEffect(() => {
@@ -55,15 +97,25 @@ const EditableCaseForm = ({ team, initialData, onDataChange, onSubmit, onCancel,
     loadDropdownData()
   }, [team?.id])
 
-  // 當初始資料變更時更新表單資料
+  // 當初始資料變更時更新表單資料並載入對應的行政區
   useEffect(() => {
     if (initialData) {
       console.log('EditableCaseForm 接收到初始資料:', initialData)
       setFormData(initialData)
+      
+      // 如果有住家縣市，載入對應的行政區列表
+      if (initialData.homeCounty) {
+        loadHomeDistricts(initialData.homeCounty)
+      }
+      
+      // 如果有事發地點縣市，載入對應的行政區列表
+      if (initialData.incidentCounty) {
+        loadIncidentDistricts(initialData.incidentCounty)
+      }
     }
-  }, [initialData])
+  }, [initialData, loadHomeDistricts, loadIncidentDistricts])
 
-  // 處理表單輸入變更
+  // 處理表單輸入變更（包含動態載入行政區）
   const handleInputChange = (field, value) => {
     console.log(`表單欄位變更: ${field} = ${value}`)
     
@@ -72,15 +124,40 @@ const EditableCaseForm = ({ team, initialData, onDataChange, onSubmit, onCancel,
       [field]: value
     }
 
-    // 特殊處理邏輯
+    // 特殊處理：住家縣市改變時清空住家行政區並載入新的行政區列表
     if (field === 'homeCounty') {
       newFormData.homeDistrict = ''
+      
+      if (value) {
+        // 非同步載入行政區
+        loadHomeDistricts(value)
+      } else {
+        setDropdownOptions(prev => ({ ...prev, homeDistricts: [] }))
+      }
     }
+
+    // 特殊處理：事發地點縣市改變時清空事發地點行政區並載入新的行政區列表
     if (field === 'incidentCounty') {
       newFormData.incidentDistrict = ''
+      
+      if (value) {
+        // 非同步載入行政區
+        loadIncidentDistricts(value)
+      } else {
+        setDropdownOptions(prev => ({ ...prev, incidentDistricts: [] }))
+      }
     }
+
+    // 特殊處理：結案日期清空時，同時清空結案時間
     if (field === 'closedDate' && !value) {
       newFormData.closedTime = ''
+    }
+
+    // 特殊處理：如果設定了結案日期但沒有時間，預設為現在時間
+    if (field === 'closedDate' && value && !formData.closedTime) {
+      const now = new Date()
+      const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`
+      newFormData.closedTime = currentTime
     }
 
     setFormData(newFormData)
@@ -92,6 +169,17 @@ const EditableCaseForm = ({ team, initialData, onDataChange, onSubmit, onCancel,
     e.preventDefault()
     onSubmit(formData)
   }
+
+  // 取得按鈕狀態和文字
+  const getButtonState = () => {
+    if (isSubmitting) return { disabled: true, text: '儲存中...' }
+    if (dataLoadingState === 'loading') return { disabled: true, text: '載入中...' }
+    if (dataLoadingState === 'error') return { disabled: true, text: '載入失敗' }
+    if (!hasChanges) return { disabled: true, text: '無變更' }
+    return { disabled: false, text: '儲存修改' }
+  }
+
+  const buttonState = getButtonState()
 
   if (loading) {
     return (
@@ -139,14 +227,63 @@ const EditableCaseForm = ({ team, initialData, onDataChange, onSubmit, onCancel,
           <button
             type="submit"
             className="submit-btn"
-            disabled={isSubmitting || !hasChanges}
+            disabled={buttonState.disabled}
           >
-            {isSubmitting ? '儲存中...' : '修改內容'}
+            {buttonState.text}
           </button>
         </div>
       </form>
     </div>
   )
+}
+
+// 表單欄位驗證函數
+const validateFormFields = (formData) => {
+  // === 必填欄位檢查 ===
+  const requiredFields = [
+    { field: 'title', name: '案件標題' },
+    { field: 'contact1Name', name: '聯絡人姓名' },
+    { field: 'contact1Phone', name: '聯絡人電話' }
+  ]
+
+  for (const { field, name } of requiredFields) {
+    if (!formData[field] || !formData[field].toString().trim()) {
+      return { valid: false, message: `請填寫${name}` }
+    }
+  }
+
+  // === 格式驗證 ===
+  const phoneRegex = /^[0-9+\-\s()]{8,15}$/
+  if (!phoneRegex.test(formData.contact1Phone)) {
+    return { valid: false, message: '聯絡人電話格式不正確' }
+  }
+
+  // 聯絡人2電話格式檢查（如果有填寫）
+  if (formData.contact2Phone && !phoneRegex.test(formData.contact2Phone)) {
+    return { valid: false, message: '聯絡人2電話格式不正確' }
+  }
+
+  // === 邏輯一致性檢查 ===
+  if (formData.closedDate && !formData.closedTime) {
+    return { valid: false, message: '請設定結案時間' }
+  }
+
+  if (formData.contact2Phone && !formData.contact2Name) {
+    return { valid: false, message: '請填寫聯絡人2姓名' }
+  }
+
+  return { valid: true }
+}
+
+// 錯誤訊息分級函數
+const getErrorSeverity = (error) => {
+  if (error.includes('系統錯誤') || error.includes('載入異常')) {
+    return 'critical'  // 需要重新載入頁面
+  }
+  if (error.includes('載入') || error.includes('資料')) {
+    return 'warning'   // 可以重試
+  }
+  return 'normal'      // 一般驗證錯誤
 }
 
 function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
@@ -157,11 +294,44 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
   const [showUnsavedModal, setShowUnsavedModal] = useState(false)
   const [error, setError] = useState('')
   const [counties, setCounties] = useState([])
+  const [dataLoadingState, setDataLoadingState] = useState('idle') // 'idle', 'loading', 'success', 'error'
 
   /**
-   * 解析事發地點資訊
-   * @param {string} incidentLocationString - 完整的事發地點字串（如：臺北市信義區信義路五段7號）
-   * @returns {Object} 解析結果
+   * 解析住家地址（從 Voter.address 格式：臺北市信義區）
+   */
+  const parseVoterAddress = useCallback((address) => {
+    if (!address || !address.trim()) {
+      return { countyName: '', districtName: '' }
+    }
+
+    console.log('解析住家地址:', address)
+    
+    // 常見的縣市後綴
+    const countySuffixes = ['市', '縣']
+    let countyName = ''
+    let districtName = ''
+    
+    // 找到縣市部分
+    for (const suffix of countySuffixes) {
+      const countyMatch = address.match(new RegExp(`^([^${suffix}]+${suffix})`))
+      if (countyMatch) {
+        countyName = countyMatch[1]
+        districtName = address.substring(countyName.length) // 剩餘部分就是行政區
+        break
+      }
+    }
+    
+    const result = {
+      countyName: countyName.trim(),
+      districtName: districtName.trim()
+    }
+    
+    console.log('住家地址解析結果:', result)
+    return result
+  }, [])
+
+  /**
+   * 解析事發地點資訊（從 description 格式：事發地點：臺北市信義區信義路五段7號）
    */
   const parseIncidentLocation = useCallback((incidentLocationString) => {
     if (!incidentLocationString || !incidentLocationString.trim()) {
@@ -174,9 +344,6 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
 
     console.log('解析事發地點:', incidentLocationString)
 
-    // 嘗試解析：縣市 + 行政區 + 詳細地址
-    // 假設格式：臺北市信義區信義路五段7號
-    
     // 常見的縣市後綴
     const countySuffixes = ['市', '縣']
     // 常見的行政區後綴  
@@ -202,7 +369,7 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
         const districtMatch = detailAddress.match(new RegExp(`^([^${suffix}]+${suffix})`))
         if (districtMatch) {
           districtName = districtMatch[1]
-          detailAddress = detailAddress.substring(districtName.length)
+          detailAddress = detailAddress.substring(districtName.length).trim()
           break
         }
       }
@@ -214,15 +381,12 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
       detailAddress: detailAddress.trim()
     }
     
-    console.log('解析結果:', result)
+    console.log('事發地點解析結果:', result)
     return result
-  }, []) // 沒有外部依賴
+  }, [])
 
   /**
-   * 輔助函數：從縣市名稱找到對應的 County ID
-   * @param {string} countyName - 縣市名稱（如：臺北市）
-   * @param {Array} countiesList - 縣市列表
-   * @returns {string} County ID 或空字串
+   * 從縣市名稱找到對應的 County ID
    */
   const findCountyIdByName = useCallback((countyName, countiesList) => {
     if (!countyName || !countiesList || countiesList.length === 0) {
@@ -254,204 +418,194 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
 
     console.log(`找不到對應的縣市: ${countyName}`)
     return ''
-  }, []) // 沒有外部依賴
+  }, [])
 
   /**
-   * 將案件資料轉換為表單可用的格式
-   * 修正案件類別顯示問題 + 住家縣市顯示問題 + 事發地點顯示問題 + 純描述內容提取
+   * 從行政區名稱找到對應的 District ID
+   */
+  const findDistrictIdByName = useCallback((districtName, countyId, districts) => {
+    if (!districtName || !countyId || !districts || districts.length === 0) {
+      return ''
+    }
+
+    console.log('尋找行政區 ID:', { districtName, countyId, availableDistricts: districts.map(d => d.name) })
+    
+    // 找到對應的行政區
+    const district = districts.find(d => d.name === districtName)
+    if (district) {
+      console.log(`找到行政區: ${districtName} -> ID: ${district.id}`)
+      return district.id
+    }
+
+    console.log(`找不到對應的行政區: ${districtName}`)
+    return ''
+  }, [])
+
+  /**
+   * 改善的 prepareEditData 函數（包含地址解析）
    */
   const prepareEditData = useCallback((caseData) => {
-    try {
-      console.log('=== 開始準備編輯資料 ===')
-      console.log('原始案件資料:', caseData)
+    console.log('=== 開始準備編輯資料 ===')
+    console.log('原始案件資料:', caseData)
 
-      // 提取各種元數據
-      const fullIncidentLocation = CaseService.extractIncidentLocation(caseData.description) || ''
-      const caseNumber = CaseService.extractCaseNumber(caseData.description) || ''
-      
-      // **新增：提取純描述內容**
-      const pureDescription = CaseService.extractPureDescription(caseData.description) || ''
-      
-      // **新增：提取時間資訊（優先使用 description 中的資料）**
-      const receivedDateTime = CaseService.extractReceivedDateTime(caseData.description)
-      const closedDateTime = CaseService.extractClosedDateTime(caseData.description)
-      
-      // **新增：提取通知設定**
-      const notificationSettings = CaseService.extractNotificationSettings(caseData.description)
-      
-      console.log('提取的特殊欄位:', { 
-        fullIncidentLocation, 
-        caseNumber, 
-        pureDescription,
-        receivedDateTime,
-        closedDateTime,
-        notificationSettings
+    try {
+      // === 檢查關聯資料完整性 ===
+      const voterCases = caseData.VoterCase || []
+      const categories = caseData.CategoryCase || []
+      const acceptance = caseData.AcceptanceCase || []
+      const inCharge = caseData.InChargeCase || []
+
+      console.log('關聯資料檢查:', {
+        voterCases: voterCases.length,
+        categories: categories.length,
+        acceptance: acceptance.length,
+        inCharge: inCharge.length,
+        note: 'AcceptanceCase 為空是正常情況（早期案件）'
       })
 
-      // === 解析事發地點 ===
-      const incidentLocationInfo = parseIncidentLocation(fullIncidentLocation)
-      console.log('事發地點解析結果:', incidentLocationInfo)
-
-      // === 提取聯絡人資料和住家縣市 ===
-      const voterCases = caseData.VoterCase || []
-      console.log('VoterCase 資料:', voterCases)
-      
-      let contactPerson = {}
-      let voterCountyName = ''
+      // === 安全地提取聯絡人資料和解析住家地址 ===
+      let contact1Data = { name: '', phone: '' }
+      let contact2Data = { name: '', phone: '' }
+      let homeCountyName = ''
+      let homeDistrictName = ''
       
       if (voterCases.length > 0 && voterCases[0].Voter) {
-        contactPerson = voterCases[0].Voter
-        console.log('聯絡人詳細資料:', contactPerson)
-        
-        // 從 Voter 的 address 欄位提取縣市名稱
-        if (contactPerson.address) {
-          voterCountyName = contactPerson.address
-          console.log('從地址提取的縣市名稱:', voterCountyName)
-        }
-      }
-      
-      console.log('聯絡人資料:', contactPerson)
-
-      // 提取承辦人員 (handler)
-      const inChargeCases = caseData.InChargeCase || []
-      console.log('InChargeCase 資料:', inChargeCases)
-      
-      let handler = ''
-      if (inChargeCases.length > 0) {
-        handler = inChargeCases[0].member_id || inChargeCases[0].Member?.id || ''
-      }
-      
-      console.log('承辦人員 ID (handler):', handler)
-
-      // 提取受理人員 (receiver)
-      const acceptanceCases = caseData.AcceptanceCase || []
-      console.log('AcceptanceCase 資料:', acceptanceCases)
-      
-      let receiver = ''
-      if (acceptanceCases.length > 0) {
-        receiver = acceptanceCases[0].member_id || acceptanceCases[0].Member?.id || ''
-      }
-      
-      console.log('受理人員 ID (receiver):', receiver)
-
-      // === 修正案件類別處理邏輯 ===
-      const categoryCases = caseData.CategoryCase || []
-      console.log('CategoryCase 資料:', categoryCases)
-      
-      let category = ''
-      if (categoryCases.length > 0 && categoryCases[0].Category) {
-        const categoryData = categoryCases[0].Category
-        console.log('類別詳細資料:', categoryData)
-        
-        const categoryName = categoryData.name
-        console.log('類別名稱:', categoryName)
-        
-        // 對於 CategoryAutoComplete 組件，我們需要傳遞正確的值
-        // 檢查是否為系統預設類別
-        const defaultCategoryIds = {
-          '交通問題': 'traffic',
-          '環境問題': 'environment', 
-          '治安問題': 'security',
-          '民生服務': 'public_service',
-          '法律諮詢': 'legal_consultation'
+        contact1Data = {
+          name: voterCases[0].Voter.name || '',
+          phone: voterCases[0].Voter.phone || ''
         }
         
-        if (defaultCategoryIds[categoryName]) {
-          // 如果是預設類別，使用預設 ID（讓 CategoryAutoComplete 能正確識別和顯示）
-          category = defaultCategoryIds[categoryName]
-          console.log('識別為預設類別，使用預設 ID:', category)
-        } else {
-          // 如果是自定義類別，直接使用類別名稱（CategoryAutoComplete 會正確處理）
-          category = categoryName
-          console.log('識別為自定義類別，使用類別名稱:', category)
+        // 解析住家地址
+        if (voterCases[0].Voter.address) {
+          const homeAddressInfo = parseVoterAddress(voterCases[0].Voter.address)
+          homeCountyName = homeAddressInfo.countyName
+          homeDistrictName = homeAddressInfo.districtName
+          console.log('住家地址解析:', { 
+            原始地址: voterCases[0].Voter.address,
+            解析結果: { homeCountyName, homeDistrictName }
+          })
         }
-      }
-      
-      console.log('最終案件類別值 (category):', category)
-
-      // **修改：處理受理時間，優先使用從 description 提取的時間**
-      let receivedDate = receivedDateTime.date
-      let receivedTime = receivedDateTime.time
-      
-      // 如果 description 中沒有受理時間，則使用 start_date 作為備選
-      if (!receivedDate && caseData.start_date) {
-        const startDate = new Date(caseData.start_date)
-        receivedDate = startDate.toISOString().split('T')[0]
-        receivedTime = startDate.toTimeString().split(' ')[0].substring(0, 5)
-        console.log('從 start_date 轉換的時間:', { receivedDate, receivedTime })
-      } else if (!receivedDate && caseData.created_at) {
-        // 如果都沒有，最後使用 created_at
-        const createdAt = new Date(caseData.created_at)
-        receivedDate = createdAt.toISOString().split('T')[0]
-        receivedTime = createdAt.toTimeString().split(' ')[0].substring(0, 5)
-        console.log('從 created_at 轉換的時間:', { receivedDate, receivedTime })
+        
+        console.log('✅ 找到聯絡人1:', contact1Data.name)
+      } else {
+        console.warn('⚠️ 聯絡人1資料缺失')
       }
 
-      // **新增：處理結案時間，優先使用從 description 提取的時間**
-      let closedDate = closedDateTime.date
-      let closedTime = closedDateTime.time
-      
-      // 如果 description 中沒有結案時間，則使用 end_date 作為備選
-      if (!closedDate && caseData.end_date) {
-        const endDate = new Date(caseData.end_date)
-        closedDate = endDate.toISOString().split('T')[0]
-        closedTime = endDate.toTimeString().split(' ')[0].substring(0, 5)
-        console.log('從 end_date 轉換的時間:', { closedDate, closedTime })
+      if (voterCases.length > 1 && voterCases[1].Voter) {
+        contact2Data = {
+          name: voterCases[1].Voter.name || '',
+          phone: voterCases[1].Voter.phone || ''
+        }
+        console.log('✅ 找到聯絡人2:', contact2Data.name)
       }
 
-      // 格式化為表單資料 - 確保欄位名稱與 FormSections 組件完全匹配
+      // === 安全地提取其他資料 ===
+      const categoryId = categories.length > 0 && categories[0].Category ? 
+        categories[0].Category.id : ''
+      
+      const receiverId = acceptance.length > 0 && acceptance[0].Member ? 
+        acceptance[0].Member.id : ''
+      
+      const handlerId = inCharge.length > 0 && inCharge[0].Member ? 
+        inCharge[0].Member.id : ''
+
+      // === 提取和解析事發地點資訊 ===
+      const pureDescription = CaseService.extractPureDescription(caseData.description) || ''
+      const incidentLocationString = CaseService.extractIncidentLocation(caseData.description) || ''
+      const incidentLocationInfo = parseIncidentLocation(incidentLocationString)
+
+      // === 構建完整的表單資料 ===
       const formData = {
-        // === BasicInfoSection 欄位 ===
-        caseNumber: caseNumber,                                    // 案件編號（只讀）
-        contactMethod: caseData.contact_type || 'phone',          // 陳情方式
-        receivedDate: receivedDate,                               // 受理日期
-        receivedTime: receivedTime,                               // 受理時間
-        closedDate: closedDate,                                   // 結案日期
-        closedTime: closedTime,                                   // 結案時間
-        receiver: receiver,                                       // 受理人員
-        handler: handler,                                         // 承辦人員
-        category: category,                                       // 案件類別（修正後的邏輯）
-        homeCounty: '',                                          // 住家縣市（稍後處理）
-        homeDistrict: '',                                        // 住家行政區（暫時不處理）
-        priority: caseData.priority || 'normal',                 // 優先等級
-        hasAttachment: 'none',                                   // 是否有附件（預設無）
-        
-        // === ContactInfoSection 欄位 ===
-        contact1Name: contactPerson.name || '',                  // 聯絡人1
-        contact1Phone: contactPerson.phone || '',                // 電話1
-        contact2Name: '',                                        // 聯絡人2（通常為空）
-        contact2Phone: '',                                       // 電話2（通常為空）
-        
-        // === CaseContentSection 欄位 ===
-        title: caseData.title || '',                            // 案件標題
-        description: pureDescription,                           // **修改：使用純描述內容**
-        incidentCounty: '',                                      // 事發縣市（稍後處理）
-        incidentDistrict: '',                                    // 事發行政區（暫時空白，因為沒有 District 資料）
-        incidentLocation: incidentLocationInfo.detailAddress,    // 事發地點詳細地址（解析後的結果）
-        
-        // === NotificationSection 欄位 ===
-        notificationMethod: notificationSettings.method || caseData.contact_type || 'phone', // **修改：優先使用提取的通知方式**
+        // 基本資訊（從 Case 表，相對安全）
+        title: caseData.title || '',
+        description: pureDescription,
+        priority: caseData.priority || 'normal',
+        contactMethod: caseData.contact_type || 'phone',
+        processingStatus: caseData.status || 'pending',
+
+        // 聯絡人資訊
+        contact1Name: contact1Data.name,
+        contact1Phone: contact1Data.phone,
+        contact2Name: contact2Data.name,
+        contact2Phone: contact2Data.phone,
+
+        // 案件分工
+        receiver: receiverId,
+        handler: handlerId,
+        category: categoryId,
+
+        // 地點資訊（初始為空，稍後由 useEffect 處理）
+        homeCounty: '',      
+        homeDistrict: '',    
+        incidentCounty: '',      
+        incidentDistrict: '',    
+        incidentLocation: incidentLocationInfo.detailAddress,
+
+        // 時間資訊
+        receivedDate: caseData.start_date ? caseData.start_date.split('T')[0] : '',
+        receivedTime: caseData.start_date ? caseData.start_date.split('T')[1]?.substring(0, 5) : '',
+        closedDate: caseData.end_date ? caseData.end_date.split('T')[0] : '',
+        closedTime: caseData.end_date ? caseData.end_date.split('T')[1]?.substring(0, 5) : '',
+
+        // 通知設定
+        notificationMethod: caseData.contact_type || 'phone',
         googleCalendarSync: false,
         sendNotification: false,
-        multipleReminders: notificationSettings.multipleReminders, // **新增：多次提醒設定**
-        reminderDate: notificationSettings.reminderDate,       // **新增：提醒日期**
-        
-        // === 內部使用的輔助欄位 ===
-        _voterCountyName: voterCountyName,                       // 暫存住家縣市名稱
-        _incidentCountyName: incidentLocationInfo.countyName,    // 暫存事發縣市名稱
-        _incidentDistrictName: incidentLocationInfo.districtName // 暫存事發行政區名稱（目前不用）
+
+        // === 內部使用的輔助欄位（用於後續的 ID 轉換）===
+        _homeCountyName: homeCountyName,
+        _homeDistrictName: homeDistrictName,
+        _incidentCountyName: incidentLocationInfo.countyName,
+        _incidentDistrictName: incidentLocationInfo.districtName
       }
 
-      console.log('=== 最終格式化的表單資料 ===')
-      console.log(formData)
-
+      console.log('✅ 表單資料準備完成，欄位數量:', Object.keys(formData).length)
+      console.log('地址相關資訊:', {
+        homeCountyName,
+        homeDistrictName,
+        incidentCountyName: incidentLocationInfo.countyName,
+        incidentDistrictName: incidentLocationInfo.districtName,
+        incidentLocation: incidentLocationInfo.detailAddress
+      })
+      
       return formData
+
     } catch (error) {
-      console.error('準備編輯資料時發生錯誤:', error)
-      console.error('錯誤堆疊:', error.stack)
-      return {}
+      console.error('❌ 準備編輯資料時發生錯誤:', error)
+      
+      // 回傳最基本的可用表單結構
+      return {
+        title: caseData?.title || '',
+        description: '',
+        contact1Name: '',
+        contact1Phone: '',
+        contact2Name: '',
+        contact2Phone: '',
+        priority: 'normal',
+        contactMethod: 'phone',
+        processingStatus: 'pending',
+        receiver: '',
+        handler: '',
+        category: '',
+        homeCounty: '',
+        homeDistrict: '',
+        incidentCounty: '',
+        incidentDistrict: '',
+        incidentLocation: '',
+        receivedDate: '',
+        receivedTime: '',
+        closedDate: '',
+        closedTime: '',
+        notificationMethod: 'phone',
+        googleCalendarSync: false,
+        sendNotification: false,
+        _homeCountyName: '',
+        _homeDistrictName: '',
+        _incidentCountyName: '',
+        _incidentDistrictName: ''
+      }
     }
-  }, [parseIncidentLocation]) // parseIncidentLocation 是依賴
+  }, [parseVoterAddress, parseIncidentLocation])
 
   // 載入縣市資料
   useEffect(() => {
@@ -472,64 +626,152 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
   // 當彈窗開啟時，準備編輯資料
   useEffect(() => {
     if (isOpen && caseData) {
-      console.log('=== CaseEditModal 準備編輯資料 ===')
-      console.log('原始案件資料:', caseData)
+      setDataLoadingState('loading')
+      setError('')
       
-      const editData = prepareEditData(caseData)
-      console.log('處理後的編輯資料:', editData)
-      
-      setOriginalData(editData)
-      setCurrentFormData(editData)
+      try {
+        console.log('=== CaseEditModal 準備編輯資料 ===')
+        console.log('原始案件資料:', caseData)
+        
+        const editData = prepareEditData(caseData)
+        console.log('處理後的編輯資料:', editData)
+        
+        // 檢查基本資料是否成功載入
+        if (!editData.title && !caseData.title) {
+          throw new Error('案件基本資料異常')
+        }
+        
+        setOriginalData(editData)
+        setCurrentFormData(editData)
+        setDataLoadingState('success')
+        setHasChanges(false)
+        
+      } catch (error) {
+        console.error('載入編輯資料失敗:', error)
+        setDataLoadingState('error')
+        setError('載入編輯資料失敗，請重新開啟編輯視窗')
+      }
+    } else {
+      setDataLoadingState('idle')
+      // 重置所有狀態
+      setOriginalData(null)
+      setCurrentFormData(null)
       setHasChanges(false)
       setError('')
     }
-  }, [isOpen, caseData, prepareEditData]) // 加入 prepareEditData 依賴
+  }, [isOpen, caseData, prepareEditData])
 
-  // 當表單資料和縣市資料都準備好時，處理住家縣市和事發縣市顯示
+  // 當表單資料和縣市資料都準備好時，處理縣市和行政區的 ID 轉換
   useEffect(() => {
-    if (currentFormData && counties && counties.length > 0) {
-      let needsUpdate = false
-      const updatedFormData = { ...currentFormData }
-      const updatedOriginalData = { ...originalData }
-      
-      // === 處理住家縣市 ===
-      if (currentFormData._voterCountyName && !currentFormData.homeCounty) {
-        console.log('=== 處理住家縣市顯示 ===')
-        console.log('要查找的住家縣市名稱:', currentFormData._voterCountyName)
+    const loadDistrictsAndSetValues = async () => {
+      if (currentFormData && counties && counties.length > 0 && dataLoadingState === 'success') {
+        console.log('=== 開始處理縣市和行政區的 ID 轉換 ===')
         
-        const homeCountyId = findCountyIdByName(currentFormData._voterCountyName, counties)
+        let needsUpdate = false
+        const updatedFormData = { ...currentFormData }
+        const updatedOriginalData = { ...originalData }
         
-        if (homeCountyId) {
-          console.log('更新 homeCounty:', homeCountyId)
-          updatedFormData.homeCounty = homeCountyId
-          updatedOriginalData.homeCounty = homeCountyId
-          needsUpdate = true
+        // === 處理住家縣市和行政區 ===
+        if (currentFormData._homeCountyName && !currentFormData.homeCounty) {
+          console.log('=== 處理住家縣市和行政區 ===')
+          console.log('要查找的住家縣市名稱:', currentFormData._homeCountyName)
+          
+          const homeCountyId = findCountyIdByName(currentFormData._homeCountyName, counties)
+          
+          if (homeCountyId) {
+            console.log('更新 homeCounty:', homeCountyId)
+            updatedFormData.homeCounty = homeCountyId
+            updatedOriginalData.homeCounty = homeCountyId
+            needsUpdate = true
+            
+            // 如果也有住家行政區名稱，載入行政區列表並設定值
+            if (currentFormData._homeDistrictName) {
+              try {
+                console.log('載入住家行政區列表...')
+                const homeDistrictsResult = await CaseService.getDistricts(homeCountyId)
+                
+                if (homeDistrictsResult.success && homeDistrictsResult.data.length > 0) {
+                  console.log('住家行政區載入成功:', homeDistrictsResult.data.length, '筆')
+                  
+                  // 查找對應的行政區 ID
+                  const homeDistrictId = findDistrictIdByName(
+                    currentFormData._homeDistrictName, 
+                    homeCountyId, 
+                    homeDistrictsResult.data
+                  )
+                  
+                  if (homeDistrictId) {
+                    console.log('更新 homeDistrict:', homeDistrictId)
+                    updatedFormData.homeDistrict = homeDistrictId
+                    updatedOriginalData.homeDistrict = homeDistrictId
+                  }
+                } else {
+                  console.warn('住家行政區載入失敗或無資料:', homeDistrictsResult.error)
+                }
+              } catch (error) {
+                console.warn('載入住家行政區異常:', error)
+              }
+            }
+          }
         }
-      }
-      
-      // === 處理事發縣市 ===
-      if (currentFormData._incidentCountyName && !currentFormData.incidentCounty) {
-        console.log('=== 處理事發縣市顯示 ===')
-        console.log('要查找的事發縣市名稱:', currentFormData._incidentCountyName)
         
-        const incidentCountyId = findCountyIdByName(currentFormData._incidentCountyName, counties)
-        
-        if (incidentCountyId) {
-          console.log('更新 incidentCounty:', incidentCountyId)
-          updatedFormData.incidentCounty = incidentCountyId
-          updatedOriginalData.incidentCounty = incidentCountyId
-          needsUpdate = true
+        // === 處理事發縣市和行政區 ===
+        if (currentFormData._incidentCountyName && !currentFormData.incidentCounty) {
+          console.log('=== 處理事發縣市和行政區 ===')
+          console.log('要查找的事發縣市名稱:', currentFormData._incidentCountyName)
+          
+          const incidentCountyId = findCountyIdByName(currentFormData._incidentCountyName, counties)
+          
+          if (incidentCountyId) {
+            console.log('更新 incidentCounty:', incidentCountyId)
+            updatedFormData.incidentCounty = incidentCountyId
+            updatedOriginalData.incidentCounty = incidentCountyId
+            needsUpdate = true
+            
+            // 如果也有事發地點行政區名稱，載入行政區列表並設定值
+            if (currentFormData._incidentDistrictName) {
+              try {
+                console.log('載入事發地點行政區列表...')
+                const incidentDistrictsResult = await CaseService.getDistricts(incidentCountyId)
+                
+                if (incidentDistrictsResult.success && incidentDistrictsResult.data.length > 0) {
+                  console.log('事發地點行政區載入成功:', incidentDistrictsResult.data.length, '筆')
+                  
+                  // 查找對應的行政區 ID
+                  const incidentDistrictId = findDistrictIdByName(
+                    currentFormData._incidentDistrictName,
+                    incidentCountyId,
+                    incidentDistrictsResult.data
+                  )
+                  
+                  if (incidentDistrictId) {
+                    console.log('更新 incidentDistrict:', incidentDistrictId)
+                    updatedFormData.incidentDistrict = incidentDistrictId
+                    updatedOriginalData.incidentDistrict = incidentDistrictId
+                  }
+                } else {
+                  console.warn('事發地點行政區載入失敗或無資料:', incidentDistrictsResult.error)
+                }
+              } catch (error) {
+                console.warn('載入事發地點行政區異常:', error)
+              }
+            }
+          }
         }
-      }
-      
-      // 一次性更新所有變更
-      if (needsUpdate) {
-        console.log('更新表單資料:', updatedFormData)
-        setCurrentFormData(updatedFormData)
-        setOriginalData(updatedOriginalData)
+        
+        // 一次性更新所有變更
+        if (needsUpdate) {
+          console.log('更新表單資料和原始資料')
+          setCurrentFormData(updatedFormData)
+          setOriginalData(updatedOriginalData)
+        }
+        
+        console.log('=== 縣市和行政區 ID 轉換完成 ===')
       }
     }
-  }, [currentFormData, counties, originalData, findCountyIdByName]) // 加入 findCountyIdByName 依賴
+    
+    loadDistrictsAndSetValues()
+  }, [currentFormData, counties, originalData, dataLoadingState, findCountyIdByName, findDistrictIdByName])
 
   /**
    * 檢查資料是否有變更
@@ -587,14 +829,34 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
   }, [onClose])
 
   /**
-   * 儲存案件修改
+   * 改善的儲存案件修改函數
    */
   const handleSave = useCallback(async (formData) => {
-    if (!originalData || !team?.id) {
-      setError('缺少必要資料，無法儲存')
+    // === 第一層：系統環境檢查 ===
+    if (!team?.id || !caseData?.id) {
+      setError('系統錯誤，請重新載入頁面')
       return
     }
 
+    // === 第二層：資料載入狀態檢查 ===  
+    if (!originalData) {
+      setError('資料尚未載入完成，請稍候再試')
+      return
+    }
+    
+    if (Object.keys(originalData).length === 0) {
+      setError('資料載入異常，請關閉編輯視窗重新開啟')
+      return
+    }
+
+    // === 第三層：表單內容驗證 ===
+    const validation = validateFormFields(formData)
+    if (!validation.valid) {
+      setError(validation.message)
+      return
+    }
+
+    // === 執行提交 ===
     setSaving(true)
     setError('')
 
@@ -687,14 +949,37 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
 
           {/* 錯誤訊息 */}
           {error && (
-            <div className="case-edit-modal-error">
-              ❌ {error}
+            <div className={`case-edit-modal-error ${getErrorSeverity(error)}`}>
+              {getErrorSeverity(error) === 'critical' && '🚨 '}
+              {getErrorSeverity(error) === 'warning' && '⚠️ '}
+              {getErrorSeverity(error) === 'normal' && '❌ '}
+              {error}
             </div>
           )}
 
           {/* 表單內容 */}
           <div className="case-edit-modal-content">
-            {currentFormData ? (
+            {dataLoadingState === 'loading' && (
+              <div className="case-edit-modal-loading">
+                <div style={{ fontSize: '1.2rem', marginBottom: '8px' }}>⏳</div>
+                載入中...
+              </div>
+            )}
+
+            {dataLoadingState === 'error' && (
+              <div className="case-edit-modal-error-state">
+                <div style={{ fontSize: '1.2rem', marginBottom: '8px' }}>❌</div>
+                <p>資料載入失敗</p>
+                <button 
+                  onClick={() => window.location.reload()} 
+                  className="retry-btn"
+                >
+                  重新載入頁面
+                </button>
+              </div>
+            )}
+
+            {dataLoadingState === 'success' && currentFormData && (
               <EditableCaseForm
                 team={team}
                 initialData={currentFormData}
@@ -703,11 +988,8 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
                 onCancel={handleCloseModal}
                 isSubmitting={saving}
                 hasChanges={hasChanges}
+                dataLoadingState={dataLoadingState}
               />
-            ) : (
-              <div className="case-edit-modal-loading">
-                載入中...
-              </div>
             )}
           </div>
         </div>
