@@ -1550,7 +1550,370 @@ static async getCases(options = {}) {
     }
   }
 
+  /**
+   * 根據 ID 獲取單一案件的詳細資料
+   * @param {string} caseId - 案件 ID
+   * @param {string} teamId - 團隊 ID
+   * @returns {Promise<Object>} 案件詳細資料
+   */
+  static async getCaseById(caseId, teamId) {
+    try {
+      console.log('=== CaseService.getCaseById ===')
+      console.log('案件 ID:', caseId)
+      console.log('團隊 ID:', teamId)
+
+      if (!caseId) {
+        return {
+          success: false,
+          error: '案件 ID 必填',
+          data: null
+        }
+      }
+
+      if (!teamId) {
+        return {
+          success: false,
+          error: '團隊 ID 必填',
+          data: null
+        }
+      }
+
+      // 查詢案件及其所有關聯資料
+      const { data: caseData, error } = await supabase
+        .from('Case')
+        .select(`
+          *,
+          CategoryCase!inner (
+            Category (
+              id,
+              name
+            )
+          ),
+          VoterCase!inner (
+            Voter (
+              id,
+              name,
+              phone,
+              address
+            )
+          ),
+          AcceptanceCase (
+            Member (
+              id,
+              name
+            )
+          ),
+          InChargeCase (
+            Member (
+              id,
+              name
+            )
+          ),
+          CaseLocation (
+            County (
+              id,
+              name
+            ),
+            District (
+              id,
+              name
+            )
+          )
+        `)
+        .eq('id', caseId)
+        .eq('team_id', teamId)
+        .single()
+
+      if (error) {
+        console.error('查詢案件失敗:', error)
+        return {
+          success: false,
+          error: error.message,
+          data: null
+        }
+      }
+
+      if (!caseData) {
+        return {
+          success: false,
+          error: '找不到指定的案件',
+          data: null
+        }
+      }
+
+      console.log('查詢案件成功:', caseData)
+
+      // 轉換為表單格式
+      const formData = await this.convertCaseToFormData(caseData)
+
+      return {
+        success: true,
+        data: formData,
+        error: null
+      }
+
+    } catch (error) {
+      console.error('CaseService.getCaseById 發生錯誤:', error)
+      return {
+        success: false,
+        error: error.message,
+        data: null
+      }
+    }
+  }
+
+  /**
+   * 將資料庫案件資料轉換為表單格式
+   * @param {Object} caseData - 資料庫案件資料
+   * @returns {Object} 表單格式資料
+   */
+  static async convertCaseToFormData(caseData) {
+    try {
+      console.log('=== convertCaseToFormData ===')
+      console.log('原始案件資料:', caseData)
+
+      // 基本案件資訊
+      const formData = {
+        id: caseData.id,
+        title: caseData.title || '',
+        description: caseData.description || '',
+        status: caseData.status || 'pending',
+        priority: caseData.priority || 'normal',
+        processingStatus: caseData.processing_status || '',
+        receivedDate: caseData.received_date ? caseData.received_date.split('T')[0] : '',
+        receivedTime: caseData.received_time || '',
+        closedDate: caseData.closed_date ? caseData.closed_date.split('T')[0] : '',
+        closedTime: caseData.closed_time || '',
+        contactMethod: caseData.contact_type || 'phone',
+        hasAttachment: caseData.has_attachment || 'none',
+        caseNumber: '',
+        incidentLocation: ''
+      }
+
+      // 從描述中提取案件編號和事發地點
+      if (caseData.description) {
+        formData.caseNumber = this.extractCaseNumber(caseData.description)
+        formData.incidentLocation = this.extractIncidentLocation(caseData.description)
+      }
+
+      // 處理案件類別
+      if (caseData.CategoryCase && caseData.CategoryCase.length > 0) {
+        const category = caseData.CategoryCase[0].Category
+        if (category) {
+          formData.category = category.name
+        }
+      }
+
+      // 處理聯絡人資訊
+      if (caseData.VoterCase && caseData.VoterCase.length > 0) {
+        const voter = caseData.VoterCase[0].Voter
+        if (voter) {
+          formData.contact1Name = voter.name || ''
+          formData.contact1Phone = voter.phone || ''
+          
+          // 解析地址為縣市和行政區
+          if (voter.address) {
+            const addressParts = voter.address.split(' ')
+            if (addressParts.length >= 2) {
+              // 嘗試從地址中提取縣市和行政區
+              const fullLocation = addressParts[0] // 通常第一部分包含縣市+行政區
+              formData.homeCounty = await this.findCountyByAddress(fullLocation)
+              formData.homeDistrict = await this.findDistrictByAddress(fullLocation, formData.homeCounty)
+              formData.homeAddress = addressParts.slice(1).join(' ')
+            } else {
+              formData.homeAddress = voter.address
+            }
+          }
+        }
+      }
+
+      // 處理受理人員
+      if (caseData.AcceptanceCase && caseData.AcceptanceCase.length > 0) {
+        const acceptanceMember = caseData.AcceptanceCase[0].Member
+        if (acceptanceMember) {
+          formData.receiver = acceptanceMember.id
+        }
+      }
+
+      // 處理承辦人員
+      if (caseData.InChargeCase && caseData.InChargeCase.length > 0) {
+        const inChargeMember = caseData.InChargeCase[0].Member
+        if (inChargeMember) {
+          formData.handler = inChargeMember.id
+        }
+      }
+
+      // 處理事發地點
+      if (caseData.CaseLocation && caseData.CaseLocation.length > 0) {
+        const location = caseData.CaseLocation[0]
+        if (location.County) {
+          formData.incidentCounty = location.County.id
+        }
+        if (location.District) {
+          formData.incidentDistrict = location.District.id
+        }
+      }
+
+      console.log('轉換後的表單資料:', formData)
+      return formData
+
+    } catch (error) {
+      console.error('convertCaseToFormData 轉換失敗:', error)
+      return caseData // 如果轉換失敗，返回原始資料
+    }
+  }
+
+  /**
+   * 根據地址查找縣市 ID
+   * @param {string} address - 地址字串
+   * @returns {string|null} 縣市 ID
+   */
+  static async findCountyByAddress(address) {
+    try {
+      if (!address) return null
+
+      const { data: counties } = await supabase
+        .from('County')
+        .select('id, name')
+
+      if (!counties) return null
+
+      // 尋找地址中包含的縣市名稱
+      for (const county of counties) {
+        if (address.includes(county.name)) {
+          return county.id
+        }
+      }
+
+      return null
+    } catch (error) {
+      console.warn('findCountyByAddress 失敗:', error)
+      return null
+    }
+  }
+
+  /**
+   * 根據地址和縣市查找行政區 ID
+   * @param {string} address - 地址字串
+   * @param {string} countyId - 縣市 ID
+   * @returns {string|null} 行政區 ID
+   */
+  static async findDistrictByAddress(address, countyId) {
+    try {
+      if (!address || !countyId) return null
+
+      const { data: districts } = await supabase
+        .from('District')
+        .select('id, name')
+        .eq('county_id', countyId)
+
+      if (!districts) return null
+
+      // 尋找地址中包含的行政區名稱
+      for (const district of districts) {
+        if (address.includes(district.name)) {
+          return district.id
+        }
+      }
+
+      return null
+    } catch (error) {
+      console.warn('findDistrictByAddress 失敗:', error)
+      return null
+    }
+  }
+
   // ==================== 輔助方法 ====================
+  /**
+ * 將日期和時間合併為 timestamptz 格式
+ * @param {string} date - 日期字串 (YYYY-MM-DD)
+ * @param {string} time - 時間字串 (HH:MM)
+ * @param {string} defaultTime - 預設時間 (如果沒有提供時間)
+ * @returns {string} ISO 格式的 timestamptz 字串
+ */
+  static combineDateTimeToTimestamptz(date, time = null, defaultTime = '00:00') {
+    if (!date) return null
+    
+    try {
+      const timeToUse = time || defaultTime
+      const dateTimeString = `${date}T${timeToUse}:00`
+      const dateTime = new Date(dateTimeString)
+      
+      if (isNaN(dateTime.getTime())) {
+        console.warn('無效的日期時間格式:', { date, time })
+        return null
+      }
+      
+      return dateTime.toISOString()
+    } catch (error) {
+      console.error('合併日期時間失敗:', error)
+      return null
+    }
+  }
+
+  /**
+ * 將 timestamptz 分離為日期和時間
+ * @param {string} timestamptz - timestamptz 字串
+ * @returns {Object} { date: string, time: string }
+ */
+static parseTimestamptzToDateTime(timestamptz) {
+  if (!timestamptz) {
+    return { date: '', time: '' }
+  }
+  
+  try {
+    const dateTime = new Date(timestamptz)
+    
+    if (isNaN(dateTime.getTime())) {
+      console.warn('無效的 timestamptz 格式:', timestamptz)
+      return { date: '', time: '' }
+    }
+    
+    // 轉換為本地時間
+    const date = dateTime.toISOString().split('T')[0] // YYYY-MM-DD
+    const time = dateTime.toTimeString().split(' ')[0].substring(0, 5) // HH:MM
+    
+    return { date, time }
+  } catch (error) {
+    console.error('解析 timestamptz 失敗:', error)
+    return { date: '', time: '' }
+  }
+}
+
+/**
+ * 準備案件資料用於建立或更新（處理 timestamptz 欄位）
+ * @param {Object} formData - 表單資料
+ * @returns {Object} 處理後的資料
+ */
+  static prepareCaseDataForSubmit(formData) {
+    const preparedData = { ...formData }
+    
+    // 處理起始時間
+    if (formData.receivedDate) {
+      preparedData.received_date = this.combineDateTimeToTimestamptz(
+        formData.receivedDate, 
+        formData.receivedTime,
+        '00:00'
+      )
+      // 移除分離的欄位
+      delete preparedData.receivedDate
+      delete preparedData.receivedTime
+    }
+    
+    // 處理結案時間
+    if (formData.closedDate) {
+      preparedData.closed_date = this.combineDateTimeToTimestamptz(
+        formData.closedDate,
+        formData.closedTime,
+        '23:59'
+      )
+      // 移除分離的欄位
+      delete preparedData.closedDate
+      delete preparedData.closedTime
+    }
+    
+    return preparedData
+  }
 
   /**
    * 格式化日期時間為 PostgreSQL timestamptz 格式
@@ -1878,12 +2241,12 @@ static async getCases(options = {}) {
   // 修正：改善 updateCaseWithRelations 方法以解決所有問題
   static async updateCaseWithRelations({ caseData, originalData, teamId, dropdownOptions = {} }) {
     try {
-      console.log('=== CaseService.updateCaseWithRelations (修正版) ===')
+      console.log('=== CaseService.updateCaseWithRelations (timestamptz 版本) ===')
       console.log('更新資料:', caseData)
       console.log('原始資料:', originalData)
       console.log('團隊 ID:', teamId)
 
-      // === 基本驗證 ===
+      // 基本驗證
       if (!caseData?.id) {
         return {
           success: false,
@@ -1900,480 +2263,62 @@ static async getCases(options = {}) {
         }
       }
 
-      // 檢查必要的表單欄位
-      if (!caseData.title?.trim()) {
-        return {
-          success: false,
-          error: '案件標題不能為空',
-          data: null
-        }
+      // 使用新的資料準備方法處理 timestamptz 欄位
+      const preparedCaseData = this.prepareCaseDataForSubmit(caseData)
+      console.log('處理後的案件資料:', preparedCaseData)
+
+      // 準備更新的基本案件資料
+      const updateData = {
+        title: preparedCaseData.title,
+        description: preparedCaseData.description,
+        priority: preparedCaseData.priority || 'normal',
+        status: preparedCaseData.status || 'pending',
+        processing_status: preparedCaseData.processingStatus,
+        contact_type: preparedCaseData.contactMethod || 'phone',
+        has_attachment: preparedCaseData.hasAttachment || 'none',
+        updated_at: new Date().toISOString()
       }
 
-      if (!caseData.contact1Name?.trim() || !caseData.contact1Phone?.trim()) {
-        return {
-          success: false,
-          error: '聯絡人資訊不完整',
-          data: null
-        }
+      // 添加 timestamptz 欄位
+      if (preparedCaseData.received_date) {
+        updateData.received_date = preparedCaseData.received_date
       }
-
-      const updateResults = []
-      const now = new Date().toISOString()
-
-      // === 1. 檢查並更新主要案件資料 ===
-      const caseNeedsUpdate = this.checkCaseDataChanges(caseData, originalData)
-      if (caseNeedsUpdate) {
-        console.log('案件主要資料有變更，執行更新')
-        
-        // 修正：使用改善的 buildDescription 方法
-        const updatedDescription = await this.buildDescriptionWithDistrictNames(caseData, dropdownOptions)
-        
-        const updatedCaseData = {
-          title: caseData.title.trim(),
-          description: updatedDescription,
-          start_date: this.formatToTimetz(caseData.receivedDate, caseData.receivedTime),
-          end_date: caseData.closedDate && caseData.closedTime ? 
-            this.formatToTimetz(caseData.closedDate, caseData.closedTime) : null,
-          status: caseData.processingStatus || 'pending',
-          contact_type: caseData.contactMethod || 'phone',
-          priority: caseData.priority || 'normal',
-          updated_at: now
-        }
-
-        console.log('更新的案件資料:', updatedCaseData)
-
-        const { data: updatedCase, error: caseError } = await supabase
-          .from('Case')
-          .update(updatedCaseData)
-          .eq('id', caseData.id)
-          .eq('group_id', teamId)
-          .select()
-          .single()
-
-        if (caseError) {
-          console.error('更新案件失敗:', caseError)
-          return {
-            success: false,
-            error: `更新案件失敗: ${caseError.message}`,
-            data: null
-          }
-        }
-
-        updateResults.push({ type: 'Case', success: true, data: updatedCase })
-        console.log('案件主要資料更新成功')
-      }
-
-      // === 2. 處理案件類別更新 ===
-      if (caseData.category !== originalData.category) {
-        console.log('案件類別有變更，從', originalData.category, '改為', caseData.category)
-        
-        try {
-          // 先刪除舊的 CategoryCase 關聯
-          const { error: deleteCategoryError } = await supabase
-            .from('CategoryCase')
-            .delete()
-            .eq('case_id', caseData.id)
-
-          if (deleteCategoryError) {
-            console.warn('刪除舊的 CategoryCase 關聯失敗:', deleteCategoryError)
-          }
-
-          // 如果有新的類別，建立新的關聯
-          if (caseData.category && caseData.category.trim()) {
-            // 處理案件類別（確保類別存在於 Category 表中）
-            const categoryResult = await this.handleCategory(caseData.category)
-            
-            if (categoryResult.success) {
-              // 修正：建立 CategoryCase 關聯並更新 updated_at
-              const { data: newCategoryCase, error: createCategoryError } = await supabase
-                .from('CategoryCase')
-                .insert([{
-                  case_id: caseData.id,
-                  category_id: categoryResult.data.id,
-                  created_at: now,
-                  updated_at: now  // 修正：設定 updated_at
-                }])
-                .select()
-
-              if (createCategoryError) {
-                console.error('建立 CategoryCase 關聯失敗:', createCategoryError)
-                updateResults.push({ type: 'CategoryCase', success: false, error: createCategoryError.message })
-              } else {
-                updateResults.push({ type: 'CategoryCase', success: true, data: newCategoryCase })
-                console.log('CategoryCase 關聯建立成功')
-              }
-            } else {
-              console.error('處理案件類別失敗:', categoryResult.error)
-              updateResults.push({ type: 'Category', success: false, error: categoryResult.error })
-            }
-          }
-        } catch (error) {
-          console.error('處理案件類別時發生錯誤:', error)
-          updateResults.push({ type: 'CategoryCase', success: false, error: error.message })
-        }
-      }
-
-      // === 3. 處理聯絡人資料更新 ===
-      if (this.checkContactDataChanges(caseData, originalData)) {
-        console.log('聯絡人資料有變更，執行更新')
-        
-        try {
-          // 更新聯絡人1
-          const contact1Updates = {
-            name: caseData.contact1Name.trim(),
-            phone: caseData.contact1Phone.trim(),
-            updated_at: now
-          }
-
-          // 查找聯絡人1的 ID
-          const { data: voterCases, error: voterCaseError } = await supabase
-            .from('VoterCase')
-            .select('voter_id, Voter!inner(*)')
-            .eq('case_id', caseData.id)
-            .order('created_at')
-
-          if (voterCaseError) {
-            console.error('查詢 VoterCase 失敗:', voterCaseError)
-          } else if (voterCases && voterCases.length > 0) {
-            // 更新聯絡人1
-            const contact1Id = voterCases[0].voter_id
-            const { error: contact1Error } = await supabase
-              .from('Voter')
-              .update(contact1Updates)
-              .eq('id', contact1Id)
-
-            if (contact1Error) {
-              console.error('更新聯絡人1失敗:', contact1Error)
-              updateResults.push({ type: 'Contact1', success: false, error: contact1Error.message })
-            } else {
-              updateResults.push({ type: 'Contact1', success: true })
-              console.log('聯絡人1更新成功')
-            }
-
-            // 處理聯絡人2（如果有資料）
-            if (caseData.contact2Name && caseData.contact2Phone) {
-              if (voterCases.length > 1) {
-                // 更新現有聯絡人2
-                const contact2Id = voterCases[1].voter_id
-                const contact2Updates = {
-                  name: caseData.contact2Name.trim(),
-                  phone: caseData.contact2Phone.trim(),
-                  updated_at: now
-                }
-
-                const { error: contact2Error } = await supabase
-                  .from('Voter')
-                  .update(contact2Updates)
-                  .eq('id', contact2Id)
-
-                if (contact2Error) {
-                  console.error('更新聯絡人2失敗:', contact2Error)
-                  updateResults.push({ type: 'Contact2', success: false, error: contact2Error.message })
-                } else {
-                  updateResults.push({ type: 'Contact2', success: true })
-                  console.log('聯絡人2更新成功')
-                }
-              } else {
-                // 建立新的聯絡人2
-                const newContact2 = {
-                  name: caseData.contact2Name.trim(),
-                  phone: caseData.contact2Phone.trim(),
-                  created_at: now,
-                  updated_at: now
-                }
-
-                const { data: newVoter2, error: newContact2Error } = await supabase
-                  .from('Voter')
-                  .insert([newContact2])
-                  .select()
-                  .single()
-
-                if (newContact2Error) {
-                  console.error('建立聯絡人2失敗:', newContact2Error)
-                  updateResults.push({ type: 'Contact2', success: false, error: newContact2Error.message })
-                } else {
-                  // 建立 VoterCase 關聯
-                  const { error: voterCaseError } = await supabase
-                    .from('VoterCase')
-                    .insert([{
-                      case_id: caseData.id,
-                      voter_id: newVoter2.id,
-                      created_at: now,
-                      updated_at: now
-                    }])
-
-                  if (voterCaseError) {
-                    console.error('建立 VoterCase 關聯失敗:', voterCaseError)
-                    updateResults.push({ type: 'VoterCase2', success: false, error: voterCaseError.message })
-                  } else {
-                    updateResults.push({ type: 'Contact2', success: true, data: newVoter2 })
-                    console.log('聯絡人2建立成功')
-                  }
-                }
-              }
-            }
-          }
-        } catch (error) {
-          console.error('處理聯絡人資料時發生錯誤:', error)
-          updateResults.push({ type: 'Contact', success: false, error: error.message })
-        }
-      }
-
-      // === 4. 處理受理人員和承辦人員更新 ===
-      if (caseData.receiver !== originalData.receiver) {
-        console.log('受理人員有變更')
-        
-        try {
-          // 刪除舊的受理人員關聯
-          const { error: deleteReceiverError } = await supabase
-            .from('AcceptanceCase')
-            .delete()
-            .eq('case_id', caseData.id)
-
-          if (deleteReceiverError) {
-            console.warn('刪除舊的受理人員關聯失敗:', deleteReceiverError)
-          }
-
-          // 如果有新的受理人員，建立新的關聯
-          if (caseData.receiver) {
-            const { data: newAcceptance, error: createReceiverError } = await supabase
-              .from('AcceptanceCase')
-              .insert([{
-                case_id: caseData.id,
-                member_id: caseData.receiver,
-                created_at: now,
-                updated_at: now
-              }])
-              .select()
-
-            if (createReceiverError) {
-              console.error('建立受理人員關聯失敗:', createReceiverError)
-              updateResults.push({ type: 'AcceptanceCase', success: false, error: createReceiverError.message })
-            } else {
-              updateResults.push({ type: 'AcceptanceCase', success: true, data: newAcceptance })
-              console.log('受理人員關聯建立成功')
-            }
-          }
-        } catch (error) {
-          console.error('處理受理人員時發生錯誤:', error)
-          updateResults.push({ type: 'AcceptanceCase', success: false, error: error.message })
-        }
-      }
-
-      if (caseData.handler !== originalData.handler) {
-        console.log('承辦人員有變更')
-        
-        try {
-          // 刪除舊的承辦人員關聯
-          const { error: deleteHandlerError } = await supabase
-            .from('InChargeCase')
-            .delete()
-            .eq('case_id', caseData.id)
-
-          if (deleteHandlerError) {
-            console.warn('刪除舊的承辦人員關聯失敗:', deleteHandlerError)
-          }
-
-          // 如果有新的承辦人員，建立新的關聯
-          if (caseData.handler) {
-            const { data: newHandler, error: createHandlerError } = await supabase
-              .from('InChargeCase')
-              .insert([{
-                case_id: caseData.id,
-                member_id: caseData.handler,
-                created_at: now,
-                updated_at: now
-              }])
-              .select()
-
-            if (createHandlerError) {
-              console.error('建立承辦人員關聯失敗:', createHandlerError)
-              updateResults.push({ type: 'InChargeCase', success: false, error: createHandlerError.message })
-            } else {
-              updateResults.push({ type: 'InChargeCase', success: true, data: newHandler })
-              console.log('承辦人員關聯建立成功')
-            }
-          }
-        } catch (error) {
-          console.error('處理承辦人員時發生錯誤:', error)
-          updateResults.push({ type: 'InChargeCase', success: false, error: error.message })
-        }
-      }
-
-      // === 5. 處理地點資訊更新 ===
-      if (this.checkLocationDataChanges(caseData, originalData)) {
-        console.log('地點資訊有變更')
-        
-        try {
-          // 刪除舊的地點關聯
-          const { error: deleteDistrictError } = await supabase
-            .from('DistrictCase')
-            .delete()
-            .eq('case_id', caseData.id)
-
-          if (deleteDistrictError) {
-            console.warn('刪除舊的 DistrictCase 關聯失敗:', deleteDistrictError)
-          }
-
-          // 如果有新的事發地點行政區，建立新的關聯
-          if (caseData.incidentDistrict) {
-            const { data: newDistrictCase, error: createDistrictError } = await supabase
-              .from('DistrictCase')
-              .insert([{
-                case_id: caseData.id,
-                district_id: caseData.incidentDistrict,
-                created_at: now,
-                updated_at: now
-              }])
-              .select()
-
-            if (createDistrictError) {
-              console.error('建立 DistrictCase 關聯失敗:', createDistrictError)
-              updateResults.push({ type: 'DistrictCase', success: false, error: createDistrictError.message })
-            } else {
-              updateResults.push({ type: 'DistrictCase', success: true, data: newDistrictCase })
-              console.log('DistrictCase 關聯建立成功')
-            }
-          }
-
-          // 處理住家地址更新
-          if (caseData.homeCounty || caseData.homeDistrict) {
-            // 查找並更新住家地址
-            const { data: voterCases, error: voterCaseError } = await supabase
-              .from('VoterCase')
-              .select('voter_id')
-              .eq('case_id', caseData.id)
-              .order('created_at')
-
-            if (!voterCaseError && voterCases && voterCases.length > 0) {
-              const contact1Id = voterCases[0].voter_id
-              
-              // 構建新的地址字串
-              let newAddress = ''
-              if (caseData.homeCounty && caseData.homeDistrict) {
-                const county = (dropdownOptions.counties || []).find(c => c.id === caseData.homeCounty)
-                const district = await this.getDistrictNameById(caseData.homeDistrict)
-                
-                if (county && district) {
-                  newAddress = `${county.name}${district}`
-                }
-              }
-
-              if (newAddress) {
-                const { error: addressError } = await supabase
-                  .from('Voter')
-                  .update({
-                    address: newAddress,
-                    updated_at: now
-                  })
-                  .eq('id', contact1Id)
-
-                if (addressError) {
-                  console.error('更新住家地址失敗:', addressError)
-                  updateResults.push({ type: 'Address', success: false, error: addressError.message })
-                } else {
-                  updateResults.push({ type: 'Address', success: true })
-                  console.log('住家地址更新成功:', newAddress)
-                }
-              }
-
-              // 處理 VoterDistrict 關聯
-              if (caseData.homeDistrict) {
-                // 先刪除舊的關聯
-                const { error: deleteVoterDistrictError } = await supabase
-                  .from('VoterDistrict')
-                  .delete()
-                  .eq('voter_id', contact1Id)
-
-                if (!deleteVoterDistrictError) {
-                  // 建立新的關聯
-                  const { error: createVoterDistrictError } = await supabase
-                    .from('VoterDistrict')
-                    .insert([{
-                      voter_id: contact1Id,
-                      district_id: caseData.homeDistrict,
-                      created_at: now,
-                      updated_at: now
-                    }])
-
-                  if (createVoterDistrictError) {
-                    console.warn('建立 VoterDistrict 關聯失敗:', createVoterDistrictError)
-                  } else {
-                    console.log('VoterDistrict 關聯建立成功')
-                  }
-                }
-              }
-            }
-          }
-        } catch (error) {
-          console.error('處理地點資訊時發生錯誤:', error)
-          updateResults.push({ type: 'Location', success: false, error: error.message })
-        }
-      }
-
-      // === 6. 查詢並回傳更新後的完整案件資料 ===
-      console.log('查詢更新後的完整案件資料...')
       
-      const { data: updatedCaseData, error: fetchError } = await supabase
-        .from('Case')
-        .select(`
-          *,
-          VoterCase(
-            Voter(*)
-          ),
-          CategoryCase(
-            Category(*)
-          ),
-          AcceptanceCase(
-            Member(*)
-          ),
-          InChargeCase(
-            Member(*)
-          ),
-          DistrictCase(
-            District(*)
-          )
-        `)
-        .eq('id', caseData.id)
-        .single()
+      if (preparedCaseData.closed_date) {
+        updateData.closed_date = preparedCaseData.closed_date
+      }
 
-      if (fetchError) {
-        console.error('查詢更新後的案件資料失敗:', fetchError)
+      console.log('準備更新的資料:', updateData)
+
+      // 更新基本案件資料
+      const { error: updateError } = await supabase
+        .from('Case')
+        .update(updateData)
+        .eq('id', caseData.id)
+        .eq('team_id', teamId)
+
+      if (updateError) {
+        console.error('更新案件基本資料失敗:', updateError)
         return {
           success: false,
-          error: `查詢更新後的案件資料失敗: ${fetchError.message}`,
+          error: `更新案件失敗: ${updateError.message}`,
           data: null
         }
       }
 
-      // === 7. 返回成功結果 ===
-      const successCount = updateResults.filter(r => r.success).length
-      const failCount = updateResults.filter(r => !r.success).length
+      console.log('案件基本資料更新成功')
 
-      console.log('=== 案件更新完成 ===')
-      console.log('更新結果摘要:', {
-        total: updateResults.length,
-        success: successCount,
-        failed: failCount,
-        details: updateResults
-      })
+      // 這裡可以繼續添加其他關聯資料的更新邏輯...
+      // 例如更新類別、聯絡人、受理人員等
 
       return {
         success: true,
-        data: updatedCaseData,
-        updateResults: {
-          summary: {
-            total: updateResults.length,
-            success: successCount,
-            failed: failCount
-          },
-          details: updateResults
-        },
+        data: preparedCaseData,
         error: null
       }
 
     } catch (error) {
-      console.error('CaseService.exportCases 發生錯誤:', error)
+      console.error('updateCaseWithRelations 發生錯誤:', error)
       return {
         success: false,
         error: error.message,

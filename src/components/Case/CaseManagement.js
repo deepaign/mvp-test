@@ -751,6 +751,7 @@ function CaseManagement({ member, team }) {
           }}
           caseData={editingCase}
           team={team}
+          member={member}  // 添加這一行
           onCaseUpdated={handleCaseUpdated}
         />
       )}
