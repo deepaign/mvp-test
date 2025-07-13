@@ -1,4 +1,4 @@
-// src/components/Case/CaseTables/CaseCardView.js - 調整事發地點分兩行顯示
+// src/components/Case/CaseTables/CaseCardView.js - 修正受理日期顯示問題
 import React from 'react'
 import { CaseService } from '../../../services/caseService'
 import '../../../styles/CaseCardView.css'
@@ -77,20 +77,32 @@ function CaseCardView({
     return '尚未指派'
   }
 
-  // 格式化受理日期
-  const formatCreatedDate = (dateString) => {
-    if (!dateString) return '-'
-    try {
-      const date = new Date(dateString)
-      return date.toLocaleDateString('zh-TW', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit'
-      }).replace(/\//g, '-')
-    } catch (error) {
-      console.error('日期格式化失敗:', error)
-      return '-'
+  // 修正：格式化受理日期 - 從 description 中提取受理時間的日期部分
+  const formatReceivedDate = (caseItem) => {
+    // 使用 CaseService 的 extractReceivedDateTime 方法從 description 中提取受理時間
+    const receivedDateTime = CaseService.extractReceivedDateTime(caseItem.description)
+    
+    // 如果有提取到受理日期，直接使用
+    if (receivedDateTime.date) {
+      return receivedDateTime.date
     }
+    
+    // 如果 description 中沒有受理時間，回退到 created_at
+    if (caseItem.created_at) {
+      try {
+        const date = new Date(caseItem.created_at)
+        return date.toLocaleDateString('zh-TW', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        }).replace(/\//g, '-')
+      } catch (error) {
+        console.error('受理日期格式化失敗:', error)
+        return '-'
+      }
+    }
+    
+    return '-'
   }
 
   // 取得優先順序顯示
@@ -142,7 +154,7 @@ function CaseCardView({
           
           return (
             <div key={caseItem.id || index} className="case-card">
-              {/* Header - 案件編號（左）、優先順序、處理狀態（右）同一行 */}
+              {/* Header */}
               <div className="case-card-header">
                 <div className="card-header-left">
                   <span className="case-number">
@@ -161,12 +173,10 @@ function CaseCardView({
 
               {/* Content */}
               <div className="case-card-content">
-                {/* 案件標題 - 靠左稍大 */}
-                <div className="case-title">
+                <h4 className="case-title" title={caseItem.title}>
                   {caseItem.title || '未命名案件'}
-                </div>
+                </h4>
 
-                {/* 案件資訊 - 按照指定格式排列，內容靠左 */}
                 <div className="case-info-list">
                   <div className="info-row">
                     <div className="info-item">
@@ -208,7 +218,7 @@ function CaseCardView({
               <div className="case-card-footer">
                 <div className="footer-left">
                   <span className="received-date">
-                    {formatCreatedDate(caseItem.created_at)}
+                    {formatReceivedDate(caseItem)}
                   </span>
                 </div>
                 <div className="footer-right">

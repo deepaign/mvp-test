@@ -318,74 +318,70 @@ function CaseManagement({ member, team }) {
     return filtered
   }, [applyDateFilter])
 
-  // 🔧 安全的排序函數
-  const applySorting = useCallback((data, sortConfig) => {
-    // 確保 data 是陣列
-    if (!Array.isArray(data) || data.length === 0) {
-      return []
-    }
-
+  // 預設排序邏輯 - 按照受理日期或案件編號排序（由新到舊）
+  // 修正：預設排序邏輯 - 改為按照受理時間排序（由新到舊）
+  const applySorting = useCallback((data) => {
     return [...data].sort((a, b) => {
-      if (!a || !b) return 0
-
-      let aValue, bValue
-
-      try {
-        switch (sortConfig.field) {
-          case 'created_at':
-          case 'updated_at':
-          case 'start_date':
-          case 'end_date':
-            aValue = a[sortConfig.field] ? new Date(a[sortConfig.field]).getTime() : 0
-            bValue = b[sortConfig.field] ? new Date(b[sortConfig.field]).getTime() : 0
-            break
-
-          case 'title':
-          case 'status':
-          case 'priority':
-            aValue = a[sortConfig.field] || ''
-            bValue = b[sortConfig.field] || ''
-            break
-
-          case 'contact_name':
-            aValue = a.VoterCase?.[0]?.Voter?.name || ''
-            bValue = b.VoterCase?.[0]?.Voter?.name || ''
-            break
-
-          case 'handler':
-            aValue = a.InChargeCase?.[0]?.Member?.name || ''
-            bValue = b.InChargeCase?.[0]?.Member?.name || ''
-            break
-
-          default:
-            aValue = a[sortConfig.field] || ''
-            bValue = b[sortConfig.field] || ''
+      // 1. 優先使用受理時間排序
+      const receivedDateTimeA = CaseService.extractReceivedDateTime(a.description)
+      const receivedDateTimeB = CaseService.extractReceivedDateTime(b.description)
+      
+      let dateA = null
+      let dateB = null
+      
+      // 解析案件 A 的日期
+      if (receivedDateTimeA.date) {
+        try {
+          const timeStr = receivedDateTimeA.time || '00:00:00'
+          dateA = new Date(`${receivedDateTimeA.date}T${timeStr}`)
+        } catch (error) {
+          console.warn('案件 A 受理時間解析失敗:', receivedDateTimeA, error)
         }
-
-        // 處理 null 值
-        if (aValue == null && bValue == null) return 0
-        if (aValue == null) return sortConfig.direction === 'asc' ? -1 : 1
-        if (bValue == null) return sortConfig.direction === 'asc' ? 1 : -1
-
-        // 字串比較
-        if (typeof aValue === 'string' && typeof bValue === 'string') {
-          aValue = aValue.toLowerCase()
-          bValue = bValue.toLowerCase()
-        }
-
-        if (aValue < bValue) {
-          return sortConfig.direction === 'asc' ? -1 : 1
-        }
-        if (aValue > bValue) {
-          return sortConfig.direction === 'asc' ? 1 : -1
-        }
-        return 0
-      } catch (error) {
-        console.warn('排序錯誤:', error, { a, b, sortConfig })
-        return 0
       }
+      
+      // 如果沒有受理時間，回退到 created_at
+      if (!dateA || isNaN(dateA.getTime())) {
+        try {
+          dateA = new Date(a.created_at || 0)
+        } catch (error) {
+          console.warn('案件 A created_at 解析失敗:', a.created_at, error)
+          dateA = new Date(0) // 設為最早的日期
+        }
+      }
+      
+      // 解析案件 B 的日期
+      if (receivedDateTimeB.date) {
+        try {
+          const timeStr = receivedDateTimeB.time || '00:00:00'
+          dateB = new Date(`${receivedDateTimeB.date}T${timeStr}`)
+        } catch (error) {
+          console.warn('案件 B 受理時間解析失敗:', receivedDateTimeB, error)
+        }
+      }
+      
+      // 如果沒有受理時間，回退到 created_at
+      if (!dateB || isNaN(dateB.getTime())) {
+        try {
+          dateB = new Date(b.created_at || 0)
+        } catch (error) {
+          console.warn('案件 B created_at 解析失敗:', b.created_at, error)
+          dateB = new Date(0) // 設為最早的日期
+        }
+      }
+      
+      // 2. 按照日期排序（由新到舊）
+      if (dateA.getTime() !== dateB.getTime()) {
+        return dateB.getTime() - dateA.getTime() // 新到舊
+      }
+      
+      // 3. 如果日期相同，則按照案件編號排序
+      const caseNumberA = CaseService.extractCaseNumber(a.description) || ''
+      const caseNumberB = CaseService.extractCaseNumber(b.description) || ''
+      
+      // 案件編號通常包含日期信息，按字串排序（降序 = 新到舊）
+      return caseNumberB.localeCompare(caseNumberA)
     })
-  }, [])
+  }, []) // 移除對 CaseService 的依賴，因為它是靜態方法
 
   // 更新篩選後的案件列表
   useEffect(() => {

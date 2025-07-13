@@ -1,4 +1,4 @@
-/* CaseFilters.css - 更新版本 */
+/* CaseFilters.css - 完整整合版本，保持原有風格 + 新增功能 */
 .case-filters-container {
   background: white;
   padding: 14px 20px;
@@ -64,6 +64,19 @@
   box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
 }
 
+/* 新增：載入狀態支援 */
+.filter-select:disabled {
+  background-color: #f8f9fa;
+  color: #6c757d;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.filter-select:hover:not(:disabled) {
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
 /* 搜尋框樣式 */
 .search-wrapper {
   position: relative;
@@ -91,6 +104,19 @@
   outline: none;
   border-color: #667eea;
   box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+}
+
+/* 新增：搜尋框載入狀態 */
+.search-input:disabled {
+  background-color: #f8f9fa;
+  color: #6c757d;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.search-input:hover:not(:disabled) {
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
 }
 
 .search-input::placeholder {
@@ -132,14 +158,54 @@
   transform: translateY(1px);
 }
 
-/* 自定義日期選擇器 */
+/* 新增：重置按鈕載入狀態 */
+.reset-filters-btn:disabled {
+  background-color: #f8f9fa;
+  color: #6c757d;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.reset-filters-btn:hover:not(:disabled) {
+  background: #e9ecef;
+  color: #333;
+  border-color: #bbb;
+}
+
+/* 自定義日期選擇器 - 更新版本 */
 .custom-date-picker {
+  margin-top: 16px;
+  padding: 16px;
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+}
+
+/* 新增：日期選擇器標題區域 */
+.date-picker-header {
   display: flex;
-  gap: 12px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 0.85rem;
+}
+
+.date-picker-title {
+  font-weight: 600;
+  color: #333;
+}
+
+.date-picker-note {
+  font-size: 0.75rem;
+  color: #666;
+  font-style: italic;
+}
+
+/* 新增：日期控制項容器 */
+.date-picker-controls {
+  display: flex;
+  gap: 16px;
   align-items: flex-end;
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid #f0f0f0;
   flex-wrap: wrap;
 }
 
@@ -178,7 +244,7 @@
   box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
 }
 
-/* 篩選摘要 */
+/* 篩選摘要 - 更新版本 */
 .filter-summary {
   margin: 16px 0 0 0;
   padding: 8px 12px;
@@ -187,6 +253,24 @@
   font-size: 0.85rem;
   color: #666;
   border-left: 3px solid #667eea;
+  /* 新增：支援圖示和說明 */
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* 新增：篩選摘要圖示 */
+.filter-summary-icon {
+  font-size: 1rem;
+}
+
+/* 新增：篩選說明文字 */
+.filter-note {
+  font-size: 0.75rem;
+  color: #999;
+  font-style: italic;
+  margin-left: 8px;
 }
 
 /* 響應式設計 */
@@ -250,6 +334,15 @@
     padding: 5px 8px;
     font-size: 0.7rem;
   }
+  
+  /* 新增：日期選擇器響應式 */
+  .date-picker-controls {
+    gap: 12px;
+  }
+  
+  .date-picker-group {
+    min-width: 120px;
+  }
 }
 
 @media (max-width: 768px) {
@@ -272,6 +365,12 @@
   }
   
   .custom-date-picker {
+    margin-top: 12px;
+    padding: 12px;
+  }
+  
+  /* 新增：日期選擇器行動版佈局 */
+  .date-picker-controls {
     flex-direction: column;
     gap: 8px;
     align-items: stretch;
@@ -284,6 +383,18 @@
   
   .date-input {
     width: 100%;
+  }
+  
+  /* 新增：日期選擇器標題響應式 */
+  .date-picker-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  
+  .filter-summary {
+    font-size: 0.8rem;
+    padding: 6px 10px;
   }
 }
 
@@ -310,7 +421,7 @@
   }
   
   .filter-summary {
-    font-size: 0.8rem;
-    padding: 6px 10px;
+    font-size: 0.75rem;
+    padding: 6px 8px;
   }
 }

@@ -1,4 +1,4 @@
-// CategoryAutoComplete.js - 配合現有 CSS 的修正版
+// src/components/Case/CaseModal/CaseForm/CategoryAutoComplete.js - 完整修正版
 import React, { useState, useEffect, useRef } from 'react'
 import '../../../../styles/CategoryAutoComplete.css'
 
@@ -18,18 +18,39 @@ const CategoryAutoComplete = ({
   // 當外部 value 變化時，更新 inputValue
   useEffect(() => {
     if (value) {
+      console.log('CategoryAutoComplete 接收到 value:', value)
+      
       // 如果 value 是預設類型 ID，轉換為名稱顯示
       const categoryMap = {
         'traffic': '交通問題',
         'environment': '環境問題',
         'security': '治安問題',
-        'public_service': '民生服務'
+        'public_service': '民生服務',
+        'legal_consultation': '法律諮詢'
       }
-      setInputValue(categoryMap[value] || value)
+      
+      if (categoryMap[value]) {
+        // 預設類別：顯示對應的中文名稱
+        setInputValue(categoryMap[value])
+        console.log('顯示預設類別名稱:', categoryMap[value])
+      } else {
+        // 自定義類別：
+        // 1. 如果 value 是 UUID，嘗試從 categories 中找到對應的名稱
+        // 2. 如果 value 是名稱，直接使用
+        const category = categories.find(c => c.id === value)
+        if (category) {
+          setInputValue(category.name)
+          console.log('從 categories 找到名稱:', category.name)
+        } else {
+          // 直接使用 value（可能是類別名稱）
+          setInputValue(value)
+          console.log('直接使用 value 作為顯示名稱:', value)
+        }
+      }
     } else {
       setInputValue('')
     }
-  }, [value])
+  }, [value, categories])
 
   // 當 categories 或 inputValue 變化時，更新篩選結果
   useEffect(() => {
@@ -76,14 +97,22 @@ const CategoryAutoComplete = ({
   }
 
   const handleOptionClick = (category) => {
+    console.log('選擇類別:', category)
     setInputValue(category.name)
     setIsOpen(false)
     
     // 回傳選中的類型
-    // 如果是預設類型，回傳 ID；如果是自定義類型，回傳名稱
-    const returnValue = category.isDefault ? 
-      getDefaultCategoryId(category.name) : 
-      category.name
+    let returnValue
+    if (category.isDefault) {
+      // 預設類型：回傳預設 ID
+      returnValue = getDefaultCategoryId(category.name)
+    } else {
+      // 自定義類型：回傳類別名稱（編輯時）或 ID（新建時）
+      // 編輯案件時，我們傳回名稱讓系統能正確識別
+      returnValue = category.name
+    }
+    
+    console.log('回傳值:', returnValue)
     
     if (onChange) {
       onChange(returnValue)
@@ -109,7 +138,8 @@ const CategoryAutoComplete = ({
       '交通問題': 'traffic',
       '環境問題': 'environment',
       '治安問題': 'security',
-      '民生服務': 'public_service'
+      '民生服務': 'public_service',
+      '法律諮詢': 'legal_consultation'
     }
     return nameToIdMap[categoryName] || categoryName
   }

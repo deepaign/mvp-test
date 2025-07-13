@@ -1,4 +1,5 @@
-// src/components/Case/CaseFilters.js - 修復篩選摘要顯示版本
+// src/components/Case/CaseFilters.js - 完整修正版本
+// 日期篩選已修正為基於 description 中的受理時間
 import React, { useState, useEffect, useCallback } from 'react'
 import { CaseService } from '../../services/caseService'
 import '../../styles/CaseFilters.css'
@@ -25,7 +26,7 @@ function CaseFilters({ team, onFiltersChange, onSearch, onReset }) {
   const [loading, setLoading] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
 
-  // 使用 useCallback 包裝 loadFilterOptions
+  // 載入篩選選項
   const loadFilterOptions = useCallback(async () => {
     if (!team?.id) return
     
@@ -62,7 +63,7 @@ function CaseFilters({ team, onFiltersChange, onSearch, onReset }) {
     }
   }, [team?.id])
 
-  // 使用 useCallback 包裝 buildFilterParams
+  // 建構篩選參數
   const buildFilterParams = useCallback(() => {
     const params = {
       category: filters.category,
@@ -73,7 +74,8 @@ function CaseFilters({ team, onFiltersChange, onSearch, onReset }) {
       endDate: customDateRange.endDate
     }
 
-    // 處理日期篩選
+    // 注意：日期篩選現在由 CaseManagement 中的 applyDateFilter 處理
+    // 這裡只傳遞日期範圍類型和自定義範圍，實際篩選邏輯使用受理時間
     const now = new Date()
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
     
@@ -84,9 +86,12 @@ function CaseFilters({ team, onFiltersChange, onSearch, onReset }) {
         break
       case 'week':
         const weekStart = new Date(today)
-        weekStart.setDate(today.getDate() - today.getDay())
+        weekStart.setDate(today.getDate() - today.getDay() + 1) // 週一
+        const weekEnd = new Date(weekStart)
+        weekEnd.setDate(weekStart.getDate() + 6) // 週日
+        weekEnd.setHours(23, 59, 59, 999)
         params.startDate = weekStart.toISOString()
-        params.endDate = new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000 - 1).toISOString()
+        params.endDate = weekEnd.toISOString()
         break
       case 'month':
         const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
@@ -95,7 +100,7 @@ function CaseFilters({ team, onFiltersChange, onSearch, onReset }) {
         params.endDate = monthEnd.toISOString()
         break
       case 'custom':
-        // 使用自定義日期範圍
+        // 使用自定義日期範圍，已在 customDateRange 中設定
         break
       default:
         // 'all' - 不設定日期範圍
@@ -119,6 +124,7 @@ function CaseFilters({ team, onFiltersChange, onSearch, onReset }) {
     }
   }, [buildFilterParams, onFiltersChange])
 
+  // 處理篩選條件變更
   const handleFilterChange = (filterType, value) => {
     setFilters(prev => ({
       ...prev,
@@ -134,6 +140,7 @@ function CaseFilters({ team, onFiltersChange, onSearch, onReset }) {
     }
   }
 
+  // 處理自定義日期變更
   const handleCustomDateChange = (dateType, value) => {
     setCustomDateRange(prev => ({
       ...prev,
@@ -141,6 +148,7 @@ function CaseFilters({ team, onFiltersChange, onSearch, onReset }) {
     }))
   }
 
+  // 重置所有篩選條件
   const resetFilters = () => {
     setFilters({
       category: 'all',
@@ -161,6 +169,7 @@ function CaseFilters({ team, onFiltersChange, onSearch, onReset }) {
     }
   }
 
+  // 處理搜尋變更
   const handleSearchChange = (value) => {
     setSearchTerm(value)
     if (onSearch) {
@@ -168,7 +177,7 @@ function CaseFilters({ team, onFiltersChange, onSearch, onReset }) {
     }
   }
 
-  // 取得承辦人員名稱的函數 - 修復版本
+  // 取得承辦人員名稱
   const getAssigneeName = useCallback((assigneeId) => {
     if (assigneeId === 'all') return '全部'
     if (assigneeId === 'unassigned') return '尚未指派'
@@ -178,7 +187,7 @@ function CaseFilters({ team, onFiltersChange, onSearch, onReset }) {
     return member ? member.name : `ID:${assigneeId}` // 如果找不到名稱，顯示 ID
   }, [filterOptions.members])
 
-  // 取得案件類別名稱的函數
+  // 取得案件類別名稱
   const getCategoryDisplayName = useCallback((categoryId) => {
     if (categoryId === 'all') return '全部'
     
@@ -193,7 +202,19 @@ function CaseFilters({ team, onFiltersChange, onSearch, onReset }) {
     return category ? category.name : categoryId
   }, [filterOptions.categories])
 
-  // 篩選摘要顯示函數 - 修復版本
+  // 取得日期範圍顯示名稱
+  const getDateRangeDisplayName = (dateRange) => {
+    const dateRangeMap = {
+      'all': '全部',
+      'today': '本日',
+      'week': '本週',
+      'month': '本月',
+      'custom': '自定義範圍'
+    }
+    return dateRangeMap[dateRange] || dateRange
+  }
+
+  // 篩選摘要顯示
   const getFilterSummary = () => {
     const activeFilters = []
     
@@ -202,11 +223,7 @@ function CaseFilters({ team, onFiltersChange, onSearch, onReset }) {
       activeFilters.push(`類型: ${categoryName}`)
     }
     if (filters.dateRange && filters.dateRange !== 'all') {
-      let dateLabel = filters.dateRange
-      if (dateLabel === 'today') dateLabel = '本日'
-      else if (dateLabel === 'week') dateLabel = '本週'
-      else if (dateLabel === 'month') dateLabel = '本月'
-      else if (dateLabel === 'custom') dateLabel = '自定義範圍'
+      const dateLabel = getDateRangeDisplayName(filters.dateRange)
       activeFilters.push(`日期: ${dateLabel}`)
     }
     if (filters.priority && filters.priority !== 'all') {
@@ -223,7 +240,9 @@ function CaseFilters({ team, onFiltersChange, onSearch, onReset }) {
 
     return activeFilters.length > 0 ? (
       <div className="filter-summary">
+        <span className="filter-summary-icon">📋</span>
         目前篩選: {activeFilters.join(' | ')}
+        <span className="filter-note">（日期篩選以受理時間為準）</span>
       </div>
     ) : null
   }
@@ -240,6 +259,7 @@ function CaseFilters({ team, onFiltersChange, onSearch, onReset }) {
               className="filter-select"
               value={filters.category}
               onChange={(e) => handleFilterChange('category', e.target.value)}
+              disabled={loading}
             >
               <option value="all">全部</option>
               {filterOptions.categories.map(category => (
@@ -251,11 +271,12 @@ function CaseFilters({ team, onFiltersChange, onSearch, onReset }) {
           </div>
 
           <div className="filter-group">
-            <label className="filter-label">日期</label>
+            <label className="filter-label">受理日期</label>
             <select 
               className="filter-select"
               value={filters.dateRange}
               onChange={(e) => handleFilterChange('dateRange', e.target.value)}
+              disabled={loading}
             >
               <option value="all">全部</option>
               <option value="today">本日</option>
@@ -271,6 +292,7 @@ function CaseFilters({ team, onFiltersChange, onSearch, onReset }) {
               className="filter-select"
               value={filters.priority}
               onChange={(e) => handleFilterChange('priority', e.target.value)}
+              disabled={loading}
             >
               <option value="all">全部</option>
               <option value="urgent">緊急</option>
@@ -285,6 +307,7 @@ function CaseFilters({ team, onFiltersChange, onSearch, onReset }) {
               className="filter-select"
               value={filters.assignee}
               onChange={(e) => handleFilterChange('assignee', e.target.value)}
+              disabled={loading}
             >
               <option value="all">全部</option>
               <option value="unassigned">尚未指派</option>
@@ -303,9 +326,10 @@ function CaseFilters({ team, onFiltersChange, onSearch, onReset }) {
               <input
                 type="text"
                 className="search-input"
-                placeholder="搜尋案件標題或內容..."
+                placeholder="搜尋案件標題、內容、編號..."
                 value={searchTerm}
                 onChange={(e) => handleSearchChange(e.target.value)}
+                disabled={loading}
               />
               <div className="search-icon">🔍</div>
             </div>
@@ -319,7 +343,7 @@ function CaseFilters({ team, onFiltersChange, onSearch, onReset }) {
               title="重置所有篩選條件"
               disabled={loading}
             >
-              重新篩選
+              {loading ? '載入中...' : '重新篩選'}
             </button>
           </div>
         </div>
@@ -328,23 +352,29 @@ function CaseFilters({ team, onFiltersChange, onSearch, onReset }) {
       {/* 自定義日期範圍選擇器 */}
       {showDatePicker && (
         <div className="custom-date-picker">
-          <div className="date-picker-group">
-            <label className="date-label">開始日期</label>
-            <input
-              type="date"
-              className="date-input"
-              value={customDateRange.startDate ? customDateRange.startDate.split('T')[0] : ''}
-              onChange={(e) => handleCustomDateChange('startDate', e.target.value ? new Date(e.target.value).toISOString() : '')}
-            />
+          <div className="date-picker-header">
+            <span className="date-picker-title">📅 自定義受理日期範圍</span>
+            <span className="date-picker-note">（以案件描述中的受理時間為準）</span>
           </div>
-          <div className="date-picker-group">
-            <label className="date-label">結束日期</label>
-            <input
-              type="date"
-              className="date-input"
-              value={customDateRange.endDate ? customDateRange.endDate.split('T')[0] : ''}
-              onChange={(e) => handleCustomDateChange('endDate', e.target.value ? new Date(e.target.value + 'T23:59:59').toISOString() : '')}
-            />
+          <div className="date-picker-controls">
+            <div className="date-picker-group">
+              <label className="date-label">開始日期</label>
+              <input
+                type="date"
+                className="date-input"
+                value={customDateRange.startDate ? customDateRange.startDate.split('T')[0] : ''}
+                onChange={(e) => handleCustomDateChange('startDate', e.target.value ? new Date(e.target.value).toISOString() : '')}
+              />
+            </div>
+            <div className="date-picker-group">
+              <label className="date-label">結束日期</label>
+              <input
+                type="date"
+                className="date-input"
+                value={customDateRange.endDate ? customDateRange.endDate.split('T')[0] : ''}
+                onChange={(e) => handleCustomDateChange('endDate', e.target.value ? new Date(e.target.value + 'T23:59:59').toISOString() : '')}
+              />
+            </div>
           </div>
         </div>
       )}
