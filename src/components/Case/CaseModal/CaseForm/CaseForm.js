@@ -10,7 +10,8 @@ import {
 import { FormFooter } from './FormFields'
 import '../../../../styles/CaseForm.css'
 
-const CaseForm = ({ team, onSubmit, onCancel }) => {
+// 修正：新增 member 參數
+const CaseForm = ({ team, member, onSubmit, onCancel }) => {
   const {
     formData,
     dropdownOptions,
@@ -18,7 +19,7 @@ const CaseForm = ({ team, onSubmit, onCancel }) => {
     isSubmitting,
     handleInputChange,
     handleSubmit
-  } = useCaseForm(team, onSubmit)
+  } = useCaseForm({ team, member, onSubmit }) // 修正：傳入 member 參數
 
   // 防止表單內的 Enter 鍵觸發提交
   const handleFormKeyDown = (e) => {

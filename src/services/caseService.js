@@ -582,6 +582,8 @@ static async getCases(options = {}) {
         selectedCountyId: formData.homeCounty
       }, formData.homeDistrict)
 
+      
+
       if (!contact1Result.success) {
         console.error('處理聯絡人1失敗:', contact1Result.error)
         return {
@@ -1144,7 +1146,6 @@ static async getCases(options = {}) {
       const newVoterData = {
         name: contactData.name,
         phone: contactData.phone,
-        district_id: districtId,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       }
@@ -2636,6 +2637,9 @@ static parseTimestamptzToDateTime(timestamptz) {
   /**
    * 更新聯絡人資訊
    */
+  /**
+ * 更新聯絡人資訊
+ */
   static async updateContacts(caseData, originalData, updateResults, dropdownOptions) {
     try {
       // 檢查聯絡人1是否有變更
@@ -2648,7 +2652,7 @@ static parseTimestamptzToDateTime(timestamptz) {
         }, {
           ...dropdownOptions,
           selectedCountyId: caseData.homeCounty
-        }, caseData.homeDistrict)
+        }, caseData.homeDistrict) // ✅ 修正：改為 caseData.homeDistrict
 
         if (contact1Result.success) {
           updateResults.push({ type: 'Contact1', success: true, data: contact1Result.data })
@@ -3012,5 +3016,232 @@ static parseTimestamptzToDateTime(timestamptz) {
     }
   
     return result
+  }
+
+  /**
+ * 建立或更新 VoterDistrict 關聯
+ * @param {string} voterId - 聯絡人 ID
+ * @param {string} districtId - 行政區 ID
+ * @returns {Promise<Object>} 處理結果
+ */
+static async createVoterDistrictRelation(voterId, districtId) {
+  try {
+    console.log('=== CaseService.createVoterDistrictRelation ===')
+    console.log('聯絡人 ID:', voterId, '行政區 ID:', districtId)
+
+    if (!voterId || !districtId) {
+      return {
+        success: false,
+        error: '聯絡人 ID 和行政區 ID 必填',
+        data: null
+      }
+    }
+
+    // 檢查是否已存在關聯
+    const { data: existingRelation, error: searchError } = await supabase
+      .from('VoterDistrict')
+      .select('*')
+      .eq('voter_id', voterId)
+      .single()
+
+    if (searchError && searchError.code !== 'PGRST116') {
+      console.error('搜尋 VoterDistrict 關聯失敗:', searchError)
+      return {
+        success: false,
+        error: searchError.message,
+        data: null
+      }
+    }
+
+    if (existingRelation) {
+      // 更新現有關聯
+      if (existingRelation.district_id !== districtId) {
+        const { data: updatedRelation, error: updateError } = await supabase
+          .from('VoterDistrict')
+          .update({
+            district_id: districtId,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingRelation.id)
+          .select()
+          .single()
+
+        if (updateError) {
+          console.error('更新 VoterDistrict 關聯失敗:', updateError)
+          return {
+            success: false,
+            error: updateError.message,
+            data: null
+          }
+        }
+
+        console.log('VoterDistrict 關聯更新成功')
+        return {
+          success: true,
+          data: updatedRelation,
+          error: null
+        }
+      } else {
+        console.log('VoterDistrict 關聯已存在且相同，無需更新')
+        return {
+          success: true,
+          data: existingRelation,
+          error: null
+        }
+      }
+    } else {
+      // 建立新關聯
+      const relationData = {
+        voter_id: voterId,
+        district_id: districtId,
+        created_at: new Date().toISOString()
+      }
+
+      const { data: newRelation, error: createError } = await supabase
+        .from('VoterDistrict')
+        .insert([relationData])
+        .select()
+        .single()
+
+      if (createError) {
+        console.error('建立 VoterDistrict 關聯失敗:', createError)
+        return {
+          success: false,
+          error: createError.message,
+          data: null
+        }
+      }
+
+      console.log('VoterDistrict 關聯建立成功')
+      return {
+        success: true,
+        data: newRelation,
+        error: null
+      }
+    }
+
+  } catch (error) {
+    console.error('CaseService.createVoterDistrictRelation 發生錯誤:', error)
+    return {
+      success: false,
+      error: error.message,
+      data: null
+    }
+  }
+}
+
+/**
+ * 處理聯絡人資料（修正版）
+ * @param {Object} contactData - 聯絡人資料
+ * @param {Object} dropdownOptions - 下拉選單選項
+ * @param {string} districtId - 行政區 ID
+ * @returns {Promise<Object>} 處理結果
+ */
+  static async handleContact(contactData, dropdownOptions = {}, districtId = null) {
+    try {
+      console.log('=== CaseService.handleContact ===')
+      console.log('聯絡人資料:', contactData)
+      console.log('行政區 ID:', districtId)
+
+      if (!contactData.name || !contactData.phone) {
+        return {
+          success: false,
+          error: '聯絡人姓名和電話必填',
+          data: null
+        }
+      }
+
+      // 檢查是否已存在相同電話的聯絡人
+      const { data: existingVoter, error: searchError } = await supabase
+        .from('Voter')
+        .select('*')
+        .eq('phone', contactData.phone)
+        .single()
+
+      if (searchError && searchError.code !== 'PGRST116') {
+        console.error('搜尋聯絡人失敗:', searchError)
+        return {
+          success: false,
+          error: `搜尋聯絡人失敗: ${searchError.message}`,
+          data: null
+        }
+      }
+
+      let voter = null
+
+      if (existingVoter) {
+        console.log('找到現有聯絡人:', existingVoter)
+        voter = existingVoter
+        
+        // 更新現有聯絡人的姓名（以防姓名有變更）
+        if (existingVoter.name !== contactData.name) {
+          const { data: updatedVoter, error: updateError } = await supabase
+            .from('Voter')
+            .update({
+              name: contactData.name,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', existingVoter.id)
+            .select()
+            .single()
+
+          if (updateError) {
+            console.warn('更新聯絡人姓名失敗:', updateError)
+          } else {
+            voter = updatedVoter
+            console.log('聯絡人姓名已更新:', updatedVoter)
+          }
+        }
+      } else {
+        // 建立新聯絡人 - 修正：移除 district_id 欄位
+        const newVoterData = {
+          name: contactData.name,
+          phone: contactData.phone,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+
+        const { data: newVoter, error: createError } = await supabase
+          .from('Voter')
+          .insert([newVoterData])
+          .select()
+          .single()
+
+        if (createError) {
+          console.error('建立聯絡人失敗:', createError)
+          return {
+            success: false,
+            error: `建立聯絡人失敗: ${createError.message}`,
+            data: null
+          }
+        }
+
+        console.log('建立聯絡人成功:', newVoter)
+        voter = newVoter
+      }
+
+      // 處理 VoterDistrict 關聯（如果有提供 districtId）
+      if (districtId && voter) {
+        const voterDistrictResult = await this.createVoterDistrictRelation(voter.id, districtId)
+        if (!voterDistrictResult.success) {
+          console.warn('建立 VoterDistrict 關聯失敗:', voterDistrictResult.error)
+          // 不要因為這個失敗就整個失敗，因為聯絡人已經建立成功
+        }
+      }
+
+      return {
+        success: true,
+        data: voter,
+        error: null
+      }
+
+    } catch (error) {
+      console.error('CaseService.handleContact 發生錯誤:', error)
+      return {
+        success: false,
+        error: error.message,
+        data: null
+      }
+    }
   }
 }

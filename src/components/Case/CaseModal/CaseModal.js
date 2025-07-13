@@ -1,11 +1,12 @@
+// src/components/Case/CaseModal/CaseModal.js - 修正版：新增 member 參數傳遞
 import React, { useState } from 'react'
 import CaseForm from './CaseForm'
 import CaseTextInput from './CaseTextInput'
 import '../../../styles/CaseModal.css'
 
-function CaseModal({ isOpen, onClose, team, onCaseCreated }) {
+// 修正：新增 member 參數
+function CaseModal({ isOpen, onClose, team, member, onCaseCreated }) {
   const [inputMode, setInputMode] = useState('form') // 'form' 或 'text'
-  // 移除 isSubmitting 狀態，因為由各個子組件自行管理
 
   if (!isOpen) return null
 
@@ -88,12 +89,14 @@ function CaseModal({ isOpen, onClose, team, onCaseCreated }) {
           {inputMode === 'form' ? (
             <CaseForm 
               team={team}
+              member={member}  
               onSubmit={handleCaseSubmit}
               onCancel={handleCancel}
             />
           ) : (
             <CaseTextInput 
               team={team}
+              member={member} 
               onSubmit={handleCaseSubmit}
               onCancel={handleCancel}
             />

@@ -1,8 +1,9 @@
-// src/components/Case/CaseModal/CaseForm/useCaseForm.js - 修正 ESLint 錯誤版本
+// src/components/Case/CaseModal/CaseForm/useCaseForm.js - 完整修正版
 import { useState, useCallback, useEffect, useMemo } from 'react'
 import { CaseService } from '../../../../services/caseService'
+import { TeamService } from '../../../../services/teamService'
 
-export function useCaseForm({ team, onSubmit }) {
+export function useCaseForm({ team, member, onSubmit }) {
   const [formData, setFormData] = useState({
     caseNumber: '',
     contactMethod: 'phone',
@@ -11,7 +12,7 @@ export function useCaseForm({ team, onSubmit }) {
     closedDate: '',
     closedTime: '',
     receiver: '',
-    handler: '',
+    assignee: '', // 修正：使用 assignee 而不是 handler
     title: '',
     category: '',
     homeCounty: '',
@@ -115,16 +116,24 @@ export function useCaseForm({ team, onSubmit }) {
       return
     }
 
+    // 檢查 member 參數
+    if (!member?.auth_user_id) {
+      console.error('成員驗證資訊缺失，無法載入下拉選單資料')
+      setLoading(false)
+      return
+    }
+
     setLoading(true)
     
     try {
-      console.log('開始載入下拉選單資料，團隊ID:', team.id)
+      console.log('開始載入下拉選單資料，團隊ID:', team.id, '成員ID:', member.auth_user_id)
 
       // 🔧 使用 Promise.allSettled 來處理多個 API 調用
       const promises = [
-        CaseService.getTeamMembers(team.id).catch(err => {
+        // 修正：使用 TeamService.getTeamMembers 並傳入正確參數
+        TeamService.getTeamMembers(team.id, member.auth_user_id).catch(err => {
           console.error('載入團隊成員失敗:', err)
-          return { success: false, data: [], error: err.message }
+          return { success: false, members: [], error: err.message }
         }),
         CaseService.getCategories(team.id).catch(err => {
           console.error('載入類別失敗:', err)
@@ -142,16 +151,26 @@ export function useCaseForm({ team, onSubmit }) {
       const [membersResult, categoriesResult, countiesResult] = results.map(result => {
         if (result.status === 'rejected') {
           console.error('Promise 被拒絕:', result.reason)
-          return { success: false, data: [], error: result.reason.message || '未知錯誤' }
+          return { success: false, data: [], members: [], error: result.reason.message || '未知錯誤' }
         }
         return result.value
       })
 
-      // 🔧 確保所有資料都是陣列
+      // 🔧 確保所有資料都是陣列，特別處理 TeamService 的回傳格式
       const safeDropdownOptions = {
-        members: ensureArray(membersResult.success ? membersResult.data : [], '團隊成員'),
-        categories: ensureArray(categoriesResult.success ? categoriesResult.data : [], '案件類別'),
-        counties: ensureArray(countiesResult.success ? countiesResult.data : [], '縣市'),
+        // 修正：TeamService.getTeamMembers 回傳格式是 { success, members, isLeader }
+        members: ensureArray(
+          membersResult.success ? membersResult.members : [], 
+          '團隊成員'
+        ),
+        categories: ensureArray(
+          categoriesResult.success ? categoriesResult.data : [], 
+          '案件類別'
+        ),
+        counties: ensureArray(
+          countiesResult.success ? countiesResult.data : [], 
+          '縣市'
+        ),
         homeDistricts: [],
         incidentDistricts: []
       }
@@ -161,6 +180,9 @@ export function useCaseForm({ team, onSubmit }) {
         categories: safeDropdownOptions.categories.length,
         counties: safeDropdownOptions.counties.length
       })
+
+      // 除錯：顯示載入的成員資料
+      console.log('載入的成員清單:', safeDropdownOptions.members)
 
       setDropdownOptions(safeDropdownOptions)
 
@@ -177,7 +199,7 @@ export function useCaseForm({ team, onSubmit }) {
     } finally {
       setLoading(false)
     }
-  }, [team?.id, ensureArray])
+  }, [team?.id, member?.auth_user_id, ensureArray])
 
   // 處理輸入變更
   const handleInputChange = useCallback((field, value) => {
@@ -276,6 +298,7 @@ export function useCaseForm({ team, onSubmit }) {
     try {
       console.log('=== 開始建立案件 ===')
       console.log('團隊資訊:', team)
+      console.log('成員資訊:', member)
       console.log('表單資料:', formData)
       console.log('下拉選單選項:', dropdownOptions)
 
@@ -304,7 +327,7 @@ export function useCaseForm({ team, onSubmit }) {
           closedDate: '',
           closedTime: '',
           receiver: '',
-          handler: '',
+          assignee: '',
           title: '',
           category: '',
           homeCounty: '',
@@ -351,15 +374,15 @@ export function useCaseForm({ team, onSubmit }) {
     } finally {
       setIsSubmitting(false)
     }
-  }, [formData, team, onSubmit, validateForm, dropdownOptions, isSubmitting, generateCaseNumber])
+  }, [formData, team, member, onSubmit, validateForm, dropdownOptions, isSubmitting, generateCaseNumber])
 
   // useEffect hooks
   useEffect(() => {
-    if (team?.id) {
-      console.log('團隊變更，載入下拉選單資料')
+    if (team?.id && member?.auth_user_id) {
+      console.log('團隊或成員變更，載入下拉選單資料')
       loadDropdownData()
     }
-  }, [loadDropdownData, team?.id])
+  }, [loadDropdownData, team?.id, member?.auth_user_id])
 
   useEffect(() => {
     if (formData.homeCounty) {
