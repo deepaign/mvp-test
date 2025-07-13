@@ -11,6 +11,19 @@ import CaseUnsavedChangesModal from './CaseUnsavedChangesModal'
 import { CaseService } from '../../../services/caseService'
 import '../../../styles/CaseEditModal.css'
 
+// 輔助函數：安全地獲取 Promise 結果中的陣列
+const getValidArray = (promiseResult, name) => {
+  if (promiseResult.status === 'fulfilled' && promiseResult.value.success) {
+    const data = promiseResult.value.data
+    if (Array.isArray(data)) {
+      console.log(`${name}載入成功:`, data.length, '筆')
+      return data
+    }
+  }
+  console.warn(`${name}載入失敗或無資料:`, promiseResult.reason || promiseResult.value?.error)
+  return []
+}
+
 // 編輯專用的表單組件
 const EditableCaseForm = ({ team, initialData, onDataChange, onSubmit, onCancel, isSubmitting, hasChanges, dataLoadingState }) => {
   const [formData, setFormData] = useState(initialData || {})
@@ -22,6 +35,13 @@ const EditableCaseForm = ({ team, initialData, onDataChange, onSubmit, onCancel,
     incidentDistricts: []
   })
   const [loading, setLoading] = useState(true)
+
+  // 穩定的 onDataChange 回調函數
+  const stableOnDataChange = useCallback((newFormData) => {
+    if (onDataChange) {
+      onDataChange(newFormData)
+    }
+  }, [onDataChange])
 
   // 載入住家行政區列表
   const loadHomeDistricts = useCallback(async (countyId) => {
@@ -129,59 +149,68 @@ const EditableCaseForm = ({ team, initialData, onDataChange, onSubmit, onCancel,
   }, [initialData, loadHomeDistricts, loadIncidentDistricts])
 
   // 處理表單輸入變更（包含動態載入行政區）
-  const handleInputChange = (field, value) => {
+  const handleInputChange = useCallback((field, value) => {
     console.log(`表單欄位變更: ${field} = ${value}`)
     
-    const newFormData = {
-      ...formData,
-      [field]: value
-    }
-
-    // 特殊處理：住家縣市改變時清空住家行政區並載入新的行政區列表
-    if (field === 'homeCounty') {
-      newFormData.homeDistrict = ''
-      
-      if (value) {
-        // 非同步載入行政區
-        loadHomeDistricts(value)
-      } else {
-        setDropdownOptions(prev => ({ ...prev, homeDistricts: [] }))
+    setFormData(currentFormData => {
+      const newFormData = {
+        ...currentFormData,
+        [field]: value
       }
-    }
 
-    // 特殊處理：事發地點縣市改變時清空事發地點行政區並載入新的行政區列表
-    if (field === 'incidentCounty') {
-      newFormData.incidentDistrict = ''
-      
-      if (value) {
-        // 非同步載入行政區
-        loadIncidentDistricts(value)
-      } else {
-        setDropdownOptions(prev => ({ ...prev, incidentDistricts: [] }))
+      // 特殊處理：住家縣市改變時清空住家行政區並載入新的行政區列表
+      if (field === 'homeCounty') {
+        newFormData.homeDistrict = ''
+        
+        if (value) {
+          // 非同步載入行政區
+          loadHomeDistricts(value)
+        } else {
+          setDropdownOptions(prev => ({ ...prev, homeDistricts: [] }))
+        }
       }
-    }
 
-    // 特殊處理：結案日期清空時，同時清空結案時間
-    if (field === 'closedDate' && !value) {
-      newFormData.closedTime = ''
-    }
+      // 特殊處理：事發地點縣市改變時清空事發地點行政區並載入新的行政區列表
+      if (field === 'incidentCounty') {
+        newFormData.incidentDistrict = ''
+        
+        if (value) {
+          // 非同步載入行政區
+          loadIncidentDistricts(value)
+        } else {
+          setDropdownOptions(prev => ({ ...prev, incidentDistricts: [] }))
+        }
+      }
 
-    // 特殊處理：如果設定了結案日期但沒有時間，預設為現在時間
-    if (field === 'closedDate' && value && !formData.closedTime) {
-      const now = new Date()
-      const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`
-      newFormData.closedTime = currentTime
-    }
+      // 特殊處理：結案日期清空時，同時清空結案時間
+      if (field === 'closedDate' && !value) {
+        newFormData.closedTime = ''
+      }
 
-    setFormData(newFormData)
-    stableOnDataChange(newFormData)
-  }, [formData, stableOnDataChange])
+      // 特殊處理：如果設定了結案日期但沒有時間，預設為現在時間
+      if (field === 'closedDate' && value && !currentFormData.closedTime) {
+        const now = new Date()
+        const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`
+        newFormData.closedTime = currentTime
+      }
+
+      // 通知父組件資料變更
+      stableOnDataChange(newFormData)
+      
+      return newFormData
+    })
+  }, [loadHomeDistricts, loadIncidentDistricts, stableOnDataChange])
 
   // 處理表單提交
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault()
     onSubmit(formData)
-  }
+  }, [formData, onSubmit])
+
+  // 載入下拉選單資料
+  useEffect(() => {
+    loadDropdownData()
+  }, [loadDropdownData])
 
   // 取得按鈕狀態和文字
   const getButtonState = () => {
@@ -698,7 +727,7 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
         }
         
         setOriginalData(editData)
-        setCurrentFormData(editData)
+        setFormData(editData)
         setDataLoadingState('success')
         setHasChanges(false)
         
@@ -711,7 +740,7 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
       setDataLoadingState('idle')
       // 重置所有狀態
       setOriginalData(null)
-      setCurrentFormData(null)
+      setFormData(null)
       setHasChanges(false)
       setError('')
     }
@@ -720,19 +749,19 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
   // 當表單資料和縣市資料都準備好時，處理縣市和行政區的 ID 轉換
   useEffect(() => {
     const loadDistrictsAndSetValues = async () => {
-      if (currentFormData && counties && counties.length > 0 && dataLoadingState === 'success') {
+      if (formData && counties && counties.length > 0 && dataLoadingState === 'success') {
         console.log('=== 開始處理縣市和行政區的 ID 轉換 ===')
         
         let needsUpdate = false
-        const updatedFormData = { ...currentFormData }
+        const updatedFormData = { ...formData }
         const updatedOriginalData = { ...originalData }
         
         // === 處理住家縣市和行政區 ===
-        if (currentFormData._homeCountyName && !currentFormData.homeCounty) {
+        if (formData._homeCountyName && !formData.homeCounty) {
           console.log('=== 處理住家縣市和行政區 ===')
-          console.log('要查找的住家縣市名稱:', currentFormData._homeCountyName)
+          console.log('要查找的住家縣市名稱:', formData._homeCountyName)
           
-          const homeCountyId = findCountyIdByName(currentFormData._homeCountyName, counties)
+          const homeCountyId = findCountyIdByName(formData._homeCountyName, counties)
           
           if (homeCountyId) {
             console.log('更新 homeCounty:', homeCountyId)
@@ -741,7 +770,7 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
             needsUpdate = true
             
             // 如果也有住家行政區名稱，載入行政區列表並設定值
-            if (currentFormData._homeDistrictName) {
+            if (formData._homeDistrictName) {
               try {
                 console.log('載入住家行政區列表...')
                 const homeDistrictsResult = await CaseService.getDistricts(homeCountyId)
@@ -751,7 +780,7 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
                   
                   // 查找對應的行政區 ID
                   const homeDistrictId = findDistrictIdByName(
-                    currentFormData._homeDistrictName, 
+                    formData._homeDistrictName, 
                     homeCountyId, 
                     homeDistrictsResult.data
                   )
@@ -772,11 +801,11 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
         }
         
         // === 處理事發縣市和行政區 ===
-        if (currentFormData._incidentCountyName && !currentFormData.incidentCounty) {
+        if (formData._incidentCountyName && !formData.incidentCounty) {
           console.log('=== 處理事發縣市和行政區 ===')
-          console.log('要查找的事發縣市名稱:', currentFormData._incidentCountyName)
+          console.log('要查找的事發縣市名稱:', formData._incidentCountyName)
           
-          const incidentCountyId = findCountyIdByName(currentFormData._incidentCountyName, counties)
+          const incidentCountyId = findCountyIdByName(formData._incidentCountyName, counties)
           
           if (incidentCountyId) {
             console.log('更新 incidentCounty:', incidentCountyId)
@@ -785,7 +814,7 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
             needsUpdate = true
             
             // 如果也有事發地點行政區名稱，載入行政區列表並設定值
-            if (currentFormData._incidentDistrictName) {
+            if (formData._incidentDistrictName) {
               try {
                 console.log('載入事發地點行政區列表...')
                 const incidentDistrictsResult = await CaseService.getDistricts(incidentCountyId)
@@ -795,7 +824,7 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
                   
                   // 查找對應的行政區 ID
                   const incidentDistrictId = findDistrictIdByName(
-                    currentFormData._incidentDistrictName,
+                    formData._incidentDistrictName,
                     incidentCountyId,
                     incidentDistrictsResult.data
                   )
@@ -818,7 +847,7 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
         // 一次性更新所有變更
         if (needsUpdate) {
           console.log('更新表單資料和原始資料')
-          setCurrentFormData(updatedFormData)
+          setFormData(updatedFormData)
           setOriginalData(updatedOriginalData)
         }
         
@@ -827,7 +856,7 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
     }
     
     loadDistrictsAndSetValues()
-  }, [currentFormData, counties, originalData, dataLoadingState, findCountyIdByName, findDistrictIdByName])
+  }, [formData, counties, originalData, dataLoadingState, findCountyIdByName, findDistrictIdByName])
 
   /**
    * 檢查資料是否有變更
@@ -840,7 +869,7 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
       'title', 'description', 'category', 'priority', 'status', 'processingStatus',
       'contact1Name', 'contact1Phone', 'contact2Name', 'contact2Phone',
       'receivedDate', 'receivedTime', 'closedDate', 'closedTime',
-      'receiver', 'assignee', 'incidentLocation', 'contactMethod'
+      'receiver', 'handler', 'incidentLocation', 'contactMethod'
     ]
     
     for (const field of importantFields) {
@@ -862,11 +891,11 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
   /**
    * 表單資料變更處理
    */
-  const handleFormDataChange = useCallback((formData) => {
-    console.log('表單資料變更:', formData)
-    setCurrentFormData(formData)
+  const handleFormDataChange = useCallback((newFormData) => {
+    console.log('表單資料變更:', newFormData)
+    setFormData(newFormData)
     
-    const hasDataChanged = checkForChanges(formData)
+    const hasDataChanged = checkForChanges(newFormData)
     setHasChanges(hasDataChanged)
     console.log('是否有變更:', hasDataChanged)
   }, [checkForChanges])
@@ -878,7 +907,7 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
     setShowUnsavedModal(false)
     setHasChanges(false)
     setOriginalData(null)
-    setCurrentFormData(null)
+    setFormData(null)
     setError('')
     onClose()
   }, [onClose])
@@ -886,7 +915,7 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
   /**
    * 改善的儲存案件修改函數
    */
-  const handleSave = useCallback(async (formData) => {
+  const handleSave = useCallback(async (submitFormData) => {
     // === 第一層：系統環境檢查 ===
     if (!team?.id || !caseData?.id) {
       setError('系統錯誤，請重新載入頁面')
@@ -905,22 +934,22 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
     }
 
     // === 第三層：表單內容驗證 ===
-    const validation = validateFormFields(formData)
+    const validation = validateFormFields(submitFormData)
     if (!validation.valid) {
       setError(validation.message)
       return
     }
 
     // === 執行提交 ===
-    setSaving(true)
+    setIsSubmitting(true)
     setError('')
 
     try {
-      console.log('提交編輯表單:', submitData)
+      console.log('提交編輯表單:', submitFormData)
 
-      const validation = CaseService.validateRequiredFields(submitData)
-      if (!validation.isValid) {
-        alert('表單驗證失敗：\n' + validation.errors.join('\n'))
+      const caseServiceValidation = CaseService.validateRequiredFields(submitFormData)
+      if (!caseServiceValidation.isValid) {
+        alert('表單驗證失敗：\n' + caseServiceValidation.errors.join('\n'))
         return
       }
 
@@ -932,7 +961,7 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
       }
 
       const result = await CaseService.updateCaseWithRelations({
-        caseData: { ...formData, id: caseData.id },
+        caseData: { ...submitFormData, id: caseData.id },
         originalData,
         teamId: team.id,
         dropdownOptions: extendedDropdownOptions
@@ -945,18 +974,18 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
         alert('案件更新成功！')
         
         if (typeof onCaseUpdated === 'function') {
-          onCaseUpdated(submitData)
+          onCaseUpdated(submitFormData)
         }
         
-        onClose()
+        closeModal()
       } else {
         console.error('案件更新失敗:', result.error)
-        alert('案件更新失敗：' + result.error)
+        setError('案件更新失敗：' + result.error)
       }
 
     } catch (error) {
       console.error('更新案件時發生錯誤:', error)
-      alert('更新案件時發生錯誤：' + error.message)
+      setError('更新案件時發生錯誤：' + error.message)
     } finally {
       setIsSubmitting(false)
     }
@@ -986,7 +1015,7 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
   /**
    * 返回表單
    */
-  const handleReturnToForm = useCallback(() => {
+  const handleContinueEditing = useCallback(() => {
     console.log('使用者選擇返回表單')
     setShowUnsavedModal(false)
   }, [])
@@ -995,13 +1024,13 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
 
   return (
     <>
-      <div className="modal-overlay" onClick={handleClose}>
+      <div className="modal-overlay" onClick={handleCloseModal}>
         <div className="modal-content case-edit-modal-large" onClick={(e) => e.stopPropagation()}>
           <div className="modal-header">
             <h2>編輯案件</h2>
             <button 
               className="modal-close-btn"
-              onClick={handleClose}
+              onClick={handleCloseModal}
               disabled={isSubmitting}
               type="button"
             >
@@ -1041,14 +1070,14 @@ function CaseEditModal({ isOpen, onClose, caseData, team, onCaseUpdated }) {
               </div>
             )}
 
-            {dataLoadingState === 'success' && currentFormData && (
+            {dataLoadingState === 'success' && formData && (
               <EditableCaseForm
                 team={team}
-                initialData={currentFormData}
+                initialData={formData}
                 onDataChange={handleFormDataChange}
                 onSubmit={handleSave}
                 onCancel={handleCloseModal}
-                isSubmitting={saving}
+                isSubmitting={isSubmitting}
                 hasChanges={hasChanges}
                 dataLoadingState={dataLoadingState}
               />
