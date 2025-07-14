@@ -1,24 +1,124 @@
 import React, { useState } from 'react'
 import '../../../styles/CaseTextInput.css'
 
-function CaseTextInput({ team, onSubmit, onCancel }) {
+function CaseTextInput({ team, member, onSubmit, onCancel, onAIExtractionComplete }) {
   const [textContent, setTextContent] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
-  
-  // 新增通知和行事曆設定狀態
-  const [notificationSettings, setNotificationSettings] = useState({
-    notificationMethod: 'phone',
-    reminderDate: '',
-    googleCalendarSync: false,
-    sendNotification: false,
-    multipleReminders: false
-  })
+  const [isAISummarizing, setIsAISummarizing] = useState(false)
 
-  const handleNotificationChange = (field, value) => {
-    setNotificationSettings(prev => ({
-      ...prev,
-      [field]: value
-    }))
+  const handleAISummary = async () => {
+    if (!textContent.trim()) {
+      alert('請先輸入陳情內容')
+      return
+    }
+
+    setIsAISummarizing(true)
+    
+    try {
+      console.log('🚀 開始 AI 分析...')
+      
+      // 從環境變數讀取 API 設定
+      const apiUrl = process.env.REACT_APP_AI_SUMMARY_URL
+      const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY
+      
+      if (!apiUrl || !supabaseKey) {
+        throw new Error('缺少必要的環境變數設定')
+      }
+      
+      const startTime = performance.now()
+      
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabaseKey}`,
+          'apikey': supabaseKey,
+        },
+        body: JSON.stringify({
+          transcript: textContent.trim()
+        })
+      })
+
+      const endTime = performance.now()
+      const duration = endTime - startTime
+      
+      console.log(`⏱️ AI 分析耗時: ${(duration/1000).toFixed(1)} 秒`)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('❌ API 呼叫失敗:', response.status, errorText)
+        throw new Error(`API 呼叫失敗 (${response.status}): ${errorText}`)
+      }
+
+      const data = await response.json()
+      
+      if (data.success && data.extractedData) {
+        console.log('✅ AI 分析成功！提取的資料:', data.extractedData)
+        
+        // 將提取的資料轉換為表單格式
+        const formData = {
+          title: data.extractedData["Petition Summary"] ? 
+                 data.extractedData["Petition Summary"].substring(0, 50) + '...' : 
+                 '通過 AI 摘要建立的案件',
+          description: data.extractedData["Petition Summary"] || textContent.trim(),
+          petitionerName: data.extractedData["Petitioner's Name"] || '',
+          contactPhone: data.extractedData["Contact Phone Number"] || '',
+          petitionerAddress: data.extractedData["Petitioner's Home Address"] || '',
+          incidentLocation: data.extractedData["Incident Location"] || '',
+          caseCategory: mapCaseCategory(data.extractedData["Case Category"]),
+          priority: mapPriority(data.extractedData["Priority Level"]),
+          petitionMethod: data.extractedData["Petition Method"] || '',
+          secondPetitionerName: data.extractedData["Second Petitioner's Chinese Name"] || '',
+          secondContactPhone: data.extractedData["Second Petitioner's Contact Phone"] || '',
+          // 原始逐字稿
+          originalTranscript: textContent.trim(),
+          // AI 提取的完整資料
+          aiExtractedData: data.extractedData,
+          // 標記為 AI 建立
+          createdByAI: true
+        }
+        
+        // 通知父組件切換到表單模式並填入資料
+        if (onAIExtractionComplete) {
+          onAIExtractionComplete(formData)
+        }
+        
+        alert(`✅ AI 分析完成！\n耗時: ${(duration/1000).toFixed(1)} 秒\n即將跳轉到逐欄輸入視窗並自動填入提取的資訊`)
+        
+      } else {
+        console.error('❌ AI 分析失敗:', data.error)
+        alert('❌ AI 分析失敗：' + (data.error || '未知錯誤'))
+      }
+      
+    } catch (error) {
+      console.error('💥 AI 分析過程發生錯誤:', error)
+      alert('💥 AI 分析失敗：' + error.message)
+    } finally {
+      setIsAISummarizing(false)
+    }
+  }
+
+  // 將 AI 回傳的案件類別對應到系統的選項
+  const mapCaseCategory = (aiCategory) => {
+    const mapping = {
+      'Traffic Issues': 'traffic',
+      'Public Services': 'public_service', 
+      'Environmental Issues': 'environment',
+      'Public Safety Issues': 'safety',
+      'Legal Consultation': 'legal',
+      'Other Issues': 'other'
+    }
+    return mapping[aiCategory] || 'other'
+  }
+
+  // 將 AI 回傳的優先級對應到系統的選項
+  const mapPriority = (aiPriority) => {
+    const mapping = {
+      'Urgent': 'high',
+      'Normal': 'medium', 
+      'Low': 'low'
+    }
+    return mapping[aiPriority] || 'medium'
   }
 
   const handleSubmit = async (e) => {
@@ -32,13 +132,12 @@ function CaseTextInput({ team, onSubmit, onCancel }) {
     setIsSubmitting(true)
 
     try {
-      // 將全文輸入和通知設定轉換為案件資料格式
+      // 直接建立案件（不經過 AI 分析）
       const caseData = {
-        title: '全文輸入案件',
+        title: 'AI摘要案件',
         description: textContent.trim(),
         inputMode: 'text',
-        // 包含通知設定
-        notificationSettings
+        originalTranscript: textContent.trim()
       }
 
       await onSubmit(caseData)
@@ -53,7 +152,7 @@ function CaseTextInput({ team, onSubmit, onCancel }) {
   return (
     <div className="case-text-input-container">
       <form onSubmit={handleSubmit} className="case-text-form">
-        {/* 全文輸入區域 */}
+        {/* AI摘要輸入區域 */}
         <div className="text-input-section">
           <label className="text-input-label">
             陳情內容全文 <span className="required">*</span>
@@ -61,92 +160,41 @@ function CaseTextInput({ team, onSubmit, onCancel }) {
           <textarea
             value={textContent}
             onChange={(e) => setTextContent(e.target.value)}
-            placeholder="請輸入陳情內容全文，系統將自動萃取關鍵資訊..."
-            rows={12}
+            placeholder="請輸入陳情內容全文，點擊「AI一鍵摘要」系統將自動分析並萃取關鍵資訊..."
+            rows={15}
             className="text-input-textarea"
             required
           />
+          
+          {/* 字數統計 */}
+          <div className="text-stats">
+            字數: {textContent.length} 字
+          </div>
         </div>
 
-        {/* AI 萃取提示 */}
-        <div className="ai-extract-notice">
-          <div className="ai-extract-header">
-            <strong>AI 萃取資訊</strong>
-          </div>
-          <p className="ai-extract-description">
-            系統將自動分析文本並萃取案件標題、聯絡人、地點等關鍵資訊
+        {/* AI 摘要操作區域 */}
+        <div className="ai-summary-section">
+          <button
+            type="button"
+            onClick={handleAISummary}
+            disabled={isAISummarizing || isSubmitting || !textContent.trim()}
+            className="ai-summary-btn"
+          >
+            {isAISummarizing ? (
+              <>
+                <span className="ai-loading-icon">🤖</span>
+                AI 分析中... ({Math.floor(Math.random() * 10) + 5}秒)
+              </>
+            ) : (
+              <>
+                <span className="ai-icon">🤖</span>
+                AI一鍵摘要
+              </>
+            )}
+          </button>
+          <p className="ai-summary-description">
+            AI將自動分析文本並萃取案件標題、聯絡人、地點等關鍵資訊，並跳轉到逐欄輸入視窗
           </p>
-        </div>
-
-        {/* 通知與行事曆設定 */}
-        <div className="form-section">
-          <h3 className="section-title">通知與行事曆設定</h3>
-          <div className="calendar-notification-container">
-            {/* 通知設定行 */}
-            <div className="notification-row">
-              <div className="notification-field">
-                <label>通知方式</label>
-                <select
-                  value={notificationSettings.notificationMethod}
-                  onChange={(e) => handleNotificationChange('notificationMethod', e.target.value)}
-                  className="notification-select"
-                >
-                  <option value="phone">電話</option>
-                  <option value="sms">簡訊</option>
-                  <option value="email">Email</option>
-                  <option value="line">Line</option>
-                  <option value="other">其他</option>
-                </select>
-              </div>
-
-              <div className="notification-field">
-                <label>提醒時間</label>
-                <input
-                  type="datetime-local"
-                  value={notificationSettings.reminderDate}
-                  onChange={(e) => handleNotificationChange('reminderDate', e.target.value)}
-                  className="datetime-input"
-                />
-              </div>
-
-              <div className="notification-actions">
-                <button
-                  type="button"
-                  className={`action-btn calendar-btn ${notificationSettings.googleCalendarSync ? 'active' : ''}`}
-                  onClick={() => handleNotificationChange('googleCalendarSync', !notificationSettings.googleCalendarSync)}
-                >
-                  <span className="btn-icon">📅</span>
-                  同步至 Google 行事曆
-                </button>
-                
-                <button
-                  type="button"
-                  className={`action-btn notification-btn ${notificationSettings.sendNotification ? 'active' : ''}`}
-                  onClick={() => handleNotificationChange('sendNotification', !notificationSettings.sendNotification)}
-                >
-                  <span className="btn-icon">🔔</span>
-                  發送通知
-                </button>
-              </div>
-            </div>
-
-            {/* 多次提醒設定 */}
-            <div className="multiple-reminder-row">
-              <div className="checkbox-container">
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={notificationSettings.multipleReminders}
-                    onChange={(e) => handleNotificationChange('multipleReminders', e.target.checked)}
-                    className="checkbox-input"
-                  />
-                  <span className="checkbox-text">
-                    設定多次提醒（會在設定時間前1天、當天和逾期時自動發送通知）
-                  </span>
-                </label>
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* Footer */}
@@ -154,17 +202,17 @@ function CaseTextInput({ team, onSubmit, onCancel }) {
           <button
             type="button"
             onClick={onCancel}
-            disabled={isSubmitting}
+            disabled={isSubmitting || isAISummarizing}
             className="cancel-btn"
           >
             取消
           </button>
           <button
             type="submit"
-            disabled={isSubmitting || !textContent.trim()}
+            disabled={isSubmitting || isAISummarizing || !textContent.trim()}
             className="submit-btn"
           >
-            {isSubmitting ? '建立中...' : '建立案件'}
+            {isSubmitting ? '建立中...' : '直接建立案件'}
           </button>
         </div>
       </form>

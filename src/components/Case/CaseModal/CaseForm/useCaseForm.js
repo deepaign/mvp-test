@@ -1,10 +1,11 @@
-// src/components/Case/CaseModal/CaseForm/useCaseForm.js - 完整修正版
+// src/components/Case/CaseModal/CaseForm/useCaseForm.js - 支援 initialData
 import { useState, useCallback, useEffect, useMemo } from 'react'
 import { CaseService } from '../../../../services/caseService'
 import { TeamService } from '../../../../services/teamService'
 
-export function useCaseForm({ team, member, onSubmit }) {
-  const [formData, setFormData] = useState({
+export function useCaseForm({ team, member, onSubmit, initialData }) {
+  // 預設表單資料
+  const getDefaultFormData = useCallback(() => ({
     caseNumber: '',
     contactMethod: 'phone',
     receivedDate: new Date().toISOString().split('T')[0],
@@ -12,7 +13,7 @@ export function useCaseForm({ team, member, onSubmit }) {
     closedDate: '',
     closedTime: '',
     receiver: '',
-    assignee: '', // 修正：使用 assignee 而不是 handler
+    assignee: '',
     title: '',
     category: '',
     homeCounty: '',
@@ -32,7 +33,76 @@ export function useCaseForm({ team, member, onSubmit }) {
     notificationMethod: 'phone',
     reminderCount: 1,
     enableCalendarSync: false
+  }), [])
+
+  // 🆕 將 AI 提取的資料轉換為表單格式
+  const convertAIDataToFormData = useCallback((aiData) => {
+    if (!aiData) return getDefaultFormData()
+
+    console.log('🤖 轉換 AI 資料到表單格式:', aiData)
+
+    const converted = {
+      ...getDefaultFormData(),
+      // 基本資訊
+      title: aiData.title || '',
+      description: aiData.description || '',
+      
+      // 聯絡人資訊
+      contact1Name: aiData.petitionerName || '',
+      contact1Phone: aiData.contactPhone || '',
+      contact2Name: aiData.secondPetitionerName || '',
+      contact2Phone: aiData.secondContactPhone || '',
+      
+      // 地址資訊
+      homeAddress: aiData.petitionerAddress || '',
+      incidentLocation: aiData.incidentLocation || '',
+      
+      // 案件分類和優先級
+      category: aiData.caseCategory || '',
+      priority: aiData.priority || 'normal',
+      
+      // 陳情方式
+      contactMethod: mapPetitionMethod(aiData.petitionMethod) || 'phone',
+      
+      // 特殊標記
+      createdByAI: aiData.createdByAI || false,
+      originalTranscript: aiData.originalTranscript || '',
+      aiExtractedData: aiData.aiExtractedData || null
+    }
+
+    console.log('✅ AI 資料轉換完成:', converted)
+    return converted
+  }, [getDefaultFormData])
+
+  // 映射陳情方式
+  const mapPetitionMethod = useCallback((aiMethod) => {
+    const mapping = {
+      'Line': 'line',
+      '電話': 'phone',
+      '現場': 'in_person',
+      'FB': 'facebook',
+      'Email': 'email',
+      '其他': 'other'
+    }
+    return mapping[aiMethod] || 'phone'
+  }, [])
+
+  // 初始化表單資料（支援 AI 資料）
+  const [formData, setFormData] = useState(() => {
+    if (initialData) {
+      return convertAIDataToFormData(initialData)
+    }
+    return getDefaultFormData()
   })
+
+  // 當 initialData 變化時更新表單
+  useEffect(() => {
+    if (initialData) {
+      console.log('🔄 收到新的 initialData，更新表單')
+      const convertedData = convertAIDataToFormData(initialData)
+      setFormData(convertedData)
+    }
+  }, [initialData, convertAIDataToFormData])
 
   const [dropdownOptions, setDropdownOptions] = useState({
     members: [],
@@ -54,6 +124,56 @@ export function useCaseForm({ team, member, onSubmit }) {
     console.warn(`${dataType} 不是陣列，使用空陣列:`, data)
     return []
   }, [])
+
+  // 載入下拉選單資料
+  const loadDropdownData = useCallback(async () => {
+    if (!team?.id || !member?.auth_user_id) {
+      console.warn('團隊ID或成員ID為空，無法載入下拉選單資料')
+      return
+    }
+
+    setLoading(true)
+    console.log('載入下拉選單資料...')
+
+    try {
+      const [membersResult, categoriesResult, countiesResult] = await Promise.allSettled([
+        TeamService.getTeamMembers(team.id, member.auth_user_id),
+        CaseService.getCategories(),
+        CaseService.getCounties()
+      ])
+
+      const newOptions = {
+        members: ensureArray(
+          membersResult.status === 'fulfilled' && membersResult.value.success 
+            ? (membersResult.value.members || membersResult.value.data)
+            : [], 
+          '團隊成員'
+        ),
+        categories: ensureArray(
+          categoriesResult.status === 'fulfilled' && categoriesResult.value.success 
+            ? categoriesResult.value.data 
+            : [], 
+          '案件類別'
+        ),
+        counties: ensureArray(
+          countiesResult.status === 'fulfilled' && countiesResult.value.success 
+            ? countiesResult.value.data 
+            : [], 
+          '縣市'
+        ),
+        homeDistricts: [],
+        incidentDistricts: []
+      }
+
+      setDropdownOptions(newOptions)
+      console.log('下拉選單資料載入完成')
+
+    } catch (error) {
+      console.error('載入下拉選單資料失敗:', error)
+    } finally {
+      setLoading(false)
+    }
+  }, [team?.id, member?.auth_user_id, ensureArray])
 
   // 載入行政區資料
   const loadDistricts = useCallback(async (countyId, type) => {
@@ -93,12 +213,35 @@ export function useCaseForm({ team, member, onSubmit }) {
     }
   }, [ensureArray])
 
+  // 處理輸入變更
+  const handleInputChange = useCallback((field, value) => {
+    console.log(`表單欄位變更: ${field} = ${value}`)
+    
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }))
+
+    // 處理縣市變更時載入對應行政區
+    if (field === 'homeCounty' && value) {
+      loadDistricts(value, 'home')
+    } else if (field === 'incidentCounty' && value) {
+      loadDistricts(value, 'incident')
+    }
+  }, [loadDistricts])
+
   // 生成案件編號
   const generateCaseNumber = useCallback(() => {
+    if (!team?.id) return
+
     const now = new Date()
-    const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '')
-    const timeStr = now.getTime().toString().slice(-3)
-    const caseNumber = `CASE-${dateStr}-${timeStr}`
+    const year = now.getFullYear()
+    const month = String(now.getMonth() + 1).padStart(2, '0')
+    const day = String(now.getDate()).padStart(2, '0')
+    const hour = String(now.getHours()).padStart(2, '0')
+    const minute = String(now.getMinutes()).padStart(2, '0')
+    
+    const caseNumber = `CASE-${year}${month}${day}-${hour}${minute}-${team.id.slice(-4)}`
     
     setFormData(prev => ({
       ...prev,
@@ -106,275 +249,66 @@ export function useCaseForm({ team, member, onSubmit }) {
     }))
     
     console.log('生成案件編號:', caseNumber)
-  }, [])
-
-  // 載入下拉選單資料
-  const loadDropdownData = useCallback(async () => {
-    if (!team?.id) {
-      console.error('團隊 ID 缺失，無法載入下拉選單資料')
-      setLoading(false)
-      return
-    }
-
-    // 檢查 member 參數
-    if (!member?.auth_user_id) {
-      console.error('成員驗證資訊缺失，無法載入下拉選單資料')
-      setLoading(false)
-      return
-    }
-
-    setLoading(true)
-    
-    try {
-      console.log('開始載入下拉選單資料，團隊ID:', team.id, '成員ID:', member.auth_user_id)
-
-      // 🔧 使用 Promise.allSettled 來處理多個 API 調用
-      const promises = [
-        // 修正：使用 TeamService.getTeamMembers 並傳入正確參數
-        TeamService.getTeamMembers(team.id, member.auth_user_id).catch(err => {
-          console.error('載入團隊成員失敗:', err)
-          return { success: false, members: [], error: err.message }
-        }),
-        CaseService.getCategories(team.id).catch(err => {
-          console.error('載入類別失敗:', err)
-          return { success: false, data: [], error: err.message }
-        }),
-        CaseService.getCounties().catch(err => {
-          console.error('載入縣市失敗:', err)
-          return { success: false, data: [], error: err.message }
-        })
-      ]
-
-      const results = await Promise.allSettled(promises)
-      
-      // 🔧 安全處理每個結果
-      const [membersResult, categoriesResult, countiesResult] = results.map(result => {
-        if (result.status === 'rejected') {
-          console.error('Promise 被拒絕:', result.reason)
-          return { success: false, data: [], members: [], error: result.reason.message || '未知錯誤' }
-        }
-        return result.value
-      })
-
-      // 🔧 確保所有資料都是陣列，特別處理 TeamService 的回傳格式
-      const safeDropdownOptions = {
-        // 修正：TeamService.getTeamMembers 回傳格式是 { success, members, isLeader }
-        members: ensureArray(
-          membersResult.success ? membersResult.members : [], 
-          '團隊成員'
-        ),
-        categories: ensureArray(
-          categoriesResult.success ? categoriesResult.data : [], 
-          '案件類別'
-        ),
-        counties: ensureArray(
-          countiesResult.success ? countiesResult.data : [], 
-          '縣市'
-        ),
-        homeDistricts: [],
-        incidentDistricts: []
-      }
-
-      console.log('下拉選單資料載入結果:', {
-        members: safeDropdownOptions.members.length,
-        categories: safeDropdownOptions.categories.length,
-        counties: safeDropdownOptions.counties.length
-      })
-
-      // 除錯：顯示載入的成員資料
-      console.log('載入的成員清單:', safeDropdownOptions.members)
-
-      setDropdownOptions(safeDropdownOptions)
-
-    } catch (error) {
-      console.error('載入下拉選單發生嚴重錯誤:', error)
-      // 🔧 確保在錯誤情況下設定安全的預設值
-      setDropdownOptions({
-        members: [],
-        categories: [],
-        counties: [],
-        homeDistricts: [],
-        incidentDistricts: []
-      })
-    } finally {
-      setLoading(false)
-    }
-  }, [team?.id, member?.auth_user_id, ensureArray])
-
-  // 處理輸入變更
-  const handleInputChange = useCallback((field, value) => {
-    console.log(`欄位變更: ${field} = ${value}`)
-    
-    setFormData(prev => {
-      const newData = {
-        ...prev,
-        [field]: value
-      }
-
-      // 特殊處理邏輯
-      if (field === 'homeCounty') {
-        newData.homeDistrict = '' // 清空行政區選擇
-      }
-      
-      if (field === 'incidentCounty') {
-        newData.incidentDistrict = '' // 清空行政區選擇
-      }
-      
-      if (field === 'closedDate' && !value) {
-        newData.closedTime = '' // 清空結案時間
-      }
-
-      return newData
-    })
-  }, [])
+  }, [team?.id])
 
   // 表單驗證
-  const validateForm = useCallback((data) => {
+  const validateForm = useCallback(() => {
     const errors = []
-
-    // 必填欄位檢查
-    if (!data.title || data.title.trim() === '') {
-      errors.push('案件標題為必填欄位')
+    
+    if (!formData.title?.trim()) {
+      errors.push('案件標題不能為空')
     }
-
-    if (!data.contact1Name || data.contact1Name.trim() === '') {
-      errors.push('聯絡人1姓名為必填欄位')
+    
+    if (!formData.description?.trim()) {
+      errors.push('案件描述不能為空')
     }
-
-    if (!data.contact1Phone || data.contact1Phone.trim() === '') {
-      errors.push('聯絡人1電話為必填欄位')
+    
+    if (!formData.contact1Name?.trim()) {
+      errors.push('聯絡人姓名不能為空')
     }
-
-    if (!data.receivedDate) {
-      errors.push('收件日期為必填欄位')
-    }
-
-    if (!data.category || data.category.trim() === '') {
-      errors.push('案件類別為必填欄位')
-    }
-
-    // 電話格式檢查
-    if (data.contact1Phone) {
-      const phoneRegex = /^[\d\-()+ \s]+$/
-      if (!phoneRegex.test(data.contact1Phone)) {
-        errors.push('聯絡人1電話格式不正確')
-      }
-    }
-
-    if (data.contact2Phone && data.contact2Phone.trim() !== '') {
-      const phoneRegex = /^[\d\-()+ \s]+$/
-      if (!phoneRegex.test(data.contact2Phone)) {
-        errors.push('聯絡人2電話格式不正確')
-      }
-    }
-
-    return {
-      isValid: errors.length === 0,
-      errors: errors
-    }
-  }, [])
+    
+    return errors
+  }, [formData])
 
   // 處理表單提交
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault()
     
-    if (isSubmitting) {
-      console.log('正在提交中，忽略重複提交')
+    console.log('=== useCaseForm.handleSubmit ===')
+    console.log('提交的表單資料:', formData)
+    
+    // 表單驗證
+    const validationErrors = validateForm()
+    if (validationErrors.length > 0) {
+      alert('表單驗證失敗：\n' + validationErrors.join('\n'))
       return
     }
-
-    console.log('開始提交表單:', formData)
-
-    // 驗證表單
-    const validation = validateForm(formData)
-    if (!validation.isValid) {
-      const errorMessage = '表單驗證失敗：\n' + validation.errors.join('\n')
-      alert(errorMessage)
-      return
-    }
-
+    
     setIsSubmitting(true)
-
+    
     try {
-      console.log('=== 開始建立案件 ===')
-      console.log('團隊資訊:', team)
-      console.log('成員資訊:', member)
-      console.log('表單資料:', formData)
-      console.log('下拉選單選項:', dropdownOptions)
-
-      // 🔧 確保 CaseService.createCase 方法存在
-      if (!CaseService.createCase || typeof CaseService.createCase !== 'function') {
-        throw new Error('CaseService.createCase 方法不存在')
+      // 準備案件資料
+      const caseData = {
+        ...formData,
+        teamId: team?.id,
+        createdBy: member?.auth_user_id,
+        // 🆕 保留 AI 相關資訊
+        createdByAI: formData.createdByAI || false,
+        originalTranscript: formData.originalTranscript || '',
+        aiExtractedData: formData.aiExtractedData || null
       }
-
-      const result = await CaseService.createCase(formData, team.id, dropdownOptions)
-
-      console.log('案件建立結果:', result)
-
-      if (result.success) {
-        console.log('✅ 案件建立成功')
-        
-        if (typeof onSubmit === 'function') {
-          onSubmit(result.data)
-        }
-        
-        // 重置表單
-        setFormData({
-          caseNumber: '',
-          contactMethod: 'phone',
-          receivedDate: new Date().toISOString().split('T')[0],
-          receivedTime: '08:00',
-          closedDate: '',
-          closedTime: '',
-          receiver: '',
-          assignee: '',
-          title: '',
-          category: '',
-          homeCounty: '',
-          homeDistrict: '',
-          homeAddress: '',
-          incidentCounty: '',
-          incidentDistrict: '',
-          incidentLocation: '',
-          priority: 'normal',
-          hasAttachment: 'none',
-          contact1Name: '',
-          contact1Phone: '',
-          contact2Name: '',
-          contact2Phone: '',
-          description: '',
-          enableNotifications: false,
-          notificationMethod: 'phone',
-          reminderCount: 1,
-          enableCalendarSync: false
-        })
-
-        // 重新生成案件編號
-        generateCaseNumber()
-        
-        alert('案件建立成功！')
-      } else {
-        console.error('❌ 案件建立失敗:', result.error)
-        alert('案件建立失敗：' + result.error)
-      }
-
+      
+      console.log('準備提交的案件資料:', caseData)
+      
+      await onSubmit(caseData)
+      
     } catch (error) {
-      console.error('❌ 提交表單發生錯誤:', error)
-      
-      let errorMessage = '提交表單時發生錯誤：\n'
-      if (error.message) {
-        errorMessage += error.message
-      } else if (error.code === 'NETWORK_ERROR') {
-        errorMessage += '網路請求失敗，請檢查網路連線'
-      } else {
-        errorMessage += '系統錯誤，請稍後再試'
-      }
-      
-      alert(errorMessage)
+      console.error('表單提交失敗:', error)
+      alert('案件建立失敗：' + error.message)
     } finally {
       setIsSubmitting(false)
     }
-  }, [formData, team, member, onSubmit, validateForm, dropdownOptions, isSubmitting, generateCaseNumber])
+  }, [formData, team, member, onSubmit, validateForm])
 
   // useEffect hooks
   useEffect(() => {
@@ -389,7 +323,6 @@ export function useCaseForm({ team, member, onSubmit }) {
       console.log('住家縣市變更，載入行政區:', formData.homeCounty)
       loadDistricts(formData.homeCounty, 'home')
     } else {
-      // 清空住家行政區
       setDropdownOptions(prev => ({
         ...prev,
         homeDistricts: []
@@ -402,7 +335,6 @@ export function useCaseForm({ team, member, onSubmit }) {
       console.log('事發縣市變更，載入行政區:', formData.incidentCounty)
       loadDistricts(formData.incidentCounty, 'incident')
     } else {
-      // 清空事發行政區
       setDropdownOptions(prev => ({
         ...prev,
         incidentDistricts: []
@@ -411,9 +343,11 @@ export function useCaseForm({ team, member, onSubmit }) {
   }, [formData.incidentCounty, loadDistricts])
 
   useEffect(() => {
-    // 初始化時生成案件編號
-    generateCaseNumber()
-  }, [generateCaseNumber])
+    // 只有在沒有初始資料時才生成新的案件編號
+    if (!initialData) {
+      generateCaseNumber()
+    }
+  }, [generateCaseNumber, initialData])
 
   // 🔧 確保 dropdownOptions 中的所有陣列都是安全的
   const safeDropdownOptions = useMemo(() => ({

@@ -1,4 +1,4 @@
-// src/components/Case/CaseModal/CaseForm/CaseForm.js - 修正版
+// src/components/Case/CaseModal/CaseForm/CaseForm.js - 支援 initialData
 import React from 'react'
 import { useCaseForm } from './useCaseForm'
 import { 
@@ -10,8 +10,7 @@ import {
 import { FormFooter } from './FormFields'
 import '../../../../styles/CaseForm.css'
 
-// 修正：新增 member 參數
-const CaseForm = ({ team, member, onSubmit, onCancel }) => {
+const CaseForm = ({ team, member, onSubmit, onCancel, initialData }) => {
   const {
     formData,
     dropdownOptions,
@@ -19,7 +18,7 @@ const CaseForm = ({ team, member, onSubmit, onCancel }) => {
     isSubmitting,
     handleInputChange,
     handleSubmit
-  } = useCaseForm({ team, member, onSubmit }) // 修正：傳入 member 參數
+  } = useCaseForm({ team, member, onSubmit, initialData }) // 🆕 傳入 initialData
 
   // 防止表單內的 Enter 鍵觸發提交
   const handleFormKeyDown = (e) => {
@@ -44,6 +43,27 @@ const CaseForm = ({ team, member, onSubmit, onCancel }) => {
 
   return (
     <div className="case-form-container">
+      {/* 🆕 AI 填入提示 */}
+      {initialData?.createdByAI && (
+        <div className="ai-filled-notice">
+          <div className="ai-notice-content">
+            <span className="ai-icon">🤖</span>
+            <div className="ai-notice-text">
+              <strong>AI 已自動填入資訊</strong>
+              <p>請檢查並修正 AI 提取的資訊，確認無誤後再提交案件</p>
+            </div>
+          </div>
+          {initialData.originalTranscript && (
+            <details className="original-transcript">
+              <summary>查看原始逐字稿</summary>
+              <div className="transcript-content">
+                {initialData.originalTranscript}
+              </div>
+            </details>
+          )}
+        </div>
+      )}
+
       <form 
         onSubmit={handleSubmit} 
         onKeyDown={handleFormKeyDown}
@@ -75,6 +95,7 @@ const CaseForm = ({ team, member, onSubmit, onCancel }) => {
         <FormFooter 
           onCancel={onCancel}
           isSubmitting={isSubmitting}
+          submitText={initialData?.createdByAI ? '確認並建立案件' : '建立案件'}
         />
       </form>
     </div>

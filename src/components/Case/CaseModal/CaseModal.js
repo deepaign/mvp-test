@@ -1,12 +1,12 @@
-// src/components/Case/CaseModal/CaseModal.js - 修正版：新增 member 參數傳遞
+// src/components/Case/CaseModal/CaseModal.js - 支援 AI 數據傳遞
 import React, { useState } from 'react'
 import CaseForm from './CaseForm'
 import CaseTextInput from './CaseTextInput'
 import '../../../styles/CaseModal.css'
 
-// 修正：新增 member 參數
 function CaseModal({ isOpen, onClose, team, member, onCaseCreated }) {
   const [inputMode, setInputMode] = useState('form') // 'form' 或 'text'
+  const [aiExtractedData, setAiExtractedData] = useState(null) // AI 提取的資料
 
   if (!isOpen) return null
 
@@ -21,14 +21,22 @@ function CaseModal({ isOpen, onClose, team, member, onCaseCreated }) {
     }
   }
 
+  // 處理 AI 提取完成的回調
+  const handleAIExtractionComplete = (extractedData) => {
+    console.log('🤖 AI 提取完成，收到資料:', extractedData)
+    
+    // 儲存 AI 提取的資料
+    setAiExtractedData(extractedData)
+    
+    // 切換到表單模式
+    setInputMode('form')
+  }
+
   const handleCaseSubmit = async (caseData) => {
     console.log('=== CaseModal.handleCaseSubmit ===')
     console.log('收到的案件資料:', caseData)
     
     try {
-      // 注意：這個函數是由 CaseForm 的 onSubmit 呼叫的
-      // 在 CaseForm 中，案件已經建立成功了，所以這裡直接處理後續動作
-      
       console.log('案件建立成功，準備關閉視窗')
       
       // 通知父組件案件已建立
@@ -37,18 +45,24 @@ function CaseModal({ isOpen, onClose, team, member, onCaseCreated }) {
         onCaseCreated(caseData)
       }
       
+      // 重置狀態
+      setAiExtractedData(null)
+      setInputMode('form')
+      
       // 關閉視窗
       console.log('關閉案件建立視窗')
       onClose()
       
     } catch (error) {
       console.error('CaseModal.handleCaseSubmit 處理失敗:', error)
-      // 不要在這裡顯示 alert，因為 CaseForm 已經處理了錯誤
     }
   }
 
   const handleCancel = () => {
     console.log('用戶取消案件建立')
+    // 重置狀態
+    setAiExtractedData(null)
+    setInputMode('form')
     onClose()
   }
 
@@ -59,6 +73,9 @@ function CaseModal({ isOpen, onClose, team, member, onCaseCreated }) {
         <div className="case-modal-header">
           <div className="case-modal-title">
             <h2>新增陳情案件</h2>
+            {aiExtractedData && (
+              <span className="ai-badge">🤖 AI 已填入</span>
+            )}
           </div>
           
           <div className="case-modal-tabs">
@@ -67,12 +84,13 @@ function CaseModal({ isOpen, onClose, team, member, onCaseCreated }) {
               onClick={() => handleInputModeChange('form')}
             >
               逐欄填寫
+              {aiExtractedData && <span className="tab-indicator">●</span>}
             </button>
             <button
               className={`case-modal-tab ${inputMode === 'text' ? 'active' : ''}`}
               onClick={() => handleInputModeChange('text')}
             >
-              全文輸入
+              AI摘要
             </button>
           </div>
           
@@ -92,6 +110,7 @@ function CaseModal({ isOpen, onClose, team, member, onCaseCreated }) {
               member={member}  
               onSubmit={handleCaseSubmit}
               onCancel={handleCancel}
+              initialData={aiExtractedData} // 傳遞 AI 提取的資料
             />
           ) : (
             <CaseTextInput 
@@ -99,6 +118,7 @@ function CaseModal({ isOpen, onClose, team, member, onCaseCreated }) {
               member={member} 
               onSubmit={handleCaseSubmit}
               onCancel={handleCancel}
+              onAIExtractionComplete={handleAIExtractionComplete} // 新增回調
             />
           )}
         </div>
