@@ -16,6 +16,7 @@ function LoginPage({ onBackToHome }) {
         provider: 'google',
         options: {
           redirectTo: window.location.origin,
+          scopes: 'openid email profile https://www.googleapis.com/auth/calendar',
           queryParams: {
           prompt: 'consent select_account', // 🔧 正確的多參數格式
           access_type: 'offline',

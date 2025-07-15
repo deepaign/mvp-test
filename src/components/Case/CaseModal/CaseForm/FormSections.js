@@ -1,6 +1,7 @@
 // src/components/Case/CaseModal/CaseForm/FormSections.js - 修正版：解決案件內容顯示問題
 import React, { useState, useEffect, useCallback } from 'react'
 import CategoryAutoComplete from './CategoryAutoComplete'
+import { GoogleCalendarService } from '../../../../services/googleCalendarService';
 
 // 輔助函數：確保選項安全
 const ensureSafeOptions = (options) => {
@@ -515,10 +516,339 @@ export const NotificationSection = ({ formData, onChange }) => {
             className="action-btn calendar-btn"
             disabled={!formData.shouldAddToCalendar}
           >
-            📅 加入行事曆
+            📅 加入 Google 行事曆
           </button>
         </div>
       </div>
     </div>
   )
 }
+
+export const CalendarNotificationSection = ({ formData, onChange }) => {
+  const [isCreating, setIsCreating] = useState(false);
+  const [calendarEventCreated, setCalendarEventCreated] = useState(false);
+  const [googleAuthStatus, setGoogleAuthStatus] = useState({
+    hasValidToken: false,
+    needsReauth: false,
+    checked: false
+  });
+
+  // 檢查 Google 授權狀態和已存在的日曆事件
+  useEffect(() => {
+    checkInitialStatus();
+  }, [formData.id]);
+
+  const checkInitialStatus = async () => {
+    try {
+      // 檢查是否已經建立過 Calendar 事件
+      if (formData.google_calendar_event_id) {
+        setCalendarEventCreated(true);
+      }
+
+      // 檢查 Google 授權狀態
+      const authStatus = await GoogleCalendarService.checkGoogleAuth();
+      setGoogleAuthStatus({
+        ...authStatus,
+        checked: true
+      });
+
+    } catch (error) {
+      console.error('檢查初始狀態失敗:', error);
+      setGoogleAuthStatus({
+        hasValidToken: false,
+        needsReauth: true,
+        checked: true
+      });
+    }
+  };
+
+  const handleCalendarToggle = (checked) => {
+    onChange('shouldAddToCalendar', checked);
+    if (!checked) {
+      onChange('calendarDate', '');
+      onChange('calendarTime', '');
+      // 注意：不要在這裡清除已建立的事件 ID，讓使用者可以重新開啟
+    }
+  };
+
+  const handleCalendarDateChange = (value) => {
+    onChange('calendarDate', value);
+  };
+
+  const handleCalendarTimeChange = (value) => {
+    onChange('calendarTime', value);
+  };
+
+  const handleCreateCalendarEvent = async () => {
+    // 驗證必要欄位
+    if (!formData.calendarDate || !formData.calendarTime) {
+      alert('請先選擇日期和時間');
+      return;
+    }
+
+    if (!formData.title && !formData.description) {
+      alert('請先填入案件標題或描述');
+      return;
+    }
+
+    setIsCreating(true);
+
+    try {
+      // 使用服務層建立事件
+      const result = await GoogleCalendarService.quickCreateCaseEvent(
+        formData,
+        formData.calendarDate,
+        formData.calendarTime
+      );
+
+      if (result.success) {
+        // 更新表單資料
+        onChange('google_calendar_event_id', result.event.id);
+        onChange('google_calendar_event_link', result.event.htmlLink);
+        setCalendarEventCreated(true);
+        
+        alert('✅ 已成功加入 Google 行事曆！');
+        
+      } else if (result.needsReauth) {
+        // 處理授權過期
+        const shouldReauth = window.confirm(
+          'Google 日曆授權已過期，需要重新登入。\n\n點擊確定將重新登入以獲取權限。'
+        );
+        
+        if (shouldReauth) {
+          await GoogleCalendarService.handleAuthExpired();
+        }
+        
+      } else {
+        throw new Error(result.error || '建立日曆事件失敗');
+      }
+
+    } catch (error) {
+      console.error('建立日曆事件失敗:', error);
+      alert(`❌ 建立日曆事件失敗：${error.message}`);
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const handleDeleteCalendarEvent = async () => {
+    if (!formData.google_calendar_event_id) return;
+
+    const confirmDelete = window.confirm(
+      '確定要從 Google 日曆中刪除此事件嗎？\n\n此操作無法復原。'
+    );
+
+    if (!confirmDelete) return;
+
+    setIsCreating(true);
+
+    try {
+      const result = await GoogleCalendarService.deleteCalendarEvent(
+        formData.google_calendar_event_id,
+        formData.id
+      );
+
+      if (result.success) {
+        // 清除表單資料
+        onChange('google_calendar_event_id', '');
+        onChange('google_calendar_event_link', '');
+        setCalendarEventCreated(false);
+        
+        alert('✅ 已成功從 Google 日曆中刪除事件');
+        
+      } else if (result.needsReauth) {
+        await GoogleCalendarService.handleAuthExpired();
+      } else {
+        throw new Error(result.error || '刪除日曆事件失敗');
+      }
+
+    } catch (error) {
+      console.error('刪除日曆事件失敗:', error);
+      alert(`❌ 刪除失敗：${error.message}`);
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  // 取得今天的日期（用於日期 input 的 min 屬性）
+  const today = new Date().toISOString().split('T')[0];
+
+  // 判斷按鈕狀態
+  const getButtonState = () => {
+    if (!formData.shouldAddToCalendar) return 'disabled';
+    if (isCreating) return 'loading';
+    if (calendarEventCreated) return 'created';
+    if (!googleAuthStatus.hasValidToken && googleAuthStatus.checked) return 'needsAuth';
+    return 'ready';
+  };
+
+  const buttonState = getButtonState();
+
+  return (
+    <div className="form-section">
+      <h3 className="section-title">通知與行程設定</h3>
+      
+      {/* 通知提醒區塊 */}
+      <div className="notification-row">
+        <div className="notification-toggle">
+          <label className="toggle-label">
+            <input
+              type="checkbox"
+              checked={formData.shouldNotify || false}
+              onChange={(e) => onChange('shouldNotify', e.target.checked)}
+              className="toggle-checkbox"
+            />
+            <span className="toggle-text">設定通知提醒</span>
+          </label>
+        </div>
+        
+        {formData.shouldNotify && (
+          <div className="notification-datetime">
+            <input
+              type="date"
+              value={formData.notificationDate || ''}
+              onChange={(e) => onChange('notificationDate', e.target.value)}
+              className="datetime-input"
+              min={today}
+            />
+            <input
+              type="time"
+              value={formData.notificationTime || ''}
+              onChange={(e) => onChange('notificationTime', e.target.value)}
+              className="datetime-input"
+            />
+          </div>
+        )}
+
+        <div className="notification-actions">
+          <button
+            type="button"
+            className={`action-btn notification-btn ${formData.shouldNotify ? 'active' : ''}`}
+            disabled={!formData.shouldNotify}
+          >
+            📱 建立通知
+          </button>
+        </div>
+      </div>
+
+      {/* Google 行事曆同步區塊 */}
+      <div className="notification-row">
+        <div className="notification-toggle">
+          <label className="toggle-label">
+            <input
+              type="checkbox"
+              checked={formData.shouldAddToCalendar || false}
+              onChange={(e) => handleCalendarToggle(e.target.checked)}
+              className="toggle-checkbox"
+            />
+            <span className="toggle-text">同步至 Google 行事曆</span>
+          </label>
+        </div>
+        
+        {formData.shouldAddToCalendar && (
+          <div className="notification-datetime">
+            <input
+              type="date"
+              value={formData.calendarDate || ''}
+              onChange={(e) => handleCalendarDateChange(e.target.value)}
+              className="datetime-input"
+              min={today}
+              required
+            />
+            <input
+              type="time"
+              value={formData.calendarTime || ''}
+              onChange={(e) => handleCalendarTimeChange(e.target.value)}
+              className="datetime-input"
+              required
+            />
+          </div>
+        )}
+
+        <div className="notification-actions">
+          {/* Google 授權狀態指示器 */}
+          {googleAuthStatus.checked && !googleAuthStatus.hasValidToken && (
+            <div className="auth-status-indicator warning">
+              <span className="status-dot"></span>
+              <span className="status-text">需要重新授權</span>
+            </div>
+          )}
+
+          {/* 主要操作按鈕 */}
+          <button
+            type="button"
+            className={`action-btn calendar-btn ${
+              buttonState === 'ready' ? 'active' : ''
+            } ${buttonState === 'created' ? 'success' : ''}`}
+            disabled={buttonState === 'disabled' || buttonState === 'loading'}
+            onClick={handleCreateCalendarEvent}
+          >
+            {buttonState === 'loading' ? (
+              <>
+                <span className="loading-spinner"></span>
+                建立中...
+              </>
+            ) : buttonState === 'created' ? (
+              <>
+                ✅ 已加入 Google 行事曆
+              </>
+            ) : buttonState === 'needsAuth' ? (
+              <>
+                🔗 需要重新授權
+              </>
+            ) : (
+              <>
+                📅 加入 Google 行事曆
+              </>
+            )}
+          </button>
+          
+          {/* 檢視 / 刪除按鈕 */}
+          {calendarEventCreated && formData.google_calendar_event_link && (
+            <>
+              <a
+                href={formData.google_calendar_event_link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="action-btn view-calendar-btn"
+              >
+                🔗 檢視
+              </a>
+              
+              <button
+                type="button"
+                className="action-btn delete-calendar-btn"
+                onClick={handleDeleteCalendarEvent}
+                disabled={isCreating}
+                title="從 Google 日曆中刪除此事件"
+              >
+                🗑️ 移除
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* 狀態說明 */}
+      {formData.shouldAddToCalendar && googleAuthStatus.checked && (
+        <div className="calendar-status-info">
+          {!googleAuthStatus.hasValidToken ? (
+            <p className="status-warning">
+              ⚠️ Google 日曆授權可能已過期，點擊按鈕時將引導您重新授權
+            </p>
+          ) : calendarEventCreated ? (
+            <p className="status-success">
+              ✅ 此案件已同步至您的 Google 日曆
+            </p>
+          ) : (
+            <p className="status-info">
+              💡 填入日期時間後即可加入 Google 日曆
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default CalendarNotificationSection;
