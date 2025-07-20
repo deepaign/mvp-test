@@ -1,37 +1,47 @@
-// ============================================================================
-// Google Calendar 前端服務層
+// 更新後的 Google Calendar 前端服務層
 // 檔案位置: src/services/googleCalendarService.js
-// ============================================================================
 
 import { supabase } from '../supabase';
 
 export class GoogleCalendarService {
-  static baseUrl = `${process.env.REACT_APP_SUPABASE_URL}/functions/v1/google-calendar`;
+  static baseUrl = process.env.REACT_APP_GOOGLE_CALENDAR_API || 
+                  `${process.env.REACT_APP_SUPABASE_URL}/functions/v1/google-calendar`;
 
   // ============================================================================
-  // 取得授權標頭
+  // 取得授權標頭和 provider_token
   // ============================================================================
-  static async getAuthHeaders() {
+  static async getAuthAndProviderToken() {
     const { data: { session } } = await supabase.auth.getSession();
     
     if (!session?.access_token) {
       throw new Error('使用者未登入');
     }
 
+    if (!session?.provider_token) {
+      throw new Error('沒有找到 Google provider token，請重新登入');
+    }
+
     return {
-      'Authorization': `Bearer ${session.access_token}`,
-      'Content-Type': 'application/json'
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json'
+      },
+      providerToken: session.provider_token
     };
   }
 
   // ============================================================================
-  // 檢查 Google 授權狀態
+  // 檢查 Google 授權狀態 - 更新版
   // ============================================================================
   static async checkGoogleAuth() {
     try {
-      const headers = await this.getAuthHeaders();
+      const { headers, providerToken } = await this.getAuthAndProviderToken();
       
-      const response = await fetch(`${this.baseUrl}/check-auth`, {
+      const params = new URLSearchParams({
+        provider_token: providerToken
+      });
+
+      const response = await fetch(`${this.baseUrl}/check-auth?${params}`, {
         method: 'GET',
         headers
       });
@@ -44,7 +54,8 @@ export class GoogleCalendarService {
 
       return {
         hasValidToken: result.hasValidToken,
-        needsReauth: result.needsReauth
+        needsReauth: result.needsReauth,
+        error: result.error
       };
 
     } catch (error) {
@@ -58,375 +69,243 @@ export class GoogleCalendarService {
   }
 
   // ============================================================================
-  // 建立 Google Calendar 事件
+  // 建立 Google Calendar 事件 - 更新版
   // ============================================================================
   static async createCalendarEvent(eventData) {
     try {
-      const headers = await this.getAuthHeaders();
+      const { headers, providerToken } = await this.getAuthAndProviderToken();
       
-      // 驗證必要欄位
+      // 前端驗證必要欄位
       if (!eventData.summary || !eventData.start?.dateTime || !eventData.end?.dateTime) {
         throw new Error('缺少必要欄位：標題、開始時間、結束時間');
       }
 
+      // 確保時間格式正確
+      const formattedEventData = {
+        ...eventData,
+        start: {
+          dateTime: eventData.start.dateTime,
+          timeZone: eventData.start.timeZone || 'Asia/Taipei'
+        },
+        end: {
+          dateTime: eventData.end.dateTime,
+          timeZone: eventData.end.timeZone || 'Asia/Taipei'
+        }
+      };
+
+      const requestBody = {
+        eventData: formattedEventData,
+        providerToken: providerToken
+      };
+
+      console.log('發送請求到 Edge Function:', {
+        url: `${this.baseUrl}/create-event`,
+        body: { ...requestBody, providerToken: 'hidden' }
+      });
+
       const response = await fetch(`${this.baseUrl}/create-event`, {
         method: 'POST',
         headers,
-        body: JSON.stringify(eventData)
+        body: JSON.stringify(requestBody)
       });
 
       const result = await response.json();
       
       if (!response.ok) {
-        throw new Error(result.message || '建立日曆事件失敗');
+        // 處理需要重新授權的情況
+        if (result.code === 'REAUTH_REQUIRED') {
+          return {
+            success: false,
+            needsReauth: true,
+            message: '需要重新授權 Google 帳號才能建立行事曆事件'
+          };
+        }
+        
+        throw new Error(result.message || '建立事件失敗');
       }
 
       return {
         success: true,
-        event: result.event
+        event: result.event,
+        message: '事件建立成功'
       };
 
     } catch (error) {
       console.error('建立 Google Calendar 事件失敗:', error);
-      
-      // 特殊處理授權過期的情況
-      if (error.message.includes('授權已過期') || error.message.includes('重新登入')) {
-        return {
-          success: false,
-          needsReauth: true,
-          error: error.message
-        };
-      }
-
       return {
         success: false,
-        error: error.message
+        error: error.message,
+        needsReauth: error.message?.includes('授權') || error.message?.includes('token')
       };
     }
   }
 
   // ============================================================================
-  // 更新 Google Calendar 事件
+  // 一鍵建立事件的便利方法 - 更新版
   // ============================================================================
-  static async updateCalendarEvent(eventId, updateData) {
+  static async quickCreateEvent({
+    title,
+    description = '',
+    startTime,
+    endTime,
+    location = '',
+    caseId = null,
+    reminderMinutes = 30
+  }) {
     try {
-      const headers = await this.getAuthHeaders();
+      // 先驗證時間格式
+      this.validateEventTime(startTime, endTime);
       
-      if (!eventId) {
-        throw new Error('缺少事件 ID');
-      }
-
-      const response = await fetch(`${this.baseUrl}/update-event`, {
-        method: 'PUT',
-        headers,
-        body: JSON.stringify({
-          eventId,
-          ...updateData
-        })
-      });
-
-      const result = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(result.message || '更新日曆事件失敗');
-      }
-
-      return {
-        success: true,
-        event: result.event
-      };
-
-    } catch (error) {
-      console.error('更新 Google Calendar 事件失敗:', error);
-      
-      if (error.message.includes('授權已過期') || error.message.includes('重新登入')) {
-        return {
-          success: false,
-          needsReauth: true,
-          error: error.message
-        };
-      }
-
-      return {
-        success: false,
-        error: error.message
-      };
-    }
-  }
-
-  // ============================================================================
-  // 刪除 Google Calendar 事件
-  // ============================================================================
-  static async deleteCalendarEvent(eventId, caseId = null) {
-    try {
-      const headers = await this.getAuthHeaders();
-      
-      if (!eventId) {
-        throw new Error('缺少事件 ID');
-      }
-
-      const response = await fetch(`${this.baseUrl}/delete-event`, {
-        method: 'DELETE',
-        headers,
-        body: JSON.stringify({
-          eventId,
-          caseId
-        })
-      });
-
-      const result = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(result.message || '刪除日曆事件失敗');
-      }
-
-      return {
-        success: true,
-        message: result.message
-      };
-
-    } catch (error) {
-      console.error('刪除 Google Calendar 事件失敗:', error);
-      
-      if (error.message.includes('授權已過期') || error.message.includes('重新登入')) {
-        return {
-          success: false,
-          needsReauth: true,
-          error: error.message
-        };
-      }
-
-      return {
-        success: false,
-        error: error.message
-      };
-    }
-  }
-
-  // ============================================================================
-  // 從案件資料建立事件資料
-  // ============================================================================
-  static formatCaseToCalendarEvent(caseData, calendarDate, calendarTime, duration = 60) {
-    // 建立開始時間
-    const startDateTime = new Date(`${calendarDate}T${calendarTime}:00`);
-    
-    // 建立結束時間（預設 1 小時後）
-    const endDateTime = new Date(startDateTime.getTime() + duration * 60 * 1000);
-
-    // 格式化描述
-    const description = this.formatEventDescription(caseData);
-
-    return {
-      summary: `案件處理 - ${caseData.title || '新案件'}`,
-      description,
-      start: {
-        dateTime: startDateTime.toISOString(),
-        timeZone: 'Asia/Taipei'
-      },
-      end: {
-        dateTime: endDateTime.toISOString(),
-        timeZone: 'Asia/Taipei'
-      },
-      location: caseData.incidentLocation || caseData.contactAddress || '',
-      reminders: {
-        useDefault: false,
-        overrides: [
-          { method: 'popup', minutes: 30 },
-          { method: 'email', minutes: 60 }
-        ]
-      },
-      // 加入案件 ID 以便後續關聯
-      caseId: caseData.id
-    };
-  }
-
-  // ============================================================================
-  // 格式化事件描述
-  // ============================================================================
-  static formatEventDescription(caseData) {
-    const sections = [];
-
-    // 基本資訊
-    sections.push('📋 案件基本資訊');
-    sections.push(`案件編號: ${caseData.caseNumber || 'AUTO'}`);
-    sections.push(`案件類型: ${caseData.category || '未分類'}`);
-    sections.push(`優先順序: ${this.getPriorityText(caseData.priority)}`);
-    sections.push(`狀態: ${this.getStatusText(caseData.status)}`);
-    sections.push('');
-
-    // 聯絡資訊
-    if (caseData.contactName || caseData.contactPhone || caseData.contactEmail) {
-      sections.push('👤 聲請人資訊');
-      if (caseData.contactName) sections.push(`姓名: ${caseData.contactName}`);
-      if (caseData.contactPhone) sections.push(`電話: ${caseData.contactPhone}`);
-      if (caseData.contactEmail) sections.push(`信箱: ${caseData.contactEmail}`);
-      sections.push('');
-    }
-
-    // 案件描述
-    if (caseData.description) {
-      sections.push('📝 案件描述');
-      sections.push(caseData.description);
-      sections.push('');
-    }
-
-    // 事發地點
-    if (caseData.incidentLocation) {
-      sections.push('📍 事發地點');
-      sections.push(caseData.incidentLocation);
-      sections.push('');
-    }
-
-    // 系統標記
-    sections.push('---');
-    sections.push('此事件由 Polify 案件管理系統自動建立');
-    
-    return sections.join('\n');
-  }
-
-  // ============================================================================
-  // 輔助函數：取得優先順序文字
-  // ============================================================================
-  static getPriorityText(priority) {
-    const priorityMap = {
-      'urgent': '🔴 緊急',
-      'normal': '🟡 一般',
-      'low': '🟢 低'
-    };
-    return priorityMap[priority] || '一般';
-  }
-
-  // ============================================================================
-  // 輔助函數：取得狀態文字
-  // ============================================================================
-  static getStatusText(status) {
-    const statusMap = {
-      'pending': '⏳ 待處理',
-      'processing': '🔄 處理中',
-      'completed': '✅ 已完成',
-      'closed': '🔒 已結案'
-    };
-    return statusMap[status] || '待處理';
-  }
-
-  // ============================================================================
-  // 處理授權過期，引導重新登入
-  // ============================================================================
-  static async handleAuthExpired() {
-    try {
-      // 可以顯示一個確認對話框
-      const shouldReauth = window.confirm(
-        'Google 日曆授權已過期，需要重新登入以繼續使用此功能。\n\n點擊確定將導向登入頁面。'
-      );
-
-      if (shouldReauth) {
-        // 清除當前 session 並重新導向登入
-        await supabase.auth.signOut();
-        // 重新載入頁面會自動導向登入頁面
-        window.location.reload();
-      }
-
-      return false;
-    } catch (error) {
-      console.error('處理授權過期失敗:', error);
-      return false;
-    }
-  }
-
-  // ============================================================================
-  // 快速建立案件相關的日曆事件（一鍵加入功能）
-  // ============================================================================
-  static async quickCreateCaseEvent(caseData, calendarDate, calendarTime) {
-    try {
-      // 首先檢查授權狀態
+      // 檢查授權狀態
       const authStatus = await this.checkGoogleAuth();
       
       if (!authStatus.hasValidToken) {
-        return {
-          success: false,
-          needsReauth: true,
-          error: 'Google 日曆授權已過期，請重新登入'
-        };
+        if (authStatus.needsReauth) {
+          return {
+            success: false,
+            needsReauth: true,
+            message: '請先重新授權 Google 帳號'
+          };
+        }
+        
+        throw new Error('無法取得 Google 授權');
       }
 
       // 建立事件資料
-      const eventData = this.formatCaseToCalendarEvent(caseData, calendarDate, calendarTime);
-      
-      // 建立事件
-      const result = await this.createCalendarEvent(eventData);
-      
-      if (result.success) {
-        console.log('Google Calendar 事件建立成功:', result.event);
-        
-        // 可選：更新本地案件資料
-        if (caseData.id && result.event) {
-          await this.updateCaseCalendarInfo(caseData.id, result.event);
+      const eventData = {
+        summary: title,
+        description,
+        start: {
+          dateTime: this.formatDateTimeForCalendar(startTime),
+          timeZone: 'Asia/Taipei'
+        },
+        end: {
+          dateTime: this.formatDateTimeForCalendar(endTime),
+          timeZone: 'Asia/Taipei'
+        },
+        location,
+        caseId,
+        reminders: {
+          useDefault: false,
+          overrides: [
+            { method: 'popup', minutes: reminderMinutes }
+          ]
         }
-      }
+      };
 
-      return result;
+      return await this.createCalendarEvent(eventData);
 
     } catch (error) {
-      console.error('快速建立日曆事件失敗:', error);
+      console.error('快速建立事件失敗:', error);
       return {
         success: false,
-        error: error.message
+        error: error.message,
+        needsReauth: true
       };
     }
   }
 
   // ============================================================================
-  // 更新案件的日曆資訊
+  // 輔助方法：格式化時間為 ISO 字串
   // ============================================================================
-  static async updateCaseCalendarInfo(caseId, calendarEvent) {
+  static formatDateTimeForCalendar(dateTime) {
     try {
-      const { error } = await supabase
-        .from('cases')
-        .update({
-          google_calendar_event_id: calendarEvent.id,
-          google_calendar_event_link: calendarEvent.htmlLink,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', caseId);
-
-      if (error) {
-        console.error('更新案件日曆資訊失敗:', error);
-        return false;
+      // 如果已經是 ISO 字串，直接返回
+      if (typeof dateTime === 'string' && dateTime.includes('T')) {
+        return dateTime;
       }
-
-      return true;
+      
+      // 處理 Date 物件
+      if (dateTime instanceof Date) {
+        return dateTime.toISOString();
+      }
+      
+      // 處理字串格式
+      const parsed = new Date(dateTime);
+      
+      // 確保時間是有效的
+      if (isNaN(parsed.getTime())) {
+        throw new Error('無效的日期時間格式');
+      }
+      
+      return parsed.toISOString();
     } catch (error) {
-      console.error('更新案件日曆資訊時發生錯誤:', error);
-      return false;
+      console.error('格式化日期時間失敗:', error);
+      throw new Error('日期時間格式錯誤');
     }
   }
 
   // ============================================================================
-  // 批次處理多個事件
+  // 輔助方法：檢查事件時間是否合理
   // ============================================================================
-  static async batchCreateEvents(eventsData) {
-    const results = [];
-    
-    for (const eventData of eventsData) {
-      try {
-        const result = await this.createCalendarEvent(eventData);
-        results.push({
-          ...result,
-          originalData: eventData
-        });
-        
-        // 避免 API 頻率限制，每次請求間隔 100ms
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
-      } catch (error) {
-        results.push({
-          success: false,
-          error: error.message,
-          originalData: eventData
-        });
+  static validateEventTime(startTime, endTime) {
+    try {
+      const start = new Date(startTime);
+      const end = new Date(endTime);
+      
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        throw new Error('無效的時間格式');
       }
+      
+      if (start >= end) {
+        throw new Error('開始時間必須早於結束時間');
+      }
+      
+      // 檢查是否是過去的時間（允許今天的事件）
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      if (start < today) {
+        throw new Error('不能建立過去日期的事件');
+      }
+      
+      // 檢查時間跨度是否合理（最長 24 小時）
+      const duration = end.getTime() - start.getTime();
+      const maxDuration = 24 * 60 * 60 * 1000; // 24 小時
+      
+      if (duration > maxDuration) {
+        throw new Error('事件持續時間不能超過 24 小時');
+      }
+      
+      return true;
+    } catch (error) {
+      throw error;
     }
+  }
 
-    return results;
+  // ============================================================================
+  // 輔助方法：重新授權 Google 帳號
+  // ============================================================================
+  static async reauthorizeGoogle() {
+    try {
+      console.log('開始重新授權 Google 帳號...');
+      
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin,
+          scopes: 'openid email profile https://www.googleapis.com/auth/calendar',
+          queryParams: {
+            prompt: 'consent', // 強制顯示同意畫面
+            access_type: 'offline' // 取得 refresh_token
+          }
+        }
+      });
+
+      if (error) {
+        console.error('重新授權失敗:', error);
+        throw error;
+      }
+
+      console.log('重新授權成功，等待重定向...');
+      return { success: true };
+
+    } catch (error) {
+      console.error('重新授權 Google 帳號失敗:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
   }
 }
