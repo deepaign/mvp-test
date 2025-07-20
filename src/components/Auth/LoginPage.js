@@ -1,7 +1,5 @@
-// ============================================================================
-// 改善後的登入頁面
+// 修正後的 LoginPage.js - 解決 Google OAuth 400 錯誤
 // 檔案位置: src/components/Auth/LoginPage.js
-// ============================================================================
 
 import React, { useState } from 'react';
 import { supabase } from '../../supabase';
@@ -17,18 +15,19 @@ function LoginPage({ onBackToHome }) {
 
       console.log('開始 Google 登入...');
       
-      // 改善後的 Google OAuth 設定
+      // 修正後的 Google OAuth 設定
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: window.location.origin,
-          // 確保包含 Calendar 權限
+          // 修正：使用標準的 scopes 設定
           scopes: 'openid email profile https://www.googleapis.com/auth/calendar',
           queryParams: {
-            prompt: 'consent select_account', // 強制顯示同意畫面和帳號選擇
-            access_type: 'offline', // 必要：取得 refresh_token
-            include_granted_scopes: 'false', // 不包含之前的授權範圍
-            approval_prompt: 'force' // 強制重新授權（備用參數）
+            // 移除衝突的參數，只保留 prompt
+            prompt: 'consent select_account',
+            access_type: 'offline',
+            include_granted_scopes: 'false'
+            // 移除 approval_prompt（已棄用）
           }
         }
       });
@@ -53,10 +52,10 @@ function LoginPage({ onBackToHome }) {
         errorMessage = 'Google 登入設定有問題，請聯繫管理員';
       } else if (err.message?.includes('network')) {
         errorMessage = '網路連接問題，請檢查網路連接';
-      } else if (err.message?.includes('popup')) {
-        errorMessage = '彈出視窗被封鎖，請允許彈出視窗或重試';
-      } else if (err.message) {
-        errorMessage = `登入錯誤：${err.message}`;
+      } else if (err.message?.includes('invalid_request')) {
+        errorMessage = 'OAuth 設定錯誤，請聯繫管理員檢查 Google OAuth 設定';
+      } else if (err.message?.includes('unauthorized_client')) {
+        errorMessage = '應用程式未獲得授權，請聯繫管理員';
       }
       
       setError(errorMessage);
@@ -66,58 +65,47 @@ function LoginPage({ onBackToHome }) {
   };
 
   return (
-    <div style={{ 
-      display: 'flex', 
-      justifyContent: 'center', 
-      alignItems: 'center', 
-      height: '100vh',
-      width: '100vw',
+    <div style={{
+      minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
       background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      padding: '20px',
-      boxSizing: 'border-box',
-      overflow: 'hidden'
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
     }}>
       <div style={{
         background: 'white',
         borderRadius: '12px',
-        boxShadow: '0 20px 40px rgba(0,0,0,0.1)',
         padding: '40px',
+        boxShadow: '0 10px 30px rgba(0,0,0,0.1)',
         width: '100%',
-        maxWidth: '450px',
-        textAlign: 'center',
-        position: 'relative',
-        maxHeight: '90vh',
-        overflow: 'auto'
+        maxWidth: '420px',
+        textAlign: 'center'
       }}>
-        {/* 回到首頁按鈕 */}
-        <button
-          onClick={onBackToHome}
-          style={{
-            position: 'absolute',
-            top: '15px',
-            left: '15px',
-            background: 'transparent',
-            border: '1.5px solid #ddd',
-            borderRadius: '6px',
-            padding: '8px 12px',
-            fontSize: '12px',
-            color: '#666',
-            cursor: 'pointer',
-            transition: 'all 0.3s ease'
-          }}
-          onMouseEnter={(e) => {
-            e.target.style.borderColor = '#667eea';
-            e.target.style.color = '#667eea';
-          }}
-          onMouseLeave={(e) => {
-            e.target.style.borderColor = '#ddd';
-            e.target.style.color = '#666';
-          }}
-        >
-          ← 回首頁
-        </button>
+        
+        {/* 返回首頁按鈕 */}
+        {onBackToHome && (
+          <button
+            onClick={onBackToHome}
+            style={{
+              position: 'absolute',
+              top: '20px',
+              left: '20px',
+              background: 'rgba(255,255,255,0.9)',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '10px 15px',
+              fontSize: '14px',
+              cursor: 'pointer',
+              color: '#555',
+              transition: 'all 0.3s ease'
+            }}
+          >
+            ← 返回首頁
+          </button>
+        )}
 
-        {/* 主標題 */}
+        {/* 標題 */}
         <h1 style={{
           color: '#2c3e50',
           marginBottom: '10px',
@@ -159,7 +147,7 @@ function LoginPage({ onBackToHome }) {
             paddingLeft: '20px'
           }}>
             <li>📅 <strong>一鍵建立行事曆事件</strong> - 記錄案件時自動同步到 Google Calendar</li>
-            <li>🔄 <strong>雙向同步</strong> - 行事曆變更自動更新到系統</li>
+            <li>🔄 <strong>即時同步</strong> - 直接在 Google Calendar 中管理事件</li>
             <li>⚡ <strong>快速操作</strong> - 無需重複授權，一次登入長期使用</li>
             <li>🔒 <strong>安全可靠</strong> - 使用 Google OAuth 2.0 加密保護</li>
           </ul>
@@ -219,8 +207,8 @@ function LoginPage({ onBackToHome }) {
               <div style={{
                 width: '20px',
                 height: '20px',
-                border: '2px solid #ffffff',
-                borderTop: '2px solid transparent',
+                border: '2px solid rgba(255,255,255,0.3)',
+                borderTop: '2px solid white',
                 borderRadius: '50%',
                 animation: 'spin 1s linear infinite'
               }}></div>
@@ -239,58 +227,25 @@ function LoginPage({ onBackToHome }) {
           )}
         </button>
 
-        {/* 授權說明 */}
-        <div style={{
-          marginTop: '25px',
-          padding: '20px',
-          background: '#e8f4fd',
-          borderRadius: '8px',
-          border: '1px solid #b3d4fc'
-        }}>
-          <h4 style={{
-            color: '#1565c0',
-            marginBottom: '10px',
-            fontSize: '16px',
-            fontWeight: '600'
-          }}>
-            🔐 授權說明
-          </h4>
-          <p style={{
-            color: '#1976d2',
-            fontSize: '13px',
-            lineHeight: '1.6',
-            margin: 0
-          }}>
-            點擊登入後，系統將請求存取您的 Google Calendar 權限。
-            <br />
-            這是為了讓您能夠一鍵建立行事曆事件，提升工作效率。
-            <br />
-            <strong>我們承諾不會存取您的其他 Google 服務資料。</strong>
-          </p>
-        </div>
-
-        {/* 技術說明 */}
-        <div style={{
-          marginTop: '20px',
-          fontSize: '12px',
+        {/* 說明文字 */}
+        <p style={{
           color: '#95a5a6',
-          lineHeight: '1.5'
+          fontSize: '13px',
+          marginTop: '20px',
+          lineHeight: '1.4'
         }}>
-          <p>
-            使用 OAuth 2.0 安全協議 • 支援 offline access_type
-            <br />
-            登入一次，長期使用 • 符合資料保護法規
-          </p>
-        </div>
-
-        {/* CSS 動畫 */}
-        <style jsx>{`
-          @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-          }
-        `}</style>
+          點擊登入即表示您同意我們的服務條款和隱私政策。<br/>
+          我們只會存取您授權的 Google 服務功能。
+        </p>
       </div>
+
+      {/* 載入動畫的 CSS */}
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }

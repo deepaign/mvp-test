@@ -31,7 +31,7 @@ export class GoogleCalendarService {
   }
 
   // ============================================================================
-  // 檢查 Google 授權狀態 - 更新版
+  // 檢查 Google 授權狀態
   // ============================================================================
   static async checkGoogleAuth() {
     try {
@@ -69,7 +69,7 @@ export class GoogleCalendarService {
   }
 
   // ============================================================================
-  // 建立 Google Calendar 事件 - 更新版
+  // 建立 Google Calendar 事件
   // ============================================================================
   static async createCalendarEvent(eventData) {
     try {
@@ -141,7 +141,7 @@ export class GoogleCalendarService {
   }
 
   // ============================================================================
-  // 一鍵建立事件的便利方法 - 更新版
+  // 一鍵建立事件的便利方法
   // ============================================================================
   static async quickCreateEvent({
     title,
@@ -149,7 +149,6 @@ export class GoogleCalendarService {
     startTime,
     endTime,
     location = '',
-    caseId = null,
     reminderMinutes = 30
   }) {
     try {
@@ -184,7 +183,6 @@ export class GoogleCalendarService {
           timeZone: 'Asia/Taipei'
         },
         location,
-        caseId,
         reminders: {
           useDefault: false,
           overrides: [
@@ -201,6 +199,34 @@ export class GoogleCalendarService {
         success: false,
         error: error.message,
         needsReauth: true
+      };
+    }
+  }
+
+  // ============================================================================
+  // 案件專用：快速建立案件相關事件
+  // ============================================================================
+  static async quickCreateCaseEvent(caseData, date, time) {
+    try {
+      // 組合日期時間
+      const startDateTime = new Date(`${date}T${time}:00`);
+      const endDateTime = new Date(startDateTime.getTime() + 60 * 60 * 1000); // 預設1小時
+      
+      const eventData = {
+        title: `案件：${caseData.title || '待處理案件'}`,
+        description: `案件描述：${caseData.description || '無描述'}\n地點：${caseData.location || '未指定'}`,
+        startTime: startDateTime.toISOString(),
+        endTime: endDateTime.toISOString(),
+        location: caseData.location || '',
+        reminderMinutes: 30
+      };
+
+      return await this.quickCreateEvent(eventData);
+    } catch (error) {
+      console.error('建立案件行事曆事件失敗:', error);
+      return {
+        success: false,
+        error: error.message
       };
     }
   }
@@ -230,82 +256,41 @@ export class GoogleCalendarService {
       
       return parsed.toISOString();
     } catch (error) {
-      console.error('格式化日期時間失敗:', error);
+      console.error('格式化時間失敗:', error);
       throw new Error('日期時間格式錯誤');
     }
   }
 
   // ============================================================================
-  // 輔助方法：檢查事件時間是否合理
+  // 輔助方法：驗證事件時間
   // ============================================================================
   static validateEventTime(startTime, endTime) {
-    try {
-      const start = new Date(startTime);
-      const end = new Date(endTime);
-      
-      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-        throw new Error('無效的時間格式');
-      }
-      
-      if (start >= end) {
-        throw new Error('開始時間必須早於結束時間');
-      }
-      
-      // 檢查是否是過去的時間（允許今天的事件）
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
-      if (start < today) {
-        throw new Error('不能建立過去日期的事件');
-      }
-      
-      // 檢查時間跨度是否合理（最長 24 小時）
-      const duration = end.getTime() - start.getTime();
-      const maxDuration = 24 * 60 * 60 * 1000; // 24 小時
-      
-      if (duration > maxDuration) {
-        throw new Error('事件持續時間不能超過 24 小時');
-      }
-      
-      return true;
-    } catch (error) {
-      throw error;
+    const start = new Date(startTime);
+    const end = new Date(endTime);
+    
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      throw new Error('無效的日期時間格式');
+    }
+    
+    if (start >= end) {
+      throw new Error('結束時間必須晚於開始時間');
+    }
+    
+    if (start < new Date()) {
+      throw new Error('開始時間不能早於現在時間');
     }
   }
 
   // ============================================================================
-  // 輔助方法：重新授權 Google 帳號
+  // 處理授權過期
   // ============================================================================
-  static async reauthorizeGoogle() {
+  static async handleAuthExpired() {
     try {
-      console.log('開始重新授權 Google 帳號...');
-      
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: window.location.origin,
-          scopes: 'openid email profile https://www.googleapis.com/auth/calendar',
-          queryParams: {
-            prompt: 'consent', // 強制顯示同意畫面
-            access_type: 'offline' // 取得 refresh_token
-          }
-        }
-      });
-
-      if (error) {
-        console.error('重新授權失敗:', error);
-        throw error;
-      }
-
-      console.log('重新授權成功，等待重定向...');
-      return { success: true };
-
+      // 重新導向到登入頁面以重新獲取權限
+      window.location.href = '/login?reauth=true';
     } catch (error) {
-      console.error('重新授權 Google 帳號失敗:', error);
-      return {
-        success: false,
-        error: error.message
-      };
+      console.error('處理授權過期失敗:', error);
+      alert('請重新登入以獲取 Google 行事曆權限');
     }
   }
 }

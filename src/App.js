@@ -11,6 +11,8 @@ import RegistrationCodeInput from './components/Team/RegistrationCodeInput'
 import StaffInviteInput from './components/Team/StaffInviteInput'
 import TeamManagement from './components/Team/TeamManagement'
 import StaffDashboard from './components/Dashboard/StaffDashboard'
+// 新增：Google 行事曆服務導入
+import { GoogleCalendarService } from './services/googleCalendarService'
 import Loading from './components/Common/Loading'
 import { TeamService } from './services/teamService'
 import './App.css'

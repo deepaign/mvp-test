@@ -1,4 +1,6 @@
-// src/components/Case/CaseModal/CaseForm/CaseForm.js - 支援 initialData
+// 修正後的 CaseForm.js - 解決 onChange 未定義錯誤
+// 檔案位置: src/components/Case/CaseModal/CaseForm/CaseForm.js
+
 import React from 'react'
 import { useCaseForm } from './useCaseForm'
 import { 
@@ -18,7 +20,7 @@ const CaseForm = ({ team, member, onSubmit, onCancel, initialData }) => {
     isSubmitting,
     handleInputChange,
     handleSubmit
-  } = useCaseForm({ team, member, onSubmit, initialData }) // 🆕 傳入 initialData
+  } = useCaseForm({ team, member, onSubmit, initialData })
 
   // 防止表單內的 Enter 鍵觸發提交
   const handleFormKeyDown = (e) => {
@@ -43,7 +45,7 @@ const CaseForm = ({ team, member, onSubmit, onCancel, initialData }) => {
 
   return (
     <div className="case-form-container">
-      {/* 🆕 AI 填入提示 */}
+      {/* AI 填入提示 */}
       {initialData?.createdByAI && (
         <div className="ai-filled-notice">
           <div className="ai-notice-content">
