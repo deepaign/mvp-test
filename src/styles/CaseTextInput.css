@@ -1,0 +1,251 @@
+/* CaseTextInput.css - 簡化版：移除通知行事曆，新增AI摘要功能 */
+
+/* 主容器 */
+.case-text-input-container {
+  width: 100%;
+  max-width: 100%;
+  padding: 0;
+  background-color: #fff;
+}
+
+.case-text-form {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 32px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+/* 文本輸入區域 */
+.text-input-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.text-input-label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+.text-input-textarea {
+  width: 100%;
+  min-height: 400px;
+  padding: 16px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  resize: vertical;
+  font-family: inherit;
+  transition: border-color 0.2s ease;
+  box-sizing: border-box;
+}
+
+.text-input-textarea:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
+.text-input-textarea::placeholder {
+  color: #999;
+  font-style: italic;
+}
+
+/* 必填標記 */
+.required {
+  color: #e74c3c;
+  font-weight: bold;
+}
+
+/* 文字統計 */
+.text-stats {
+  font-size: 0.8rem;
+  color: #666;
+  text-align: right;
+  margin-top: 4px;
+}
+
+/* AI 摘要操作區域 */
+.ai-summary-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 24px;
+  background: linear-gradient(135deg, #e8f4f8 0%, #f0f8ff 100%);
+  border: 2px dashed #4a90e2;
+  border-radius: 12px;
+  margin: 8px 0;
+}
+
+/* AI 標誌和標籤 */
+.ai-badge {
+  background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  margin-left: 8px;
+}
+
+.tab-indicator {
+  color: #4a90e2;
+  margin-left: 4px;
+  font-size: 0.8rem;
+}
+
+.ai-summary-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 28px;
+  background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(74, 144, 226, 0.3);
+  min-width: 160px;
+  justify-content: center;
+}
+
+.ai-summary-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #357abd 0%, #2968a3 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(74, 144, 226, 0.4);
+}
+
+.ai-summary-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+  opacity: 0.7;
+}
+
+.ai-icon {
+  font-size: 1.2rem;
+  animation: none;
+}
+
+.ai-loading-icon {
+  font-size: 1.2rem;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.1);
+  }
+}
+
+.ai-summary-description {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #4a90e2;
+  text-align: center;
+  line-height: 1.4;
+  max-width: 500px;
+}
+
+/* 表單底部按鈕 */
+.form-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 20px;
+  border-top: 1px solid #e9ecef;
+  margin-top: 8px;
+}
+
+.cancel-btn {
+  background: #f8f9fa;
+  color: #6c757d;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  padding: 12px 24px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cancel-btn:hover:not(:disabled) {
+  background: #e9ecef;
+  border-color: #adb5bd;
+}
+
+.cancel-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.submit-btn {
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 12px 24px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.submit-btn:hover:not(:disabled) {
+  background: #5a6fd8;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.submit-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* 響應式設計 */
+@media (max-width: 768px) {
+  .case-text-form {
+    padding: 20px;
+    gap: 20px;
+  }
+
+  .text-input-textarea {
+    min-height: 300px;
+  }
+
+  .ai-summary-section {
+    padding: 20px;
+  }
+
+  .ai-summary-btn {
+    padding: 12px 24px;
+    font-size: 0.9rem;
+    min-width: 140px;
+  }
+
+  .form-footer {
+    flex-direction: column-reverse;
+    gap: 8px;
+  }
+
+  .cancel-btn,
+  .submit-btn {
+    width: 100%;
+    text-align: center;
+  }
+}

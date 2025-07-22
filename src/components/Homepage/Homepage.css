@@ -35,7 +35,7 @@ body {
 /* 登入按鈕覆蓋層 */
 .login-overlay-btn {
   position: absolute;
-  top: 70%;
+  top: 60%;
   left: 50%;
   transform: translateX(-50%);
   background: rgba(255, 255, 255, 0.15);

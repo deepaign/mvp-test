@@ -1,7 +1,9 @@
+// 更新的 src/components/Homepage/Homepage.jsx
 import React, { useEffect } from 'react';
+import LogoutButton from '../Common/LogoutButton';
 import './Homepage.css';
 
-function Homepage({ onLoginClick }) {
+function Homepage({ onLoginClick, user, onLogout }) {
   // 添加動畫效果
   useEffect(() => {
     // 創建並添加 canvas 元素到動畫容器
@@ -213,9 +215,50 @@ function Homepage({ onLoginClick }) {
 
   return (
     <div id="animation-container" className="fullscreen-animation-container">
+      {/* 登出按鈕 - 只在用戶已登入時顯示 */}
+      {user && (
+        <div style={{
+          position: 'absolute',
+          top: '20px',
+          right: '20px',
+          zIndex: 200
+        }}>
+          <LogoutButton 
+            onLogout={onLogout}
+            variant="minimal"
+            size="small"
+            style={{
+              background: 'rgba(255, 255, 255, 0.15)',
+              backdropFilter: 'blur(10px)',
+              border: '1px solid rgba(255, 255, 255, 0.3)',
+              color: 'white'
+            }}
+          />
+        </div>
+      )}
+
+      {/* 用戶資訊 - 只在用戶已登入時顯示 */}
+      {user && (
+        <div style={{
+          position: 'absolute',
+          top: '20px',
+          left: '20px',
+          zIndex: 200,
+          background: 'rgba(255, 255, 255, 0.15)',
+          backdropFilter: 'blur(10px)',
+          border: '1px solid rgba(255, 255, 255, 0.3)',
+          borderRadius: '8px',
+          padding: '8px 12px',
+          color: 'white',
+          fontSize: '0.8rem'
+        }}>
+          👋 {user.user_metadata?.full_name || user.email}
+        </div>
+      )}
+
       {/* 登入按鈕 */}
       <button className="login-overlay-btn" onClick={onLoginClick}>
-        登入系統
+        {user ? '進入系統' : '登入系統'}
       </button>
     </div>
   );

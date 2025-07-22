@@ -1,0 +1,107 @@
+/* CaseTabs.css */
+.case-tabs-container {
+  background: white;
+  border-radius: 12px 12px 0 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  overflow: hidden;
+}
+
+/* 新增：包含tabs和action buttons的容器 */
+.case-tabs-wrapper {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px 0 20px;
+  gap: 20px;
+}
+
+.case-tabs {
+  display: flex;
+  background: #f8f9fa;
+  padding: 3px;
+  border-radius: 6px;
+  gap: 4px;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.case-tab {
+  background: transparent;
+  border: none;
+  padding: 8px 20px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  text-align: center;
+  flex: 1;
+  min-width: 120px;
+}
+
+.case-tab:hover {
+  background: rgba(102, 126, 234, 0.1);
+  color: #667eea;
+}
+
+.case-tab.active {
+  background: #667eea;
+  color: white;
+  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
+}
+
+.case-tabs-divider {
+  width: 100%;
+  height: 1px;
+  background: #e9ecef;
+  margin-top: 16px;
+}
+
+/* 響應式設計 */
+@media (max-width: 992px) {
+  .case-tabs-wrapper {
+    padding: 14px 16px 0 16px;
+    gap: 16px;
+  }
+  
+  .case-tab {
+    padding: 6px 16px;
+    font-size: 0.75rem;
+    min-width: 100px;
+  }
+}
+
+@media (max-width: 768px) {
+  .case-tabs-wrapper {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 12px 16px 0 16px;
+  }
+  
+  .case-tabs {
+    width: 100%;
+  }
+  
+  .case-tab {
+    flex: 1;
+    padding: 6px 12px;
+    font-size: 0.7rem;
+    min-width: 80px;
+  }
+}
+
+@media (max-width: 576px) {
+  .case-tabs-wrapper {
+    padding: 10px 12px 0 12px;
+    gap: 8px;
+  }
+  
+  .case-tab {
+    padding: 5px 8px;
+    font-size: 0.65rem;
+    min-width: 70px;
+  }
+}

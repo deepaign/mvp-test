@@ -1,0 +1,1239 @@
+/* CaseForm.css - 修正深色模式問題，特別處理 AI 萃取區域 */
+
+/* 強制淺色主題 - 覆蓋所有深色模式設定 */
+.case-form-container,
+.case-form-container *,
+.case-text-input-container,
+.case-text-input-container *,
+.case-modal,
+.case-modal * {
+  color-scheme: light !important;
+  forced-color-adjust: none !important;
+}
+
+/* 主容器 */
+.case-form-container {
+  width: 100%;
+  max-width: 100%;
+  padding: 0;
+  background-color: #fff !important;
+  color: #333 !important;
+}
+
+.case-form {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  padding: 32px;
+  max-height: 80vh;
+  overflow-y: auto;
+  background-color: #fff !important;
+  color: #333 !important;
+}
+
+/* 表單區塊 */
+.form-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background-color: #fff !important;
+}
+
+.section-title {
+  font-size: 1.2rem !important;
+  font-weight: 600 !important;
+  color: #333 !important;
+  margin: 0 !important;
+  padding-bottom: 8px !important;
+  border-bottom: 2px solid #f0f0f0 !important;
+  background-color: transparent !important;
+}
+
+/* 表單網格 */
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  align-items: start;
+  background-color: #fff !important;
+}
+
+/* 表單欄位 */
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background-color: #fff !important;
+}
+
+.form-field.full-width {
+  grid-column: 1 / -1;
+}
+
+.form-field label {
+  font-size: 0.9rem !important;
+  font-weight: 500 !important;
+  color: #333 !important;
+  margin-bottom: 4px !important;
+  background-color: transparent !important;
+}
+
+/* 必填標記 */
+.required {
+  color: #e74c3c !important;
+  font-weight: bold !important;
+}
+
+/* 輸入框樣式 - 強制淺色主題 */
+.form-field input,
+.form-field select,
+.form-field textarea {
+  padding: 10px 12px !important;
+  border: 1px solid #ddd !important;
+  border-radius: 6px !important;
+  font-size: 0.9rem !important;
+  font-family: inherit !important;
+  background-color: #fff !important;
+  color: #333 !important;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
+}
+
+.form-field input:focus,
+.form-field select:focus,
+.form-field textarea:focus {
+  outline: none !important;
+  border-color: #667eea !important;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1) !important;
+  background-color: #fff !important;
+  color: #333 !important;
+}
+
+/* 只讀輸入框 */
+.readonly-input {
+  background-color: #f8f9fa !important;
+  color: #6c757d !important;
+  cursor: not-allowed !important;
+}
+
+.readonly-input:focus {
+  border-color: #ddd !important;
+  box-shadow: none !important;
+}
+
+/* 日期時間組合輸入框 */
+.datetime-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+}
+
+.date-input,
+.time-input {
+  padding: 10px 12px !important;
+  border: 1px solid #ddd !important;
+  border-radius: 6px !important;
+  font-size: 0.9rem !important;
+  background-color: #fff !important;
+  color: #333 !important;
+  transition: border-color 0.2s ease !important;
+}
+
+.date-input {
+  flex: 2;
+}
+
+.time-input {
+  flex: 1;
+}
+
+.date-input:focus,
+.time-input:focus {
+  outline: none !important;
+  border-color: #667eea !important;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1) !important;
+  background-color: #fff !important;
+  color: #333 !important;
+}
+
+.time-input:disabled {
+  background-color: #f5f5f5 !important;
+  cursor: not-allowed !important;
+  color: #999 !important;
+}
+
+/* 行政區選擇器 */
+.district-selector {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.county-select,
+.district-select {
+  flex: 1;
+  padding: 10px 12px !important;
+  border: 1px solid #ddd !important;
+  border-radius: 6px !important;
+  font-size: 0.9rem !important;
+  background-color: #fff !important;
+  color: #333 !important;
+  transition: border-color 0.2s ease !important;
+}
+
+.county-select:focus,
+.district-select:focus {
+  outline: none !important;
+  border-color: #667eea !important;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1) !important;
+  background-color: #fff !important;
+  color: #333 !important;
+}
+
+.district-select:disabled {
+  background-color: #f5f5f5 !important;
+  cursor: not-allowed !important;
+  color: #999 !important;
+}
+
+/* 事發地點群組 */
+.incident-location-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 行事曆與通知設定樣式 */
+.calendar-notification-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+  padding: 0;
+  background-color: #fff !important;
+}
+
+/* 通知設定行 */
+.notification-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 2fr;
+  gap: 20px;
+  align-items: end;
+  width: 100%;
+  background-color: #fff !important;
+}
+
+/* 通知欄位 */
+.notification-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background-color: #fff !important;
+}
+
+.notification-field label {
+  font-size: 0.9rem !important;
+  font-weight: 500 !important;
+  color: #333 !important;
+  margin-bottom: 0 !important;
+  background-color: transparent !important;
+}
+
+.notification-select,
+.datetime-input {
+  padding: 10px 12px !important;
+  border: 1px solid #ddd !important;
+  border-radius: 6px !important;
+  font-size: 0.9rem !important;
+  background-color: #fff !important;
+  color: #333 !important;
+  width: 100% !important;
+  height: 42px !important;
+  box-sizing: border-box !important;
+  transition: border-color 0.2s ease !important;
+}
+
+.notification-select {
+  appearance: none !important;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23333' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 8px center !important;
+  background-size: 16px !important;
+  padding-right: 32px !important;
+}
+
+.notification-select:focus,
+.datetime-input:focus {
+  outline: none !important;
+  border-color: #667eea !important;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1) !important;
+  background-color: #fff !important;
+  color: #333 !important;
+}
+
+/* 操作按鈕區域 */
+.notification-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  align-items: center;
+  height: 42px;
+  background-color: #fff !important;
+}
+
+.action-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px !important;
+  border: 2px solid #e0e0e0 !important;
+  border-radius: 8px !important;
+  background-color: #fff !important;
+  color: #333 !important;
+  font-size: 0.85rem !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  white-space: nowrap !important;
+  min-width: fit-content !important;
+}
+
+.action-btn:hover {
+  border-color: #667eea !important;
+  background-color: #f8f9ff !important;
+  color: #333 !important;
+}
+
+.action-btn.active {
+  border-color: #667eea !important;
+  background-color: #667eea !important;
+  color: white !important;
+}
+
+.action-btn.active:hover {
+  background-color: #5a6fd8 !important;
+  color: white !important;
+}
+
+/* 行事曆按鈕特殊樣式 - 強制綠色主題 */
+.calendar-btn {
+  border-color: #27ae60 !important;
+  color: #27ae60 !important;
+}
+
+.calendar-btn:hover {
+  border-color: #27ae60 !important;
+  background-color: #e8f5e8 !important;
+  color: #27ae60 !important;
+}
+
+.calendar-btn.active {
+  border-color: #27ae60 !important;
+  background-color: #27ae60 !important;
+  color: white !important;
+}
+
+.calendar-btn.active:hover {
+  background-color: #229954 !important;
+  border-color: #229954 !important;
+  color: white !important;
+}
+
+/* 通知按鈕特殊樣式 - 強制橙色主題 */
+.notification-btn {
+  border-color: #f39c12 !important;
+  color: #f39c12 !important;
+}
+
+.notification-btn:hover {
+  border-color: #f39c12 !important;
+  background-color: #fef9e7 !important;
+  color: #f39c12 !important;
+}
+
+.notification-btn.active {
+  border-color: #f39c12 !important;
+  background-color: #f39c12 !important;
+  color: white !important;
+}
+
+.notification-btn.active:hover {
+  background-color: #e67e22 !important;
+  border-color: #e67e22 !important;
+  color: white !important;
+}
+
+.btn-icon {
+  font-size: 1rem !important;
+  line-height: 1 !important;
+}
+
+/* 多次提醒設定 */
+.multiple-reminder-row {
+  border-top: 1px solid #e9ecef !important;
+  padding-top: 16px !important;
+  margin-top: 4px !important;
+  background-color: #fff !important;
+}
+
+.checkbox-container {
+  display: flex;
+  align-items: flex-start;
+  width: 100%;
+  background-color: #fff !important;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 0.9rem !important;
+  line-height: 1.5 !important;
+  width: 100%;
+  color: #333 !important;
+  background-color: #fff !important;
+}
+
+.checkbox-input {
+  width: 18px !important;
+  height: 18px !important;
+  margin: 2px 0 0 0 !important;
+  cursor: pointer !important;
+  accent-color: #667eea !important;
+  flex-shrink: 0 !important;
+}
+
+.checkbox-text {
+  color: #555 !important;
+  flex: 1;
+  background-color: transparent !important;
+}
+
+/* 複選框群組 */
+.checkbox-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: #fff !important;
+}
+
+.checkbox-group .checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 0.9rem !important;
+  line-height: 1.4 !important;
+  margin: 0;
+  color: #333 !important;
+}
+
+.checkbox-group input[type="checkbox"] {
+  width: 16px !important;
+  height: 16px !important;
+  margin: 0 !important;
+  cursor: pointer !important;
+  accent-color: #667eea !important;
+}
+
+/* 表單底部按鈕 */
+.form-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 24px !important;
+  border-top: 1px solid #e9ecef !important;
+  margin-top: 8px !important;
+  background-color: #fff !important;
+}
+
+.cancel-btn {
+  background: #f8f9fa !important;
+  color: #6c757d !important;
+  border: 1px solid #dee2e6 !important;
+  border-radius: 6px !important;
+  padding: 12px 24px !important;
+  font-size: 0.9rem !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+}
+
+.cancel-btn:hover:not(:disabled) {
+  background: #e9ecef !important;
+  border-color: #adb5bd !important;
+  color: #6c757d !important;
+}
+
+.cancel-btn:disabled {
+  cursor: not-allowed !important;
+  opacity: 0.6 !important;
+}
+
+.submit-btn {
+  background: #667eea !important;
+  background-color: #667eea !important;
+  color: white !important;
+  border: none !important;
+  border-radius: 6px !important;
+  padding: 12px 24px !important;
+  font-size: 0.9rem !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  /* 強制覆蓋可能的系統樣式 */
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+}
+
+.submit-btn:hover:not(:disabled) {
+  background: #5a6fd8 !important;
+  background-color: #5a6fd8 !important;
+  color: white !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+}
+
+.submit-btn:focus {
+  background: #667eea !important;
+  background-color: #667eea !important;
+  color: white !important;
+  outline: none !important;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.3) !important;
+}
+
+.submit-btn:active {
+  background: #5a6fd8 !important;
+  background-color: #5a6fd8 !important;
+  color: white !important;
+}
+
+.submit-btn:disabled {
+  background: #ccc !important;
+  background-color: #ccc !important;
+  color: #666 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* 全文輸入特殊樣式 */
+.case-text-input-container {
+  width: 100%;
+  max-width: 100%;
+  padding: 0;
+  background-color: #fff !important;
+  color: #333 !important;
+}
+
+.case-text-form {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 32px;
+  max-height: 80vh;
+  overflow-y: auto;
+  background-color: #fff !important;
+  color: #333 !important;
+}
+
+.text-input-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background-color: #fff !important;
+}
+
+.text-input-label {
+  font-size: 0.9rem !important;
+  font-weight: 500 !important;
+  color: #333 !important;
+  margin-bottom: 4px !important;
+  background-color: transparent !important;
+}
+
+.text-input-textarea {
+  width: 100% !important;
+  min-height: 300px !important;
+  padding: 16px !important;
+  border: 1px solid #ddd !important;
+  border-radius: 8px !important;
+  font-size: 0.9rem !important;
+  line-height: 1.6 !important;
+  resize: vertical !important;
+  font-family: inherit !important;
+  transition: border-color 0.2s ease !important;
+  box-sizing: border-box !important;
+  background-color: #fff !important;
+  color: #333 !important;
+}
+
+.text-input-textarea:focus {
+  outline: none !important;
+  border-color: #667eea !important;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1) !important;
+  background-color: #fff !important;
+  color: #333 !important;
+}
+
+.text-input-textarea::placeholder {
+  color: #999 !important;
+  font-style: italic !important;
+}
+
+/* AI 萃取提示區域 - 特別修正背景問題 */
+.ai-extract-notice {
+  background: #e3f2fd !important;
+  border: 1px solid #bbdefb !important;
+  border-radius: 8px !important;
+  padding: 16px !important;
+  margin: 8px 0 !important;
+  color: #1976d2 !important;
+  /* 關鍵：移除任何可能造成文字背景問題的屬性 */
+  text-decoration: none !important;
+  text-shadow: none !important;
+  box-shadow: none !important;
+}
+
+.ai-extract-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: #1976d2 !important;
+  font-size: 0.95rem !important;
+  background-color: transparent !important;
+  /* 確保標題文字正常顯示 */
+  text-decoration: none !important;
+  text-shadow: none !important;
+  font-weight: 600 !important;
+}
+
+.ai-icon {
+  font-size: 1.2rem !important;
+  background-color: transparent !important;
+}
+
+.ai-extract-description {
+  margin: 0 !important;
+  font-size: 0.85rem !important;
+  color: #1976d2 !important;
+  opacity: 0.9 !important;
+  line-height: 1.4 !important;
+  background-color: transparent !important;
+  /* 確保描述文字正常顯示 */
+  text-decoration: none !important;
+  text-shadow: none !important;
+  font-weight: normal !important;
+}
+
+/* 特別處理 AI 萃取區域內的所有元素 */
+.ai-extract-notice *,
+.ai-extract-notice *::before,
+.ai-extract-notice *::after {
+  background-color: transparent !important;
+  text-decoration: none !important;
+  text-shadow: none !important;
+  box-shadow: none !important;
+  border: none !important;
+  outline: none !important;
+}
+
+/* 選擇框箭頭樣式 */
+.form-field select {
+  appearance: none !important;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23333' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 8px center !important;
+  background-size: 16px !important;
+  padding-right: 32px !important;
+}
+
+/* 頁簽切換按鈕樣式 - 強制淺色主題 */
+.case-modal-tab {
+  background: white !important;
+  background-color: white !important;
+  border: none !important;
+  border-radius: 4px !important;
+  padding: 8px 16px !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  color: #666 !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  white-space: nowrap !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+}
+
+.case-modal-tab:hover {
+  background: rgba(102, 126, 234, 0.1) !important;
+  background-color: rgba(102, 126, 234, 0.1) !important;
+  color: #667eea !important;
+}
+
+.case-modal-tab.active {
+  background: #667eea !important;
+  background-color: #667eea !important;
+  color: white !important;
+  box-shadow: 0 1px 3px rgba(102, 126, 234, 0.3) !important;
+}
+
+.case-modal-tab.active:hover {
+  background: #667eea !important;
+  background-color: #667eea !important;
+  color: white !important;
+}
+
+/* 頁簽容器也需要強制樣式 */
+.case-modal-tabs {
+  display: flex !important;
+  background: white !important;
+  background-color: white !important;
+  border-radius: 6px !important;
+  padding: 2px !important;
+  gap: 2px !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+}
+.form-field.error input,
+.form-field.error select,
+.form-field.error textarea {
+  border-color: #e74c3c !important;
+  box-shadow: 0 0 0 2px rgba(231, 76, 60, 0.1) !important;
+}
+
+/* 成功狀態樣式 */
+.form-field.success input,
+.form-field.success select,
+.form-field.success textarea {
+  border-color: #27ae60 !important;
+  box-shadow: 0 0 0 2px rgba(39, 174, 96, 0.1) !important;
+}
+
+/* 表單加載狀態 */
+.case-form.loading,
+.case-text-form.loading {
+  pointer-events: none !important;
+  opacity: 0.7 !important;
+}
+
+/* 滾動條樣式 */
+.case-form::-webkit-scrollbar,
+.case-text-form::-webkit-scrollbar {
+  width: 6px !important;
+}
+
+.case-form::-webkit-scrollbar-track,
+.case-text-form::-webkit-scrollbar-track {
+  background: #f1f1f1 !important;
+  border-radius: 3px !important;
+}
+
+.case-form::-webkit-scrollbar-thumb,
+.case-text-form::-webkit-scrollbar-thumb {
+  background: #c1c1c1 !important;
+  border-radius: 3px !important;
+}
+
+.case-form::-webkit-scrollbar-thumb:hover,
+.case-text-form::-webkit-scrollbar-thumb:hover {
+  background: #a1a1a1 !important;
+}
+
+/* 移除所有深色模式樣式 */
+@media (prefers-color-scheme: dark) {
+  .case-form-container,
+  .case-form-container *,
+  .case-text-input-container,
+  .case-text-input-container *,
+  .case-modal,
+  .case-modal * {
+    background-color: #fff !important;
+    color: #333 !important;
+    border-color: #ddd !important;
+  }
+  
+  .section-title {
+    color: #333 !important;
+    border-bottom-color: #f0f0f0 !important;
+  }
+  
+  .form-field label {
+    color: #333 !important;
+  }
+  
+  .required {
+    color: #e74c3c !important;
+  }
+  
+  .text-input-label {
+    color: #333 !important;
+  }
+  
+  .notification-field label {
+    color: #333 !important;
+  }
+  
+  .checkbox-text {
+    color: #555 !important;
+  }
+  
+  .ai-extract-notice {
+    background: #e3f2fd !important;
+    border-color: #bbdefb !important;
+    color: #1976d2 !important;
+  }
+  
+  .ai-extract-header {
+    color: #1976d2 !important;
+  }
+  
+  .ai-extract-description {
+    color: #1976d2 !important;
+  }
+  
+  /* 特別強制移除深色模式對 AI 萃取區域的影響 */
+  .ai-extract-notice,
+  .ai-extract-notice *,
+  .ai-extract-notice *::before,
+  .ai-extract-notice *::after {
+    background-color: #e3f2fd !important;
+    color: #1976d2 !important;
+    text-decoration: none !important;
+    text-shadow: none !important;
+    box-shadow: none !important;
+  }
+  
+  /* 深色模式下強制按鈕顏色 */
+  .calendar-btn {
+    border-color: #27ae60 !important;
+    color: #27ae60 !important;
+  }
+
+  .calendar-btn:hover {
+    border-color: #27ae60 !important;
+    background-color: #e8f5e8 !important;
+    color: #27ae60 !important;
+  }
+
+  .calendar-btn.active {
+    border-color: #27ae60 !important;
+    background-color: #27ae60 !important;
+    color: white !important;
+  }
+
+  .calendar-btn.active:hover {
+    background-color: #229954 !important;
+    border-color: #229954 !important;
+    color: white !important;
+  }
+
+  .notification-btn {
+    border-color: #f39c12 !important;
+    color: #f39c12 !important;
+  }
+
+  .notification-btn:hover {
+    border-color: #f39c12 !important;
+    background-color: #fef9e7 !important;
+    color: #f39c12 !important;
+  }
+
+  .notification-btn.active {
+    border-color: #f39c12 !important;
+    background-color: #f39c12 !important;
+    color: white !important;
+  }
+
+  .notification-btn.active:hover {
+    background-color: #e67e22 !important;
+    border-color: #e67e22 !important;
+    color: white !important;
+  }
+  
+  /* 深色模式下強制建立案件按鈕樣式 */
+  .submit-btn {
+    background: #667eea !important;
+    background-color: #667eea !important;
+    color: white !important;
+    border: none !important;
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
+    appearance: none !important;
+  }
+
+  .submit-btn:hover:not(:disabled) {
+    background: #5a6fd8 !important;
+    background-color: #5a6fd8 !important;
+    color: white !important;
+  }
+
+  .submit-btn:focus {
+    background: #667eea !important;
+    background-color: #667eea !important;
+    color: white !important;
+  }
+
+  .submit-btn:active {
+    background: #5a6fd8 !important;
+    background-color: #5a6fd8 !important;
+    color: white !important;
+  }
+
+  .submit-btn:disabled {
+    background: #ccc !important;
+    background-color: #ccc !important;
+    color: #666 !important;
+  }
+
+  /* 深色模式下強制頁簽切換按鈕樣式 */
+  .case-modal-tab {
+    background: white !important;
+    background-color: white !important;
+    border: none !important;
+    border-radius: 4px !important;
+    padding: 8px 16px !important;
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    color: #666 !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+    white-space: nowrap !important;
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
+    appearance: none !important;
+  }
+
+  .case-modal-tab:hover {
+    background: rgba(102, 126, 234, 0.1) !important;
+    background-color: rgba(102, 126, 234, 0.1) !important;
+    color: #667eea !important;
+  }
+
+  .case-modal-tab.active {
+    background: #667eea !important;
+    background-color: #667eea !important;
+    color: white !important;
+    box-shadow: 0 1px 3px rgba(102, 126, 234, 0.3) !important;
+  }
+
+  .case-modal-tab.active:hover {
+    background: #667eea !important;
+    background-color: #667eea !important;
+    color: white !important;
+  }
+}
+
+/* 強制覆蓋 option 元素樣式 */
+.form-field select option,
+.notification-select option {
+  background-color: #fff !important;
+  color: #333 !important;
+}
+
+/* 強制覆蓋 placeholder 樣式 */
+.form-field input::placeholder,
+.form-field textarea::placeholder,
+.text-input-textarea::placeholder {
+  color: #999 !important;
+  opacity: 1 !important;
+}
+
+/* 強制覆蓋 focus 樣式 */
+.form-field input:focus::placeholder,
+.form-field textarea:focus::placeholder,
+.text-input-textarea:focus::placeholder {
+  color: #bbb !important;
+}
+
+/* 響應式設計 */
+@media (max-width: 1200px) {
+  .notification-row {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto;
+    gap: 16px;
+  }
+  
+  .notification-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 768px) {
+  .case-form,
+  .case-text-form {
+    padding: 24px;
+    gap: 28px;
+  }
+  
+  .form-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  
+  .datetime-group {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .date-input,
+  .time-input {
+    flex: 1;
+    width: 100%;
+  }
+  
+  .district-selector {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .county-select,
+  .district-select {
+    width: 100%;
+  }
+  
+  .notification-row {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  
+  .notification-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    height: auto;
+  }
+  
+  .action-btn {
+    justify-content: center;
+    width: 100%;
+    padding: 12px 16px !important;
+  }
+  
+  .checkbox-label {
+    font-size: 0.85rem !important;
+  }
+  
+  .form-footer {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .cancel-btn,
+  .submit-btn {
+    width: 100%;
+    padding: 14px !important;
+  }
+  
+  .text-input-textarea {
+    min-height: 250px !important;
+    padding: 12px !important;
+    font-size: 0.85rem !important;
+  }
+  
+  .ai-extract-notice {
+    padding: 12px !important;
+  }
+  
+  .ai-extract-header {
+    font-size: 0.9rem !important;
+  }
+  
+  .ai-extract-description {
+    font-size: 0.8rem !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .case-form,
+  .case-text-form {
+    padding: 16px;
+    gap: 24px;
+  }
+  
+  .section-title {
+    font-size: 1.1rem !important;
+  }
+  
+  .form-field input,
+  .form-field select,
+  .form-field textarea {
+    padding: 8px 10px !important;
+    font-size: 0.85rem !important;
+  }
+  
+  .calendar-notification-container {
+    gap: 16px;
+  }
+  
+  .notification-row {
+    gap: 10px;
+  }
+  
+  .action-btn {
+    padding: 10px 12px !important;
+    font-size: 0.8rem !important;
+  }
+  
+  .btn-icon {
+    font-size: 0.9rem !important;
+  }
+  
+  .text-input-textarea {
+    min-height: 200px !important;
+    padding: 10px !important;
+    font-size: 0.8rem !important;
+  }
+  
+  .section-title {
+    font-size: 1rem !important;
+  }
+  
+  .ai-extract-notice {
+    padding: 10px !important;
+  }
+  
+  .ai-extract-header {
+    font-size: 0.85rem !important;
+  }
+  
+  .ai-extract-description {
+    font-size: 0.75rem !important;
+  }
+}
+
+/* 確保在表單網格中正確顯示 */
+.form-grid .calendar-notification-container {
+  grid-column: 1 / -1;
+}
+
+/* 修正可能的樣式衝突 */
+.form-section .calendar-notification-container {
+  margin-top: 0;
+}
+
+.form-section .notification-row {
+  margin-bottom: 0;
+}
+
+/* 文本域特殊樣式 */
+.form-field textarea {
+  resize: vertical !important;
+  min-height: 100px !important;
+  line-height: 1.5 !important;
+}
+
+/* 禁用狀態 */
+.text-input-textarea:disabled {
+  background-color: #f5f5f5 !important;
+  cursor: not-allowed !important;
+  color: #999 !important;
+}
+
+/* AI 填入通知區域 */
+.ai-filled-notice {
+  background: linear-gradient(135deg, #e8f4f8 0%, #f0f8ff 100%);
+  border: 2px solid #4a90e2;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 8px rgba(74, 144, 226, 0.1);
+}
+
+.ai-notice-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.ai-notice-content .ai-icon {
+  font-size: 1.5rem;
+  line-height: 1;
+  margin-top: 2px;
+}
+
+.ai-notice-text {
+  flex: 1;
+}
+
+.ai-notice-text strong {
+  color: #2c5282;
+  font-size: 1.1rem;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.ai-notice-text p {
+  color: #4a90e2;
+  font-size: 0.9rem;
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* 原始逐字稿展開區域 */
+.original-transcript {
+  border-top: 1px solid #bee3f8;
+  padding-top: 16px;
+}
+
+.original-transcript summary {
+  color: #4a90e2;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 8px 0;
+  font-size: 0.9rem;
+  user-select: none;
+}
+
+.original-transcript summary:hover {
+  color: #2c5282;
+}
+
+.transcript-content {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 16px;
+  margin-top: 8px;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: #4a5568;
+  max-height: 200px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+
+/* 更新 FormFooter 的提交按鈕文字樣式 */
+.submit-btn.ai-filled {
+  background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
+}
+
+.submit-btn.ai-filled:hover:not(:disabled) {
+  background: linear-gradient(135deg, #357abd 0%, #2968a3 100%);
+}
+
+/* 響應式設計 */
+@media (max-width: 768px) {
+  .ai-filled-notice {
+    padding: 16px;
+    margin-bottom: 20px;
+  }
+  
+  .ai-notice-content {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .ai-notice-content .ai-icon {
+    align-self: flex-start;
+  }
+  
+  .transcript-content {
+    font-size: 0.8rem;
+    padding: 12px;
+  }
+}
