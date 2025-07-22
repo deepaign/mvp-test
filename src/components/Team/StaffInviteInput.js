@@ -1,5 +1,5 @@
 // 更新的 src/components/Team/StaffInviteInput.js
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { TeamService } from '../../services/teamService'
 import LogoutButton from '../Common/LogoutButton'
 
@@ -10,6 +10,27 @@ function StaffInviteInput({ user, onTeamJoined, onBack, onLogout }) {
   const [teamPreview, setTeamPreview] = useState(null)
   const [invitationInfo, setInvitationInfo] = useState(null)
   const [validating, setValidating] = useState(false)
+
+  // 確保頁面可以滾動
+  useEffect(() => {
+    // 強制設置頁面可以滾動
+    document.body.style.overflow = 'auto'
+    document.documentElement.style.overflow = 'auto'
+    document.body.style.height = 'auto'
+    document.documentElement.style.height = 'auto'
+    
+    // 移除可能影響滾動的 CSS 類
+    document.body.classList.remove('no-scroll')
+    document.documentElement.classList.remove('no-scroll')
+    
+    return () => {
+      // 清理時恢復預設
+      document.body.style.overflow = ''
+      document.documentElement.style.overflow = ''
+      document.body.style.height = ''
+      document.documentElement.style.height = ''
+    }
+  }, [])
 
   // 驗證邀請碼格式
   const validateCodeFormat = (code) => {
@@ -63,7 +84,7 @@ function StaffInviteInput({ user, onTeamJoined, onBack, onLogout }) {
     }
 
     setLoading(true)
-    setError('') // 清除之前的錯誤
+    setError('')
 
     try {
       console.log('🚀 開始加入團隊流程...')
@@ -88,15 +109,22 @@ function StaffInviteInput({ user, onTeamJoined, onBack, onLogout }) {
         console.log('成員資料:', result.member)
         console.log('團隊資料:', result.team)
         
-        // 🔧 添加成功提示
+        // 顯示成功提示
         alert(`🎉 ${result.message}`)
         
-        // 🔧 確保跳轉
+        // 修正：傳遞正確的參數格式給 onTeamJoined
         if (onTeamJoined && typeof onTeamJoined === 'function') {
-          onTeamJoined(result.member, result.team)
+          console.log('🔄 調用 onTeamJoined 回調函數...')
+          
+          // 傳遞整個 result 物件，而不是分離的參數
+          onTeamJoined(result)
+          
         } else {
           console.error('❌ onTeamJoined 回調函數不存在或不是函數')
+          console.error('onTeamJoined 類型:', typeof onTeamJoined)
+          console.error('onTeamJoined 值:', onTeamJoined)
         }
+        
       } else {
         console.error('❌ 加入團隊失敗:', result.message)
         setError(result.message || '加入團隊失敗，請稍後重試')
@@ -105,7 +133,6 @@ function StaffInviteInput({ user, onTeamJoined, onBack, onLogout }) {
     } catch (error) {
       console.error('❌ 加入團隊異常:', error)
       
-      // 🔧 更詳細的錯誤分類
       let errorMessage = '加入團隊失敗，請稍後重試'
       
       if (error.message?.includes('duplicate key')) {
@@ -119,6 +146,7 @@ function StaffInviteInput({ user, onTeamJoined, onBack, onLogout }) {
       }
       
       setError(errorMessage)
+      
     } finally {
       setLoading(false)
     }
@@ -154,15 +182,42 @@ function StaffInviteInput({ user, onTeamJoined, onBack, onLogout }) {
     }
   }
 
-  return (
-    <div style={{ 
+  const StaffInviteInputStyles = {
+    container: {
       minHeight: '100vh',
       background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
       padding: '20px',
+      paddingTop: '40px',  // 增加頂部間距
+      paddingBottom: '40px', // 增加底部間距
+      overflow: 'auto',    // 允許滾動
       display: 'flex',
+      flexDirection: 'column',
       alignItems: 'center',
-      justifyContent: 'center'
-    }}>
+      justifyContent: 'flex-start'  // 改為 flex-start
+    },
+    card: {
+      background: 'white',
+      borderRadius: '16px',
+      padding: '40px',
+      width: '100%',
+      maxWidth: '500px',
+      boxShadow: '0 20px 40px rgba(0,0,0,0.1)',
+      position: 'relative',
+      margin: 'auto',  // 自動居中
+      flexShrink: 0    // 防止被壓縮
+    }
+  }
+
+   return (
+    <div 
+      style={{ 
+        // 關鍵修正：不要設置 height 或 minHeight 為 100vh
+        background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+        padding: '20px',
+        paddingBottom: '60px', // 確保底部有足夠空間
+        // 移除 display: flex 和 alignItems，使用普通文檔流
+      }}
+    >
       <div style={{
         background: 'white',
         borderRadius: '16px',
@@ -170,8 +225,10 @@ function StaffInviteInput({ user, onTeamJoined, onBack, onLogout }) {
         width: '100%',
         maxWidth: '500px',
         boxShadow: '0 20px 40px rgba(0,0,0,0.1)',
-        position: 'relative'
+        position: 'relative',
+        margin: '40px auto', // 使用 margin 而不是 flex 居中
       }}>
+        
         {/* 返回和登出按鈕 */}
         <div style={{
           position: 'absolute',
@@ -255,98 +312,92 @@ function StaffInviteInput({ user, onTeamJoined, onBack, onLogout }) {
               style={{
                 width: '100%',
                 padding: '20px',
-                border: `3px solid ${error ? '#e74c3c' : (teamPreview ? '#28a745' : '#e1e5e9')}`,
+                border: `3px solid ${error ? '#e74c3c' : (teamPreview ? '#28a745' : '#ddd')}`,
                 borderRadius: '12px',
-                fontSize: '1.5rem',
+                fontSize: '1.4rem',
+                fontWeight: '600',
                 textAlign: 'center',
                 letterSpacing: '4px',
                 textTransform: 'uppercase',
-                fontFamily: 'monospace',
-                boxSizing: 'border-box',
-                fontWeight: 'bold',
-                transition: 'all 0.3s ease'
+                outline: 'none',
+                transition: 'all 0.3s ease',
+                fontFamily: 'Monaco, Consolas, monospace',
+                boxSizing: 'border-box'
               }}
-              disabled={loading}
             />
             {validating && (
               <div style={{
                 position: 'absolute',
-                right: '16px',
+                right: '15px',
                 top: '50%',
                 transform: 'translateY(-50%)',
                 width: '20px',
                 height: '20px',
-                border: '2px solid #e1e5e9',
-                borderTop: '2px solid #f093fb',
+                border: '2px solid #ccc',
+                borderTop: '2px solid #667eea',
                 borderRadius: '50%',
                 animation: 'spin 1s linear infinite'
               }}></div>
             )}
           </div>
-          <div style={{ 
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginTop: '8px'
-          }}>
-            <span style={{ fontSize: '0.8rem', color: '#888' }}>
-              {inviteCode.length}/6 字元
-            </span>
-            {teamPreview && (
-              <span style={{ fontSize: '0.8rem', color: '#28a745', fontWeight: '500' }}>
-                ✅ 邀請碼有效
-              </span>
-            )}
-          </div>
         </div>
 
-        {/* 團隊預覽 */}
+        {/* 團隊預覽區域 */}
         {teamPreview && invitationInfo && (
           <div style={{
-            background: 'linear-gradient(135deg, #fff3e0 0%, #fce4ec 100%)',
-            border: '2px solid #f093fb',
+            background: 'linear-gradient(135deg, #e8f5e8 0%, #f0f8f0 100%)',
             borderRadius: '12px',
             padding: '24px',
             marginBottom: '20px',
-            position: 'relative',
-            overflow: 'hidden'
+            border: '2px solid #28a745'
           }}>
-            <div style={{
-              position: 'absolute',
-              top: '-10px',
-              right: '-10px',
-              background: '#f093fb',
-              color: 'white',
-              padding: '8px 16px',
-              borderRadius: '0 0 0 12px',
-              fontSize: '0.8rem',
-              fontWeight: '600'
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              marginBottom: '16px' 
             }}>
-              即將加入
+              <div style={{ fontSize: '2rem', marginRight: '12px' }}>✅</div>
+              <div>
+                <h3 style={{ 
+                  color: '#28a745', 
+                  margin: '0 0 4px 0',
+                  fontSize: '1.1rem',
+                  fontWeight: '600'
+                }}>
+                  找到有效的邀請碼！
+                </h3>
+                <p style={{ 
+                  color: '#666', 
+                  margin: 0,
+                  fontSize: '0.9rem'
+                }}>
+                  確認加入以下團隊
+                </p>
+              </div>
             </div>
             
-            <h3 style={{ 
-              color: '#d81b60', 
-              fontSize: '1.2rem', 
-              marginBottom: '16px',
-              textAlign: 'center',
-              margin: '0 0 16px 0'
+            <div style={{
+              background: 'white',
+              borderRadius: '8px',
+              padding: '16px',
+              marginBottom: '16px'
             }}>
-              🏛️ {teamPreview.name}
-            </h3>
-            
-            <div style={{ fontSize: '0.95rem', color: '#555', lineHeight: '1.6' }}>
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
+                <span style={{ width: '20px', textAlign: 'center' }}>🏛️</span>
+                <strong style={{ marginRight: '8px' }}>團隊名稱:</strong>
+                {teamPreview.name}
+              </div>
               <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
                 <span style={{ width: '20px', textAlign: 'center' }}>👤</span>
-                <strong style={{ marginRight: '8px' }}>負責人:</strong>
+                <strong style={{ marginRight: '8px' }}>政治人物:</strong>
                 {teamPreview.politician_name}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
-                <span style={{ width: '20px', textAlign: 'center' }}>🏷️</span>
+                <span style={{ width: '20px', textAlign: 'center' }}>💼</span>
                 <strong style={{ marginRight: '8px' }}>職位:</strong>
                 {getPositionLabel(teamPreview.position)}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center' }}>
                 <span style={{ width: '20px', textAlign: 'center' }}>📍</span>
                 <strong style={{ marginRight: '8px' }}>服務地區:</strong>
                 {teamPreview.county} {teamPreview.district && `${teamPreview.district}`}
@@ -437,6 +488,7 @@ function StaffInviteInput({ user, onTeamJoined, onBack, onLogout }) {
           </p>
         </div>
 
+        {/* 添加旋轉動畫 */}
         <style jsx>{`
           @keyframes spin {
             0% { transform: rotate(0deg); }
@@ -444,6 +496,9 @@ function StaffInviteInput({ user, onTeamJoined, onBack, onLogout }) {
           }
         `}</style>
       </div>
+      
+      {/* 額外的底部間距確保內容不會被截斷 */}
+      <div style={{ height: '40px' }}></div>
     </div>
   )
 }

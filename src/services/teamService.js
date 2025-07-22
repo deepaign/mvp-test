@@ -208,63 +208,81 @@ export class TeamService {
   // 驗證邀請碼
   static async validateInviteCode(inviteCode) {
     try {
-      console.log('🔍 驗證邀請碼:', inviteCode.toUpperCase())
+      console.log('🔍 驗證邀請碼:', inviteCode)
       
-      const { data, error } = await supabase
+      // 步驟1: 先查詢邀請碼記錄（不使用 JOIN 避免 406 錯誤）
+      const { data: invitationRecords, error: inviteError } = await supabase
         .from('TeamInvitation')
-        .select(`
-          id,
-          group_id,
-          expires_at,
-          status,
-          max_uses,
-          current_uses,
-          Group:group_id (
-            id,
-            name,
-            politician_name,
-            status
-          )
-        `)
+        .select('*')
         .eq('invite_code', inviteCode.toUpperCase())
         .eq('status', 'active')
-        .single()
+        
+      console.log('邀請碼查詢結果:', { 
+        count: invitationRecords?.length, 
+        records: invitationRecords, 
+        error: inviteError 
+      })
 
-      if (error) {
-        if (error.code === 'PGRST116') {
-          return { valid: false, message: '邀請碼不存在或已失效' }
-        }
-        console.error('❌ 查詢邀請碼失敗:', error)
-        return { valid: false, message: '驗證邀請碼時發生錯誤' }
+      if (inviteError) {
+        console.error('❌ 查詢邀請碼失敗:', inviteError)
+        return { valid: false, message: '邀請碼驗證失敗，請稍後重試' }
       }
 
-      // 檢查邀請碼是否過期
+      if (!invitationRecords || invitationRecords.length === 0) {
+        console.log('❌ 找不到有效邀請碼')
+        return { valid: false, message: '邀請碼不存在或已失效' }
+      }
+
+      const invitation = invitationRecords[0]
+      console.log('✅ 找到邀請碼記錄:', invitation)
+
+      // 步驟2: 檢查邀請碼是否過期
       const now = new Date()
-      const expiresAt = new Date(data.expires_at)
+      const expiresAt = new Date(invitation.expires_at)
       
       if (expiresAt < now) {
+        console.log('❌ 邀請碼已過期')
         return { valid: false, message: '邀請碼已過期' }
       }
 
-      // 檢查使用次數
-      if (data.current_uses >= data.max_uses) {
+      // 步驟3: 檢查使用次數
+      if (invitation.current_uses >= invitation.max_uses) {
+        console.log('❌ 邀請碼已達使用上限')
         return { valid: false, message: '邀請碼已達使用上限' }
       }
 
-      // 檢查團隊狀態
-      if (data.Group.status !== 'active') {
+      // 步驟4: 單獨查詢團隊資訊
+      const { data: teamRecords, error: teamError } = await supabase
+        .from('Group')
+        .select('*')
+        .eq('id', invitation.group_id)
+        .single()
+
+      if (teamError || !teamRecords) {
+        console.error('❌ 查詢團隊資訊失敗:', teamError)
+        return { valid: false, message: '團隊資訊異常' }
+      }
+
+      const team = teamRecords
+      console.log('✅ 團隊資訊:', team.name)
+
+      // 步驟5: 檢查團隊狀態
+      if (team.status !== 'active') {
+        console.log('❌ 團隊狀態不是 active:', team.status)
         return { valid: false, message: '該團隊目前無法接受新成員' }
       }
 
+      console.log('✅ 驗證完成，邀請碼有效')
+
       return { 
         valid: true, 
-        invitation: data,
-        team: data.Group
+        invitation: invitation,
+        team: team
       }
-
+      
     } catch (error) {
       console.error('💥 驗證邀請碼異常:', error)
-      return { valid: false, message: '驗證邀請碼時發生異常' }
+      return { valid: false, message: '驗證失敗，請稍後重試' }
     }
   }
 
@@ -272,51 +290,118 @@ export class TeamService {
   static async joinTeamWithInviteCode(inviteCode, userId, userName, userEmail) {
     try {
       console.log('🚀 開始加入團隊流程')
-      console.log('邀請碼:', inviteCode.toUpperCase())
+      console.log('邀請碼:', inviteCode)
       console.log('用戶:', { userId, userName, userEmail })
 
       // 步驟1: 驗證邀請碼
       const validation = await this.validateInviteCode(inviteCode)
-      
       if (!validation.valid) {
+        console.log('❌ 邀請碼驗證失敗:', validation.message)
         return { success: false, message: validation.message }
       }
 
-      const { invitation, team } = validation
+      const invitation = validation.invitation
+      const team = validation.team
+      console.log('✅ 邀請碼驗證成功，團隊:', team.name)
 
       // 步驟2: 檢查用戶是否已經是該團隊成員
-      const existingCheck = await this.checkUserTeam(userId)
-      
-      if (existingCheck.hasTeam && existingCheck.group.id === invitation.group_id) {
+      const { data: existingMember, error: checkError } = await supabase
+        .from('Member')
+        .select('id, status, group_id, name')
+        .eq('auth_user_id', userId)
+        .eq('group_id', invitation.group_id)
+        .maybeSingle()
+
+      if (checkError) {
+        console.error('❌ 檢查現有成員失敗:', checkError)
+        return { success: false, message: '檢查成員狀態失敗，請稍後重試' }
+      }
+
+      if (existingMember && existingMember.status === 'active') {
         console.log('❌ 用戶已經是該團隊的活躍成員')
         return { success: false, message: '您已經是該團隊的成員' }
       }
 
-      // 步驟3: 使用 RPC 調用加入團隊
-      const { data: rpcResult, error: rpcError } = await supabase.rpc('join_team_with_invite', {
-        p_invite_code: inviteCode.toUpperCase(),
-        p_user_id: userId,
-        p_user_name: userName,
-        p_user_email: userEmail,
-        p_invitation_id: invitation.id,
-        p_group_id: invitation.group_id
-      })
+      // 步驟3: 創建或更新成員記錄
+      let memberData
+      
+      if (existingMember) {
+        // 重新啟用現有成員
+        const { data: updatedMember, error: updateError } = await supabase
+          .from('Member')
+          .update({
+            status: 'active',
+            name: userName,
+            email: userEmail,
+            role: 'staff',  // 幕僚角色
+            is_leader: false,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingMember.id)
+          .select()
+          .single()
 
-      if (rpcError) {
-        console.error('❌ 加入團隊失敗:', rpcError)
-        return { success: false, message: `加入團隊失敗：${rpcError.message}` }
+        if (updateError) {
+          console.error('❌ 更新成員記錄失敗:', updateError)
+          return { success: false, message: '加入團隊失敗，請稍後重試' }
+        }
+        
+        memberData = updatedMember
+        console.log('✅ 重新啟用現有成員:', memberData.id)
+        
+      } else {
+        // 創建新成員記錄
+        const { data: newMember, error: createError } = await supabase
+          .from('Member')
+          .insert({
+            auth_user_id: userId,
+            group_id: invitation.group_id,
+            name: userName,
+            email: userEmail,
+            role: 'staff',  // 幕僚角色
+            is_leader: false,
+            status: 'active'
+          })
+          .select()
+          .single()
+
+        if (createError) {
+          console.error('❌ 創建成員記錄失敗:', createError)
+          return { success: false, message: '加入團隊失敗，請稍後重試' }
+        }
+        
+        memberData = newMember
+        console.log('✅ 創建新成員記錄:', memberData.id)
       }
 
-      console.log('✅ 成功加入團隊:', rpcResult)
+      // 步驟4: 更新邀請碼使用狀態
+      const { error: inviteUpdateError } = await supabase
+        .from('TeamInvitation')
+        .update({
+          current_uses: invitation.current_uses + 1,
+          used_at: new Date().toISOString(),
+          used_by: memberData.id
+        })
+        .eq('id', invitation.id)
+
+      if (inviteUpdateError) {
+        console.error('❌ 更新邀請碼狀態失敗:', inviteUpdateError)
+        // 但不要因此失敗，因為成員已經創建成功
+      } else {
+        console.log('✅ 邀請碼使用狀態已更新')
+      }
+
+      console.log('🎉 加入團隊成功!')
       
       return { 
         success: true, 
+        member: memberData,  // 確保返回完整的成員資訊
         team: team,
         message: `歡迎加入 ${team.name}！` 
       }
 
     } catch (error) {
-      console.error('❌ 加入團隊過程發生異常:', error)
+      console.error('💥 加入團隊過程發生異常:', error)
       return { 
         success: false, 
         message: `加入團隊失敗：${error.message}` 
@@ -325,50 +410,87 @@ export class TeamService {
   }
 
   // 生成幕僚邀請碼
-  static async createStaffInvitation(groupId, createdBy, hoursValid = 72) {
+  static async createStaffInvitation(groupId, authUserId, hoursValid = 72) {
     try {
-      // 驗證創建者是否為團隊負責人，同時獲取 member.id
-      const { data: member } = await supabase
-        .from('Member')
-        .select('id, is_leader')
-        .eq('auth_user_id', createdBy)
-        .eq('group_id', groupId)
-        .single()
+      console.log('=== createStaffInvitation 開始 ===')
+      console.log('團隊ID:', groupId)
+      console.log('用戶ID:', authUserId)
+      console.log('有效時數:', hoursValid)
+      
+      // 步驟1: 驗證用戶權限（使用我們的 RPC 函數）
+      const { data: membershipInfo, error: membershipError } = await supabase
+        .rpc('get_user_membership_info')
 
-      if (!member || !member.is_leader) {
-        return { success: false, message: '只有團隊負責人可以邀請成員' }
+      if (membershipError) {
+        console.error('❌ 檢查用戶權限失敗:', membershipError)
+        return { success: false, message: '檢查權限失敗' }
       }
 
+      console.log('用戶成員資訊:', membershipInfo)
+
+      // 檢查是否有權限
+      if (!membershipInfo || Object.keys(membershipInfo).length === 0) {
+        return { success: false, message: '您不是任何團隊的成員' }
+      }
+
+      if (!membershipInfo.is_leader) {
+        return { success: false, message: '只有團隊負責人可以生成邀請碼' }
+      }
+
+      if (membershipInfo.group_id !== groupId) {
+        return { success: false, message: '您不能為其他團隊生成邀請碼' }
+      }
+
+      console.log('✅ 權限驗證通過，開始生成邀請碼')
+
+      // 步驟2: 生成邀請碼
       const inviteCode = this.generateInviteCode()
       const expiresAt = new Date(Date.now() + hoursValid * 60 * 60 * 1000)
       
+      console.log('邀請碼:', inviteCode)
+      console.log('過期時間:', expiresAt.toISOString())
+
+      // 步驟3: 創建邀請記錄
       const { data, error } = await supabase
         .from('TeamInvitation')
         .insert({
           group_id: groupId,
           invite_code: inviteCode,
-          expires_at: expiresAt,
-          invited_by: member.id,
-          max_uses: 1,  // 🔧 修改：設為一次性使用
+          expires_at: expiresAt.toISOString(),
+          invited_by: membershipInfo.member_id, // 使用從 RPC 獲取的 member_id
+          max_uses: 1,
+          current_uses: 0,
           status: 'active'
         })
         .select()
         .single()
 
       if (error) {
-        console.error('插入邀請記錄失敗:', error)
-        throw error
+        console.error('❌ 插入邀請記錄失敗:', error)
+        
+        // 處理特定錯誤
+        if (error.code === '23505') { // 唯一約束違反
+          return { success: false, message: '邀請碼生成衝突，請重試' }
+        }
+        
+        return { success: false, message: `生成邀請碼失敗：${error.message}` }
       }
-      
+
+      console.log('✅ 邀請碼生成成功:', data)
+
       return { 
         success: true, 
-        inviteCode, 
-        expiresAt,
-        message: `邀請碼生成成功，${hoursValid}小時內有效，僅可使用一次` // 更新訊息
+        inviteCode,
+        expiresAt: expiresAt.toISOString(),
+        message: `邀請碼生成成功，${hoursValid}小時內有效`
       }
+
     } catch (error) {
-      console.error('生成邀請碼失敗:', error)
-      return { success: false, error: error.message }
+      console.error('💥 生成邀請碼異常:', error)
+      return { 
+        success: false, 
+        message: `生成邀請碼失敗：${error.message}` 
+      }
     }
   }
 

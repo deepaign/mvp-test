@@ -30,24 +30,33 @@ function App() {
   const isProcessingAuth = useRef(false)
 
   // 定義哪些頁面需要全螢幕模式（無捲動）
-  const fullscreenPages = ['homepage', 'login', 'joinTeamSelection', 'registrationCode', 'inviteCode']
+  const fullscreenPages = ['homepage', 'login', 'joinTeamSelection', 'registrationCode'] // 移除 'inviteCode'
   const isFullscreenPage = fullscreenPages.includes(currentStep)
+
 
   // 根據當前頁面動態控制 body 的捲動
   useEffect(() => {
-    if (isFullscreenPage) {
-      document.body.style.overflow = 'hidden'
-      document.documentElement.style.overflow = 'hidden'
-    } else {
-      document.body.style.overflow = 'auto'
-      document.documentElement.style.overflow = 'auto'
-    }
+  if (currentStep === 'inviteCode') {
+    // 強制允許滾動
+    document.body.style.overflow = 'auto'
+    document.documentElement.style.overflow = 'auto'
+    document.body.style.position = 'static'
+    document.documentElement.style.position = 'static'
+  } else if (isFullscreenPage) {
+    document.body.style.overflow = 'hidden'
+    document.documentElement.style.overflow = 'hidden'
+  } else {
+    document.body.style.overflow = 'auto'
+    document.documentElement.style.overflow = 'auto'
+  }
 
-    return () => {
-      document.body.style.overflow = 'auto'
-      document.documentElement.style.overflow = 'auto'
-    }
-  }, [isFullscreenPage])
+  return () => {
+    document.body.style.overflow = 'auto'
+    document.documentElement.style.overflow = 'auto'
+    document.body.style.position = 'static'
+    document.documentElement.style.position = 'static'
+  }
+  }, [currentStep, isFullscreenPage])
 
   // 決定用戶應該導向哪個頁面
   const determineUserDestination = useCallback(async (authUser) => {
@@ -250,15 +259,68 @@ function App() {
     }
   }
 
-  const handleTeamJoined = async (memberData, teamData) => {
-    console.log(`=== 團隊加入成功 ===`)
-    console.log('團隊:', teamData.name)
-    console.log('成員角色:', memberData.role)
-    console.log('是否為負責人:', memberData.is_leader)
-    
-    setMember(memberData)
-    setTeam(teamData)
-    setCurrentStep('dashboard')
+  const handleTeamJoined = (joinResult) => {
+    try {
+      console.log('=== handleTeamJoined 開始 ===')
+      console.log('接收到的參數:', joinResult)
+      console.log('參數類型:', typeof joinResult)
+      
+      // 檢查參數結構
+      if (!joinResult || typeof joinResult !== 'object') {
+        console.error('❌ joinResult 不是有效物件:', joinResult)
+        // setError('加入成功但資料格式異常')
+        return
+      }
+      
+      // 檢查團隊資訊
+      if (!joinResult.team) {
+        console.error('❌ 缺少團隊資訊:', joinResult)
+        // setError('加入成功但團隊資訊缺失')
+        return
+      }
+      
+      // 檢查成員資訊
+      if (!joinResult.member) {
+        console.error('❌ 缺少成員資訊:', joinResult)
+        // setError('加入成功但成員資訊缺失')
+        return
+      }
+      
+      const member = joinResult.member
+      const team = joinResult.team
+      
+      console.log('✅ 團隊資訊:', {
+        id: team.id,
+        name: team.name,
+        politician_name: team.politician_name
+      })
+      
+      console.log('✅ 成員資訊:', {
+        id: member.id,
+        name: member.name,
+        role: member.role,
+        is_leader: member.is_leader,
+        status: member.status
+      })
+      
+      // 設置應用狀態
+      console.log('🔄 設置應用狀態...')
+      setMember(member)
+      setTeam(team)
+      
+      // 確保狀態更新後再跳轉
+      console.log('🔄 準備跳轉到儀表板...')
+      setCurrentStep('dashboard')
+      
+      console.log('✅ handleTeamJoined 完成，已設置 currentStep 為 dashboard')
+      
+    } catch (error) {
+      console.error('💥 handleTeamJoined 發生錯誤:', error)
+      console.error('錯誤堆疊:', error.stack)
+      console.error('加入結果物件:', joinResult)
+      
+      // setError(`處理團隊加入結果時發生錯誤：${error.message}`)
+    }
   }
 
   const handleLogout = async () => {
