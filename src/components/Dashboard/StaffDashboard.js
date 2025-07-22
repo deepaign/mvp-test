@@ -59,24 +59,25 @@ function StaffDashboard({ member, team, onLogout }) {
       setLoading(true)
       setError('')
       
-      const result = await TeamService.getTeamMembers(team.id, member.auth_user_id)
-      console.log('載入團隊成員結果:', result)
+      // 使用新的 RPC 函數獲取團隊成員
+      const result = await TeamService.getTeamMembers()
+      
+      console.log('團隊成員載入結果:', result)
       
       if (result.success) {
-        setTeamMembers(result.members)
+        // 確保 data 是陣列
+        const members = Array.isArray(result.data) ? result.data : []
+        setTeamMembers(members)
+        console.log(`✅ 成功載入 ${members.length} 位團隊成員`)
       } else {
-        setError(result.message)
-        
-        // 如果是權限問題，可能成員已被移除
-        if (result.message.includes('不是該團隊') || result.message.includes('活躍成員')) {
-          console.log('權限錯誤，可能已被移除，執行登出')
-          alert('您可能已被移出團隊，請重新登入。')
-          onLogout()
-        }
+        console.error('❌ 載入團隊成員失敗:', result.error)
+        setError(result.error || '載入團隊成員失敗')
+        setTeamMembers([]) // 設置為空陣列
       }
     } catch (error) {
-      console.error('載入團隊成員失敗:', error)
-      setError('載入團隊成員失敗')
+      console.error('💥 載入團隊成員異常:', error)
+      setError('載入團隊成員時發生異常')
+      setTeamMembers([]) // 設置為空陣列
     } finally {
       setLoading(false)
     }
@@ -206,8 +207,18 @@ function StaffDashboard({ member, team, onLogout }) {
   }
 
   const getRoleDisplayName = (role, isLeader) => {
-    if (isLeader) return '團隊負責人'
-    return role === 'politician' ? '政治人物' : '幕僚助理'
+    if (isLeader) return '負責人'
+    
+    switch (role) {
+      case 'politician':
+        return '政治人物'
+      case 'staff':
+        return '幕僚助理'
+      case 'volunteer':
+        return '志工'
+      default:
+        return '成員'
+    }
   }
 
   // 處理 tab 切換
@@ -518,6 +529,137 @@ function StaffDashboard({ member, team, onLogout }) {
         )
     }
   }
+
+  // 在渲染邏輯中添加更安全的檢查
+  const renderTeamMembersTable = () => {
+    // 確保 teamMembers 是陣列
+    const members = Array.isArray(teamMembers) ? teamMembers : []
+    
+    if (loading) {
+      return (
+        <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
+          載入中...
+        </div>
+      )
+    }
+    
+    if (members.length === 0) {
+      return (
+        <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
+          尚無團隊成員
+        </div>
+      )
+    }
+    
+    return (
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ 
+          width: '100%', 
+          borderCollapse: 'collapse',
+          fontSize: '0.95rem'
+        }}>
+          {/* 表格頭部 */}
+          <thead>
+            <tr style={{ background: '#f8f9fa' }}>
+              <th style={{ 
+                padding: '12px', 
+                textAlign: 'left', 
+                borderBottom: '2px solid #e9ecef',
+                fontWeight: '600',
+                color: '#495057'
+              }}>
+                成員姓名
+              </th>
+              <th style={{ 
+                padding: '12px', 
+                textAlign: 'left', 
+                borderBottom: '2px solid #e9ecef',
+                fontWeight: '600',
+                color: '#495057'
+              }}>
+                電子信箱
+              </th>
+              <th style={{ 
+                padding: '12px', 
+                textAlign: 'center', 
+                borderBottom: '2px solid #e9ecef',
+                fontWeight: '600',
+                color: '#495057'
+              }}>
+                角色
+              </th>
+              <th style={{ 
+                padding: '12px', 
+                textAlign: 'center', 
+                borderBottom: '2px solid #e9ecef',
+                fontWeight: '600',
+                color: '#495057'
+              }}>
+                加入時間
+              </th>
+            </tr>
+          </thead>
+          
+          {/* 表格內容 */}
+          <tbody>
+            {members.map((m, index) => (
+              <tr key={m.id || index} style={{ 
+                borderBottom: '1px solid #f1f3f4',
+                background: index % 2 === 0 ? '#ffffff' : '#f8f9fa'
+              }}>
+                <td style={{ padding: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ fontWeight: '500', color: '#333' }}>
+                        {m.name || '未設定姓名'}
+                      </div>
+                      {m.is_leader && (
+                        <span style={{
+                          fontSize: '0.7rem',
+                          background: '#667eea',
+                          color: 'white',
+                          padding: '2px 6px',
+                          borderRadius: '4px',
+                          marginTop: '4px',
+                          display: 'inline-block'
+                        }}>
+                          負責人
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </td>
+                
+                <td style={{ padding: '12px', color: '#666' }}>
+                  {m.email || '未設定信箱'}
+                </td>
+                
+                <td style={{ padding: '12px', textAlign: 'center' }}>
+                  <span style={{
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    fontSize: '0.8rem',
+                    fontWeight: '500',
+                    background: m.is_leader ? '#e3f2fd' : '#f3e5f5',
+                    color: m.is_leader ? '#1976d2' : '#7b1fa2'
+                  }}>
+                    {getRoleDisplayName(m.role, m.is_leader)}
+                  </span>
+                </td>
+                
+                <td style={{ padding: '12px', textAlign: 'center', color: '#666', fontSize: '0.85rem' }}>
+                  {m.created_at ? new Date(m.created_at).toLocaleDateString('zh-TW') : '未知'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+
+  // 角色顯示名稱函數（如果還沒有的話）
+  
 
   // 如果有錯誤且是權限相關，顯示錯誤頁面
   if (error && (error.includes('不是該團隊') || error.includes('活躍成員'))) {
