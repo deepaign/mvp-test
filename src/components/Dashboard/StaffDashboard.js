@@ -9,6 +9,11 @@ function StaffDashboard({ member, team, onLogout }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState('team') // 預設顯示團隊成員
+  
+  // 新增：邀請碼相關狀態
+  const [showInviteModal, setShowInviteModal] = useState(false)
+  const [inviteCode, setInviteCode] = useState('')
+  const [inviteLoading, setInviteLoading] = useState(false)
 
   // 檢查成員狀態是否仍然有效
   const checkMemberStatus = async () => {
@@ -77,6 +82,103 @@ function StaffDashboard({ member, team, onLogout }) {
     }
   }
 
+  // 新增：生成邀請碼功能
+  const generateInviteCode = async () => {
+    try {
+      setInviteLoading(true)
+      setError('')
+      
+      console.log('開始生成邀請碼...')
+      console.log('團隊 ID:', team.id)
+      console.log('用戶 ID:', member.auth_user_id)
+      console.log('是否為負責人:', member.is_leader)
+      
+      const result = await TeamService.createStaffInvitation(
+        team.id,
+        member.auth_user_id
+      )
+
+      console.log('邀請碼生成結果:', result)
+
+      if (result.success) {
+        setInviteCode(result.inviteCode)
+        setShowInviteModal(true)
+      } else {
+        console.error('生成失敗:', result.message)
+        setError(result.message)
+      }
+    } catch (error) {
+      console.error('生成邀請碼失敗:', error)
+      setError('生成邀請碼失敗')
+    } finally {
+      setInviteLoading(false)
+    }
+  }
+
+  // 新增：移除成員功能
+  const removeMember = async (memberId, memberName) => {
+    // 確認對話框
+    const confirmed = window.confirm(
+      `確定要移除 ${memberName} 嗎？\n\n移除後該成員將無法訪問團隊系統。`
+    )
+    
+    if (!confirmed) return
+
+    try {
+      console.log('=== 開始移除成員 ===')
+      console.log('成員ID:', memberId)
+      console.log('成員姓名:', memberName)
+      console.log('團隊ID:', team.id)
+      console.log('操作者ID:', member.auth_user_id)
+      console.log('操作者是否為負責人:', member.is_leader)
+      
+      // 清除之前的錯誤
+      setError('')
+      
+      const result = await TeamService.removeMember(
+        team.id,
+        memberId,
+        member.auth_user_id
+      )
+
+      console.log('=== 移除成員結果 ===', result)
+
+      if (result.success) {
+        console.log('✅ 移除成功，更新本地狀態')
+        
+        // 立即更新本地成員列表
+        setTeamMembers(prevMembers => {
+          const newMembers = prevMembers.filter(m => m.id !== memberId)
+          console.log('本地成員列表已更新:', newMembers.map(m => m.name))
+          return newMembers
+        })
+        
+        // 顯示成功訊息
+        alert(`✅ ${result.message}`)
+        
+        // 重新載入成員列表以確保同步
+        console.log('重新載入成員列表以確保同步...')
+        await loadTeamMembers()
+        
+      } else {
+        console.error('❌ 移除失敗:', result.message)
+        setError(result.message || '移除成員失敗')
+        alert(`❌ 移除失敗：${result.message}`)
+      }
+    } catch (error) {
+      console.error('❌ 移除成員異常:', error)
+      const errorMessage = `移除成員時發生錯誤：${error.message}`
+      setError(errorMessage)
+      alert(`❌ ${errorMessage}`)
+    }
+  }
+
+  // 新增：複製邀請碼
+  const copyInviteCode = () => {
+    navigator.clipboard.writeText(inviteCode)
+    alert('邀請碼已複製到剪貼板')
+  }
+
   // 組件載入時檢查狀態
   useEffect(() => {
     loadTeamMembers()
@@ -112,6 +214,9 @@ function StaffDashboard({ member, team, onLogout }) {
   const handleTabChange = (tabId) => {
     setActiveTab(tabId)
   }
+
+  // 檢查是否為團隊管理員（政治人物）
+  const isTeamManager = member.is_leader || member.role === 'politician'
 
   // 渲染不同 tab 的內容
   const renderTabContent = () => {
@@ -164,10 +269,10 @@ function StaffDashboard({ member, team, onLogout }) {
               textAlign: 'center',
               boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
             }}>
-              <div style={{ fontSize: '3rem', marginBottom: '20px' }}>🚫</div>
+              <div style={{ fontSize: '3rem', marginBottom: '20px' }}>🔒</div>
               <h2 style={{ color: '#e74c3c', marginBottom: '16px' }}>權限不足</h2>
               <p style={{ color: '#666', fontSize: '1.1rem' }}>
-                您沒有權限存取案件管理功能
+                您沒有權限查看案件管理功能
               </p>
             </div>
           )
@@ -179,28 +284,22 @@ function StaffDashboard({ member, team, onLogout }) {
       default:
         return (
           <>
-            {/* 歡迎卡片 */}
+            {/* 團隊基本資訊 */}
             <div style={{
               background: 'white',
               borderRadius: '12px',
-              padding: '30px',
+              padding: '24px',
               marginBottom: '30px',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-              textAlign: 'center'
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
             }}>
-              <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🎉</div>
-              <h2 style={{ color: '#28a745', fontSize: '1.8rem', marginBottom: '16px', fontWeight: '600' }}>
-                歡迎加入團隊！
-              </h2>
-              <p style={{ color: '#666', fontSize: '1.1rem', marginBottom: '20px', lineHeight: '1.5' }}>
-                您已成功加入 <strong>{team.name}</strong>
-              </p>
+              <h3 style={{ fontSize: '1.3rem', marginBottom: '20px', color: '#333' }}>
+                🏛️ 團隊資訊
+              </h3>
               
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                gap: '20px',
-                marginTop: '24px'
+              <div style={{ 
+                display: 'grid', 
+                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+                gap: '16px' 
               }}>
                 <div style={{
                   background: '#f8f9fa',
@@ -208,7 +307,7 @@ function StaffDashboard({ member, team, onLogout }) {
                   padding: '16px',
                   textAlign: 'center'
                 }}>
-                  <div style={{ fontSize: '1.5rem', color: '#f093fb', marginBottom: '8px' }}>🤝</div>
+                  <div style={{ fontSize: '1.5rem', color: '#667eea', marginBottom: '8px' }}>🤝</div>
                   <div style={{ color: '#333', fontWeight: '600' }}>我的身份</div>
                   <div style={{ color: '#666', fontSize: '0.9rem' }}>
                     {getRoleDisplayName(member.role, member.is_leader)}
@@ -239,66 +338,132 @@ function StaffDashboard({ member, team, onLogout }) {
               </div>
             </div>
 
-            {/* 團隊成員 */}
+            {/* 團隊成員管理 */}
             <div style={{
               background: 'white',
               borderRadius: '12px',
               padding: '24px',
               boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
             }}>
-              <h3 style={{ fontSize: '1.3rem', marginBottom: '20px', color: '#333' }}>
-                👥 團隊成員
-              </h3>
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center', 
+                marginBottom: '20px' 
+              }}>
+                <h3 style={{ fontSize: '1.3rem', color: '#333', margin: 0 }}>
+                  👥 團隊成員 ({teamMembers.length})
+                </h3>
+                
+                {/* 只有團隊管理員才能看到生成邀請碼按鈕 */}
+                {isTeamManager && (
+                  <button
+                    onClick={generateInviteCode}
+                    disabled={inviteLoading}
+                    style={{
+                      background: inviteLoading ? '#ccc' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      padding: '10px 20px',
+                      fontSize: '0.9rem',
+                      fontWeight: '500',
+                      cursor: inviteLoading ? 'not-allowed' : 'pointer',
+                      opacity: inviteLoading ? 0.7 : 1,
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    {inviteLoading ? '生成中...' : '📋 生成邀請碼'}
+                  </button>
+                )}
+              </div>
               
               {loading ? (
                 <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
                   載入中...
                 </div>
+              ) : teamMembers.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
+                  尚無團隊成員
+                </div>
               ) : (
                 <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <table style={{ 
+                    width: '100%', 
+                    borderCollapse: 'collapse',
+                    fontSize: '0.95rem'
+                  }}>
                     <thead>
                       <tr style={{ background: '#f8f9fa' }}>
-                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #e9ecef' }}>
-                          姓名
+                        <th style={{ 
+                          padding: '12px', 
+                          textAlign: 'left', 
+                          borderBottom: '2px solid #e9ecef',
+                          fontWeight: '600',
+                          color: '#495057'
+                        }}>
+                          成員姓名
                         </th>
-                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #e9ecef' }}>
-                          Email
+                        <th style={{ 
+                          padding: '12px', 
+                          textAlign: 'left', 
+                          borderBottom: '2px solid #e9ecef',
+                          fontWeight: '600',
+                          color: '#495057'
+                        }}>
+                          電子信箱
                         </th>
-                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #e9ecef' }}>
-                          身份
+                        <th style={{ 
+                          padding: '12px', 
+                          textAlign: 'center', 
+                          borderBottom: '2px solid #e9ecef',
+                          fontWeight: '600',
+                          color: '#495057'
+                        }}>
+                          角色
                         </th>
-                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #e9ecef' }}>
+                        <th style={{ 
+                          padding: '12px', 
+                          textAlign: 'center', 
+                          borderBottom: '2px solid #e9ecef',
+                          fontWeight: '600',
+                          color: '#495057'
+                        }}>
                           加入時間
                         </th>
+                        {/* 只有團隊管理員才能看到操作欄 */}
+                        {isTeamManager && (
+                          <th style={{ 
+                            padding: '12px', 
+                            textAlign: 'center', 
+                            borderBottom: '2px solid #e9ecef',
+                            fontWeight: '600',
+                            color: '#495057'
+                          }}>
+                            操作
+                          </th>
+                        )}
                       </tr>
                     </thead>
                     <tbody>
                       {teamMembers.map((m, index) => (
                         <tr key={m.id} style={{ 
-                          background: index % 2 === 0 ? 'white' : '#f8f9fa',
-                          borderBottom: '1px solid #e9ecef'
+                          borderBottom: '1px solid #f1f3f4',
+                          background: index % 2 === 0 ? 'white' : '#fafbfc'
                         }}>
-                          <td style={{ padding: '12px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              {m.is_leader && <span style={{ fontSize: '1.2rem' }}>👑</span>}
-                              <strong>{m.name}</strong>
-                              {m.id === member.id && (
-                                <span style={{
-                                  background: '#e3f2fd',
-                                  color: '#1976d2',
-                                  padding: '2px 6px',
-                                  borderRadius: '8px',
-                                  fontSize: '0.7rem',
-                                  fontWeight: '500'
-                                }}>
-                                  我
-                                </span>
-                              )}
-                            </div>
+                          <td style={{ padding: '12px', fontWeight: '500', color: '#333' }}>
+                            {m.name}
+                            {m.is_leader && (
+                              <span style={{ 
+                                marginLeft: '8px', 
+                                fontSize: '1rem' 
+                              }}>👑</span>
+                            )}
                           </td>
-                          <td style={{ padding: '12px', color: '#666' }}>{m.email}</td>
-                          <td style={{ padding: '12px' }}>
+                          <td style={{ padding: '12px', color: '#666' }}>
+                            {m.email}
+                          </td>
+                          <td style={{ padding: '12px', textAlign: 'center' }}>
                             <span style={{
                               background: m.is_leader ? '#e3f2fd' : '#f3e5f5',
                               color: m.is_leader ? '#1976d2' : '#7b1fa2',
@@ -310,9 +475,38 @@ function StaffDashboard({ member, team, onLogout }) {
                               {getRoleDisplayName(m.role, m.is_leader)}
                             </span>
                           </td>
-                          <td style={{ padding: '12px', color: '#666' }}>
+                          <td style={{ padding: '12px', color: '#666', textAlign: 'center' }}>
                             {new Date(m.created_at).toLocaleDateString('zh-TW')}
                           </td>
+                          {/* 只有團隊管理員才能看到移除按鈕 */}
+                          {isTeamManager && (
+                            <td style={{ padding: '12px', textAlign: 'center' }}>
+                              {/* 不能移除自己，也不能移除其他負責人 */}
+                              {m.id !== member.id && !m.is_leader ? (
+                                <button
+                                  onClick={() => removeMember(m.id, m.name)}
+                                  style={{
+                                    background: '#dc3545',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '6px',
+                                    padding: '6px 12px',
+                                    fontSize: '0.8rem',
+                                    cursor: 'pointer',
+                                    transition: 'background-color 0.2s'
+                                  }}
+                                  onMouseOver={(e) => e.target.style.background = '#c82333'}
+                                  onMouseOut={(e) => e.target.style.background = '#dc3545'}
+                                >
+                                  移除
+                                </button>
+                              ) : (
+                                <span style={{ color: '#ccc', fontSize: '0.8rem' }}>
+                                  {m.id === member.id ? '本人' : '負責人'}
+                                </span>
+                              )}
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
@@ -378,6 +572,21 @@ function StaffDashboard({ member, team, onLogout }) {
         onLogout={onLogout}
       />
 
+      {/* 錯誤訊息 */}
+      {error && !error.includes('不是該團隊') && !error.includes('活躍成員') && (
+        <div style={{ padding: '20px 40px 0' }}>
+          <div style={{
+            background: '#fee',
+            border: '1px solid #fcc',
+            color: '#e74c3c',
+            padding: '12px 16px',
+            borderRadius: '8px'
+          }}>
+            {error}
+          </div>
+        </div>
+      )}
+
       {/* 主要內容 */}
       <div style={{ padding: '40px' }}>
         {renderTabContent()}
@@ -404,6 +613,100 @@ function StaffDashboard({ member, team, onLogout }) {
           </div>
         )}
       </div>
+
+      {/* 邀請碼彈出視窗 */}
+      {showInviteModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.6)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: '16px',
+            padding: '32px',
+            maxWidth: '480px',
+            width: '90%',
+            boxShadow: '0 10px 30px rgba(0,0,0,0.2)'
+          }}>
+            <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+              <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🎉</div>
+              <h2 style={{ color: '#333', marginBottom: '8px' }}>邀請碼已生成</h2>
+              <p style={{ color: '#666', fontSize: '0.95rem' }}>
+                請將此邀請碼分享給想要加入團隊的幕僚成員
+              </p>
+            </div>
+            
+            <div style={{
+              background: '#f8f9fa',
+              border: '2px dashed #dee2e6',
+              borderRadius: '12px',
+              padding: '20px',
+              textAlign: 'center',
+              marginBottom: '24px'
+            }}>
+              <div style={{ 
+                fontSize: '1.8rem', 
+                fontWeight: 'bold', 
+                color: '#667eea',
+                fontFamily: 'monospace',
+                letterSpacing: '2px'
+              }}>
+                {inviteCode}
+              </div>
+            </div>
+            
+            <div style={{ 
+              display: 'flex', 
+              gap: '12px',
+              justifyContent: 'center'
+            }}>
+              <button
+                onClick={copyInviteCode}
+                style={{
+                  background: '#28a745',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '12px 24px',
+                  fontSize: '0.95rem',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  flex: 1,
+                  maxWidth: '150px'
+                }}
+              >
+                📋 複製邀請碼
+              </button>
+              
+              <button
+                onClick={() => setShowInviteModal(false)}
+                style={{
+                  background: '#6c757d',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '12px 24px',
+                  fontSize: '0.95rem',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  flex: 1,
+                  maxWidth: '150px'
+                }}
+              >
+                關閉
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
