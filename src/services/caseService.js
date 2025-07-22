@@ -118,8 +118,15 @@ export class CaseService {
 
       console.log('=== CaseService.getCases ===')
       console.log('查詢參數:', { groupId, status, filters, searchTerm, page, limit })
+      
+      // 🔍 新增：詳細參數檢查
+      console.log('🔍 參數詳細檢查:')
+      console.log('  - groupId 類型:', typeof groupId, '值:', groupId)
+      console.log('  - groupId 是否為空:', !groupId)
+      console.log('  - filters 內容:', JSON.stringify(filters, null, 2))
 
       if (!groupId) {
+        console.error('❌ 團隊 ID 為空，無法查詢')
         return {
           success: false,
           error: '團隊 ID 必填',
@@ -127,7 +134,49 @@ export class CaseService {
         }
       }
 
+      // 🔍 新增：先測試基本連線和基礎查詢
+      console.log('🔍 步驟 1: 測試基本查詢...')
+      const { data: basicTest, error: basicError, count: basicCount } = await supabase
+        .from('Case')
+        .select('id, title, group_id', { count: 'exact' })
+        .eq('group_id', groupId)
+        .limit(3)
+
+      console.log('基本查詢結果:', {
+        成功: !basicError,
+        錯誤: basicError?.message,
+        找到筆數: basicTest?.length || 0,
+        總計筆數: basicCount,
+        範例資料: basicTest?.slice(0, 2)
+      })
+
+      if (basicError) {
+        console.error('❌ 基本查詢失敗:', basicError)
+        return {
+          success: false,
+          error: `基本查詢失敗: ${basicError.message}`,
+          data: []
+        }
+      }
+
+      if (!basicTest || basicTest.length === 0) {
+        console.warn('⚠️ 基本查詢成功但沒有找到任何案件')
+        console.log('  - 請檢查 group_id 是否正確')
+        console.log('  - 請檢查資料庫中是否有該團隊的案件')
+        return {
+          success: true,
+          data: [],
+          count: 0,
+          page,
+          limit,
+          error: null
+        }
+      }
+
+      console.log('✅ 基本查詢成功，開始完整查詢...')
+
       // 建立基礎查詢 - 修正查詢以包含 Voter.address
+      console.log('🔍 步驟 2: 建立完整查詢...')
       let query = supabase
         .from('Case')
         .select(`
@@ -180,19 +229,25 @@ export class CaseService {
         `)
         .eq('group_id', groupId)
 
+      console.log('查詢建立完成，group_id:', groupId)
+
       // 狀態篩選 - 在資料庫層級處理
       if (status !== 'all') {
+        console.log('🔍 應用狀態篩選:', status)
         query = query.eq('status', status)
       }
 
       // 搜尋篩選 - 在資料庫層級處理
       if (searchTerm && searchTerm.trim()) {
+        console.log('🔍 應用搜尋篩選:', searchTerm)
         query = query.or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`)
       }
 
       // 日期篩選 - 在資料庫層級處理（根據 created_at）
       if (filters.dateRange && filters.dateRange !== 'all') {
+        console.log('🔍 處理日期篩選:', filters.dateRange)
         const dateFilter = this.buildDateFilter(filters.dateRange, filters.startDate, filters.endDate)
+        console.log('日期篩選結果:', dateFilter)
         if (dateFilter.startDate && dateFilter.endDate) {
           console.log('應用日期篩選:', dateFilter)
           query = query
@@ -202,19 +257,37 @@ export class CaseService {
       }
 
       // 排序（預設由新到舊）
+      console.log('🔍 應用排序: created_at desc')
       query = query.order('created_at', { ascending: false })
 
       // 分頁
       if (page >= 0 && limit > 0) {
         const start = page * limit
         const end = start + limit - 1
+        console.log('🔍 應用分頁:', { page, limit, start, end })
         query = query.range(start, end)
       }
 
+      console.log('🔍 步驟 3: 執行完整查詢...')
+      const queryStartTime = Date.now()
       const { data, error } = await query
+      const queryDuration = Date.now() - queryStartTime
+
+      console.log('完整查詢執行結果:', {
+        成功: !error,
+        執行時間: `${queryDuration}ms`,
+        錯誤: error?.message,
+        回傳筆數: data?.length || 0
+      })
 
       if (error) {
-        console.error('查詢案件失敗:', error)
+        console.error('❌ 查詢案件失敗:', error)
+        console.error('錯誤詳細資訊:', {
+          code: error.code,
+          details: error.details,
+          hint: error.hint,
+          message: error.message
+        })
         return {
           success: false,
           error: error.message,
@@ -222,51 +295,82 @@ export class CaseService {
         }
       }
 
-      console.log(`查詢成功，共 ${data?.length || 0} 筆案件`)
+      console.log(`✅ 查詢成功，共 ${data?.length || 0} 筆案件`)
       
-      // 驗證是否成功取得 address 資料
+      // 🔍 新增：資料結構驗證
       if (data && data.length > 0) {
+        console.log('🔍 步驟 4: 驗證資料結構...')
         const firstCase = data[0]
+        
+        console.log('第一筆案件基本資訊:', {
+          id: firstCase.id,
+          title: firstCase.title,
+          group_id: firstCase.group_id,
+          status: firstCase.status,
+          created_at: firstCase.created_at
+        })
+        
+        console.log('關聯資料檢查:', {
+          CategoryCase: Array.isArray(firstCase.CategoryCase) ? firstCase.CategoryCase.length : 'null',
+          VoterCase: Array.isArray(firstCase.VoterCase) ? firstCase.VoterCase.length : 'null',
+          InChargeCase: Array.isArray(firstCase.InChargeCase) ? firstCase.InChargeCase.length : 'null',
+          AcceptanceCase: Array.isArray(firstCase.AcceptanceCase) ? firstCase.AcceptanceCase.length : 'null'
+        })
+        
+        // 驗證是否成功取得 address 資料
         if (firstCase.VoterCase && firstCase.VoterCase[0] && firstCase.VoterCase[0].Voter) {
           console.log('✅ 成功取得 Voter 資料，包含 address:', {
             name: firstCase.VoterCase[0].Voter.name,
             phone: firstCase.VoterCase[0].Voter.phone,
             address: firstCase.VoterCase[0].Voter.address
           })
+        } else {
+          console.log('⚠️ 第一筆案件沒有 Voter 資料')
         }
+      } else {
+        console.log('⚠️ 查詢成功但沒有回傳任何資料')
       }
+      
+      console.log('🔍 步驟 5: 開始前端篩選...')
       
       // 在前端進行多重篩選（交集邏輯）
       let filteredData = data || []
+      const originalCount = filteredData.length
+      console.log(`開始前端篩選，原始筆數: ${originalCount}`)
       
       // 案件類型篩選
       if (filters.category && filters.category !== 'all') {
-        console.log('應用案件類型篩選:', filters.category)
+        console.log('🔍 應用案件類型篩選:', filters.category)
+        const beforeFilter = filteredData.length
         filteredData = filteredData.filter(caseItem => {
           const categories = caseItem.CategoryCase || []
           
           // 檢查預設類型
           if (['traffic', 'environment', 'security', 'public_service', 'legal_consultation'].includes(filters.category)) {
             const targetCategoryName = this.getCategoryName(filters.category)
-            return categories.some(cat => cat.Category && cat.Category.name === targetCategoryName)
+            const result = categories.some(cat => cat.Category && cat.Category.name === targetCategoryName)
+            return result
           } else {
             // 檢查自定義類型
-            return categories.some(cat => cat.Category && cat.Category.id === filters.category)
+            const result = categories.some(cat => cat.Category && cat.Category.id === filters.category)
+            return result
           }
         })
-        console.log(`案件類型篩選後，剩餘 ${filteredData.length} 筆案件`)
+        console.log(`案件類型篩選: ${beforeFilter} -> ${filteredData.length} 筆案件`)
       }
 
       // 優先順序篩選
       if (filters.priority && filters.priority !== 'all') {
-        console.log('應用優先順序篩選:', filters.priority)
+        console.log('🔍 應用優先順序篩選:', filters.priority)
+        const beforeFilter = filteredData.length
         filteredData = filteredData.filter(caseItem => caseItem.priority === filters.priority)
-        console.log(`優先順序篩選後，剩餘 ${filteredData.length} 筆案件`)
+        console.log(`優先順序篩選: ${beforeFilter} -> ${filteredData.length} 筆案件`)
       }
 
       // 承辦人員篩選
       if (filters.assignee && filters.assignee !== 'all') {
-        console.log('應用承辦人員篩選:', filters.assignee)
+        console.log('🔍 應用承辦人員篩選:', filters.assignee)
+        const beforeFilter = filteredData.length
         
         if (filters.assignee === 'unassigned') {
           // 篩選尚未指派承辦人員的案件
@@ -290,12 +394,14 @@ export class CaseService {
             return inCharge.some(ic => ic.member_id === filters.assignee)
           })
         }
-        console.log(`承辦人員篩選後，剩餘 ${filteredData.length} 筆案件`)
+        console.log(`承辦人員篩選: ${beforeFilter} -> ${filteredData.length} 筆案件`)
       }
 
+      console.log('🔍 步驟 6: 篩選完成')
+      console.log(`篩選摘要: 原始 ${originalCount} -> 最終 ${filteredData.length} 筆案件`)
       console.log(`最終篩選結果：${filteredData.length} 筆案件`)
-      
-      return {
+
+      const finalResult = {
         success: true,
         data: filteredData,
         count: filteredData.length,
@@ -304,8 +410,19 @@ export class CaseService {
         error: null
       }
 
+      console.log('🔍 最終回傳結果:', {
+        success: finalResult.success,
+        count: finalResult.count,
+        page: finalResult.page,
+        limit: finalResult.limit,
+        hasData: Array.isArray(finalResult.data) && finalResult.data.length > 0
+      })
+      
+      return finalResult
+
     } catch (error) {
-      console.error('CaseService.getCases 發生錯誤:', error)
+      console.error('❌ CaseService.getCases 發生錯誤:', error)
+      console.error('錯誤堆疊:', error.stack)
       return {
         success: false,
         error: error.message,
