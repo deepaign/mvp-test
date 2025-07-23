@@ -510,64 +510,64 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
    */
   static async getCategories(teamId = null) {
     try {
-      console.log('=== CaseService.getCategories ===')
+      console.log('=== CaseService.getCategories (UUID修正版) ===')
 
-      // 預設類別 - 使用標準化的 ID
-      const defaultCategories = [
-        { id: 'traffic', name: '交通問題', isDefault: true },
-        { id: 'environment', name: '環境問題', isDefault: true },
-        { id: 'security', name: '治安問題', isDefault: true },
-        { id: 'public_service', name: '民生服務', isDefault: true },
-        { id: 'legal_consultation', name: '法律諮詢', isDefault: true }
-      ]
-
-      // 從資料庫載入自定義類別
+      // 從資料庫載入所有類別
       const { data: dbCategories, error } = await supabase
         .from('Category')
         .select('id, name, description')
         .order('name')
 
       if (error) {
-        console.error('載入自定義類別失敗，僅使用預設類別:', error)
+        console.error('載入類別失敗:', error)
         return {
-          success: true,
-          data: defaultCategories,
-          error: null
+          success: false,
+          error: error.message,
+          data: []
         }
       }
 
-      // 合併預設類別和自定義類別
-      const customCategories = (dbCategories || []).map(cat => ({
+      // 預設類別名稱列表
+      const defaultCategoryNames = ['交通問題', '環境問題', '治安問題', '民生服務', '法律諮詢']
+
+      // 標記哪些是預設類別
+      const allCategories = (dbCategories || []).map(cat => ({
         ...cat,
-        isDefault: false
+        isDefault: defaultCategoryNames.includes(cat.name)
       }))
 
-      // 過濾重複的類別（避免名稱衝突）
-      const filteredCustomCategories = customCategories.filter(custom => 
-        !defaultCategories.some(def => def.name === custom.name)
-      )
+      // 檢查是否有缺失的預設類別，如果有則建立
+      const existingCategoryNames = allCategories.map(cat => cat.name)
+      const missingDefaultCategories = []
 
-      const allCategories = [...defaultCategories, ...filteredCustomCategories]
+      for (const defaultName of defaultCategoryNames) {
+        if (!existingCategoryNames.includes(defaultName)) {
+          console.log('發現缺失的預設類別:', defaultName)
+          
+          // 建立缺失的預設類別
+          const createResult = await this.ensureDefaultCategoryExists(null, defaultName)
+          if (createResult.success) {
+            missingDefaultCategories.push(createResult.data)
+          }
+        }
+      }
 
-      console.log(`載入類別成功，共 ${allCategories.length} 筆`)
+      // 合併現有類別和新建的預設類別
+      const finalCategories = [...allCategories, ...missingDefaultCategories]
+
+      console.log(`載入類別成功，共 ${finalCategories.length} 筆`)
       return {
         success: true,
-        data: allCategories,
+        data: finalCategories,
         error: null
       }
 
     } catch (error) {
       console.error('CaseService.getCategories 發生錯誤:', error)
       return {
-        success: true,
-        data: [
-          { id: 'traffic', name: '交通問題', isDefault: true },
-          { id: 'environment', name: '環境問題', isDefault: true },
-          { id: 'security', name: '治安問題', isDefault: true },
-          { id: 'public_service', name: '民生服務', isDefault: true },
-          { id: 'legal_consultation', name: '法律諮詢', isDefault: true }
-        ],
-        error: error.message
+        success: false,
+        error: error.message,
+        data: []
       }
     }
   }
@@ -1083,9 +1083,16 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
    * @param {string} categoryName - 類別名稱
    * @returns {Promise<Object>} 處理結果
    */
+  // CaseService.js 中修正案件類別處理的完整邏輯
+
+  /**
+   * 處理案件類別 - 完全修正版：確保預設類別也有 UUID
+   * @param {string} categoryValue - 類別值（可能是 ID 或名稱）
+   * @returns {Promise<Object>} 處理結果
+   */
   static async handleCategory(categoryValue) {
     try {
-      console.log('=== CaseService.handleCategory (修正版) ===')
+      console.log('=== CaseService.handleCategory (UUID修正版) ===')
       console.log('輸入類別值:', categoryValue, '類型:', typeof categoryValue)
 
       if (!categoryValue || categoryValue.toString().trim() === '') {
@@ -1098,26 +1105,35 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
 
       const normalizedValue = categoryValue.toString().trim()
 
+      // 預設類別映射 - 需要確保這些類別在資料庫中存在
+      const defaultCategoryMap = {
+        'traffic': '交通問題',
+        'environment': '環境問題',
+        'security': '治安問題',
+        'public_service': '民生服務',
+        'legal_consultation': '法律諮詢'
+      }
+
       // 檢查是否為預設類別 ID
-      const defaultCategories = [
-        { id: 'traffic', name: '交通問題' },
-        { id: 'environment', name: '環境問題' },
-        { id: 'security', name: '治安問題' },
-        { id: 'public_service', name: '民生服務' },
-        { id: 'legal_consultation', name: '法律諮詢' }
-      ]
+      if (defaultCategoryMap[normalizedValue]) {
+        console.log('處理預設類別 ID:', normalizedValue)
+        const categoryName = defaultCategoryMap[normalizedValue]
+        
+        // 確保預設類別在資料庫中存在
+        return await this.ensureDefaultCategoryExists(normalizedValue, categoryName)
+      }
 
-      const defaultCategory = defaultCategories.find(cat => 
-        cat.id === normalizedValue || cat.name === normalizedValue
+      // 檢查是否為預設類別名稱
+      const defaultCategoryEntry = Object.entries(defaultCategoryMap).find(
+        ([id, name]) => name === normalizedValue
       )
-
-      if (defaultCategory) {
-        console.log('找到預設類別:', defaultCategory)
-        return {
-          success: true,
-          data: { id: defaultCategory.id, name: defaultCategory.name, isDefault: true },
-          error: null
-        }
+      
+      if (defaultCategoryEntry) {
+        console.log('處理預設類別名稱:', normalizedValue)
+        const [categoryId, categoryName] = defaultCategoryEntry
+        
+        // 確保預設類別在資料庫中存在
+        return await this.ensureDefaultCategoryExists(categoryId, categoryName)
       }
 
       // 檢查是否為有效的 UUID 格式
@@ -1208,6 +1224,83 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
 
     } catch (error) {
       console.error('CaseService.handleCategory 發生錯誤:', error)
+      return {
+        success: false,
+        error: error.message,
+        data: null
+      }
+    }
+  }
+
+  /**
+   * 確保預設類別在資料庫中存在 - 新增方法
+   * @param {string} categoryId - 預設類別 ID
+   * @param {string} categoryName - 預設類別名稱
+   * @returns {Promise<Object>} 處理結果
+   */
+  static async ensureDefaultCategoryExists(categoryId, categoryName) {
+    try {
+      console.log('=== ensureDefaultCategoryExists ===')
+      console.log('檢查預設類別:', { categoryId, categoryName })
+
+      // 首先嘗試根據名稱查找
+      const { data: existingCategory, error: searchError } = await supabase
+        .from('Category')
+        .select('id, name, description')
+        .eq('name', categoryName)
+        .single()
+
+      if (searchError && searchError.code !== 'PGRST116') {
+        console.error('搜尋預設類別失敗:', searchError)
+        return {
+          success: false,
+          error: `搜尋預設類別失敗: ${searchError.message}`,
+          data: null
+        }
+      }
+
+      if (existingCategory) {
+        console.log('找到現有的預設類別:', existingCategory)
+        return {
+          success: true,
+          data: { ...existingCategory, isDefault: true },
+          error: null
+        }
+      }
+
+      // 如果不存在，則建立新的預設類別
+      console.log('建立新的預設類別:', categoryName)
+      const newCategoryData = {
+        name: categoryName,
+        description: `系統預設類別：${categoryName}`,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+
+      const { data: newCategory, error: createError } = await supabase
+        .from('Category')
+        .insert([newCategoryData])
+        .select('id, name, description')
+        .single()
+
+      if (createError) {
+        console.error('建立預設類別失敗:', createError)
+        return {
+          success: false,
+          error: `建立預設類別失敗: ${createError.message}`,
+          data: null
+        }
+      }
+
+      console.log('建立預設類別成功:', newCategory)
+      return {
+        success: true,
+        data: { ...newCategory, isDefault: true },
+        error: null
+      }
+
+    } catch (error) {
+      console.error('ensureDefaultCategoryExists 發生錯誤:', error)
       return {
         success: false,
         error: error.message,
@@ -2759,7 +2852,7 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
    */
   static async updateCaseCategorySafely(caseData, originalData, updateResults) {
     try {
-      console.log('=== updateCaseCategorySafely (完全修正版) ===')
+      console.log('=== updateCaseCategorySafely (最終修正版) ===')
       console.log('新類別:', caseData.category)
       console.log('原類別:', originalData.category)
       
@@ -2793,19 +2886,30 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
       if (newCategory) {
         console.log('處理新類別關聯:', newCategory)
         
-        // 使用統一的類別處理邏輯
+        // 使用統一的類別處理邏輯，確保獲得有效的 UUID
         const categoryResult = await this.handleCategory(newCategory)
         
         if (categoryResult.success) {
           const categoryData = categoryResult.data
-          console.log('類別處理成功，建立關聯:', categoryData)
+          console.log('類別處理成功，準備建立關聯:', categoryData)
           
+          // 確保 categoryData.id 是有效的 UUID
+          if (!categoryData.id) {
+            console.error('類別處理成功但缺少有效的 UUID')
+            updateResults.push({ 
+              type: 'CategoryCase', 
+              success: false, 
+              error: '類別處理成功但缺少有效的 UUID' 
+            })
+            return
+          }
+
           // 建立 CategoryCase 關聯
           const { error: insertError } = await supabase
             .from('CategoryCase')
             .insert([{
               case_id: caseData.id,
-              category_id: categoryData.id,
+              category_id: categoryData.id, // 這裡現在保證是 UUID
               created_at: new Date().toISOString()
             }])
 

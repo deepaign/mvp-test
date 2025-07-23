@@ -371,10 +371,8 @@ export const CaseContentSection = ({ formData, dropdownOptions, onChange }) => {
   // 處理案件類別變更 - 修正版
   const handleCategoryChange = useCallback((categoryValue) => {
     console.log('案件類別變更:', categoryValue)
-    // 如果是字串，直接使用；如果是物件，取其 id 或 name
-    const finalValue = typeof categoryValue === 'object' ? 
-      (categoryValue.id || categoryValue.name) : categoryValue
-    onChange('category', finalValue)
+    // 統一處理：直接傳遞類別值，讓後端統一處理
+    onChange('category', categoryValue)
   }, [onChange])
 
   return (

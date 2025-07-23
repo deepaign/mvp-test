@@ -1,4 +1,3 @@
-// src/components/Case/CaseModal/CaseForm/CategoryAutoComplete.js - 完整修正版
 // 修正後的 CategoryAutoComplete.js
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import '../../../../styles/CategoryAutoComplete.css'
@@ -21,18 +20,10 @@ const CategoryAutoComplete = ({
     console.log('CategoryAutoComplete 初始化:', { formData, categories })
     
     if (formData.category) {
-      // 如果 formData.category 是 UUID，嘗試找到對應的名稱
-      const category = categories.find(cat => 
-        cat.id === formData.category || cat.name === formData.category
-      )
-      
-      if (category) {
-        setInputValue(category.name)
-      } else {
-        // 如果找不到對應的類別，可能是預設類別或新建類別
-        const categoryName = getCategoryDisplayName(formData.category)
-        setInputValue(categoryName)
-      }
+      // 直接使用 formData.category 作為顯示值
+      // 如果是預設類別 ID，轉換為名稱顯示
+      const categoryName = getCategoryDisplayName(formData.category)
+      setInputValue(categoryName)
     } else {
       setInputValue('')
     }
@@ -84,9 +75,9 @@ const CategoryAutoComplete = ({
     setIsOpen(false)
     
     // 將選擇的類別傳遞給父組件
-    // 對於預設類別，傳遞 ID；對於自定義類別，傳遞 ID
+    // 統一傳遞類別名稱，讓後端邏輯統一處理
     if (onChange) {
-      onChange(category.id)
+      onChange(category.name)
     }
   }, [onChange])
 
