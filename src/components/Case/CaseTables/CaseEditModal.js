@@ -258,16 +258,16 @@ const CaseEditModal = ({ isOpen, onClose, caseData, team, member, onCaseUpdated 
       })
 
       console.log('🔍 步驟 2: 處理案件類別...')
-      // 獲取案件類別名稱
       let category = ''
       if (caseData.CategoryCase && caseData.CategoryCase.length > 0) {
         const categoryData = caseData.CategoryCase[0].Category
         if (categoryData) {
-          // 優先使用 ID，這樣在更新時不會有問題
+          // ✅ 修正：確保使用正確的類別 ID，並檢查是否為有效的 UUID
           category = categoryData.id
           console.log('找到類別:', {
             id: categoryData.id,
-            name: categoryData.name
+            name: categoryData.name,
+            isValidUUID: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(categoryData.id)
           })
         }
       }
@@ -397,18 +397,8 @@ const CaseEditModal = ({ isOpen, onClose, caseData, team, member, onCaseUpdated 
         console.log('⚠️ 沒有 end_date 資料')
       }
 
-      console.log('🔍 步驟 7: 處理地址資訊...')
-      // 處理住家和事發地點的縣市行政區資訊
-      let homeCounty = '', homeDistrict = '', homeAddress = ''
+      console.log('🔍 步驟 7: 處理事發地點...')
       let incidentCounty = '', incidentDistrict = ''
-      
-      // 這部分可能需要根據您的實際資料結構來調整
-      // 如果有 VoterCase 中的地址資訊
-      if (caseData.VoterCase && caseData.VoterCase.length > 0 && caseData.VoterCase[0].Voter) {
-        homeAddress = caseData.VoterCase[0].Voter.address || ''
-      }
-      
-      // 如果有 DistrictCase 中的事發地點資訊
       if (caseData.DistrictCase && caseData.DistrictCase.length > 0) {
         const districtData = caseData.DistrictCase[0].District
         if (districtData) {
@@ -455,9 +445,9 @@ const CaseEditModal = ({ isOpen, onClose, caseData, team, member, onCaseUpdated 
         closedTime: closedTime,
         
         // 地址資訊
-        homeCounty: homeCounty,
-        homeDistrict: homeDistrict,
-        homeAddress: homeAddress,
+        // homeCounty: homeCounty,
+        // homeDistrict: homeDistrict,
+        // homeAddress: homeAddress,
         incidentCounty: incidentCounty,
         incidentDistrict: incidentDistrict,
         

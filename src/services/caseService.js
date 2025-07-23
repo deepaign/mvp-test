@@ -1561,11 +1561,12 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
       updated_at: caseData.updated_at
     }
 
-    // 提取案件類別
+    // ✅ 修正：提取案件類別（加強錯誤處理）
     let category = {
       id: null,
       name: '未分類'
     }
+    
     if (caseData.CategoryCase && caseData.CategoryCase.length > 0) {
       const categoryData = caseData.CategoryCase[0].Category
       if (categoryData) {
@@ -1573,10 +1574,15 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
           id: categoryData.id,
           name: categoryData.name || '未分類'
         }
+        console.log('✅ 案件類別提取成功:', category)
+      } else {
+        console.warn('⚠️ CategoryCase 存在但 Category 資料為空')
       }
+    } else {
+      console.log('ℹ️ 無 CategoryCase 資料')
     }
 
-    // 提取事發地點
+    // ✅ 修正：提取事發地點（加強錯誤處理）
     let district = {
       id: null,
       name: '未指定',
@@ -1585,6 +1591,7 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
         name: ''
       }
     }
+    
     if (caseData.DistrictCase && caseData.DistrictCase.length > 0) {
       const districtData = caseData.DistrictCase[0].District
       if (districtData) {
@@ -1596,7 +1603,12 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
             name: districtData.County?.name || ''
           }
         }
+        console.log('✅ 事發地點提取成功:', district)
+      } else {
+        console.warn('⚠️ DistrictCase 存在但 District 資料為空')
       }
+    } else {
+      console.log('ℹ️ 無 DistrictCase 資料')
     }
 
     // ✅ 修正聯絡人資訊提取 - 優先使用 VoterCase，備用 CaseVoter
@@ -2239,10 +2251,11 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
       console.log('新類別:', caseData.category)
       console.log('原類別:', originalData.category)
       
-      // 比較類別是否有變更（考慮空值情況）
-      const newCategory = caseData.category?.trim() || null
-      const oldCategory = originalData.category?.trim() || null
+      // 正規化類別值（移除空白字符和 null 處理）
+      const newCategory = caseData.category?.toString().trim() || null
+      const oldCategory = originalData.category?.toString().trim() || null
       
+      // ✅ 修正：更嚴格的比較邏輯
       if (newCategory === oldCategory) {
         console.log('案件類別沒有變更，跳過更新')
         updateResults.push({ type: 'CategoryCase', success: true, message: '無變更' })
@@ -2269,26 +2282,34 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
       if (newCategory) {
         console.log('建立新類別關聯:', newCategory)
         
-        // ✅ 修正：直接使用類別 ID，不需要處理類別名稱
+        // ✅ 修正：直接使用類別 ID，並驗證格式
         let categoryId = newCategory
         
-        // 如果傳入的是類別名稱，需要先查找對應的 ID
-        if (!newCategory.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
-          // 看起來不是 UUID，可能是類別名稱，需要查找對應的類別
+        // 檢查是否為有效的 UUID 格式
+        const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(newCategory)
+        
+        if (!isValidUUID) {
+          // 如果不是 UUID，嘗試根據名稱查找類別
+          console.log('類別值不是 UUID，嘗試查找對應類別:', newCategory)
+          
           const { data: categoryData, error: categoryError } = await supabase
             .from('Category')
-            .select('id')
+            .select('id, name')
             .eq('name', newCategory)
             .single()
 
           if (categoryError || !categoryData) {
             console.error('找不到對應的類別:', newCategory, categoryError)
-            updateResults.push({ type: 'CategoryCase', success: false, error: `找不到類別: ${newCategory}` })
+            updateResults.push({ 
+              type: 'CategoryCase', 
+              success: false, 
+              error: `找不到類別: ${newCategory}` 
+            })
             return
           }
           
           categoryId = categoryData.id
-          console.log('找到類別 ID:', categoryId)
+          console.log('找到類別 ID:', { id: categoryId, name: categoryData.name })
         }
 
         // 建立新的類別關聯
@@ -2420,10 +2441,11 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
       console.log('新事發地點:', caseData.incidentDistrict)
       console.log('原事發地點:', originalData.incidentDistrict)
       
-      // 比較事發地點是否有變更
-      const newDistrict = caseData.incidentDistrict?.trim() || null
-      const oldDistrict = originalData.incidentDistrict?.trim() || null
+      // ✅ 修正：正規化地點值
+      const newDistrict = caseData.incidentDistrict?.toString().trim() || null
+      const oldDistrict = originalData.incidentDistrict?.toString().trim() || null
       
+      // ✅ 修正：更嚴格的比較邏輯
       if (newDistrict === oldDistrict) {
         console.log('事發地點沒有變更，跳過更新')
         updateResults.push({ type: 'DistrictCase', success: true, message: '無變更' })
@@ -2450,6 +2472,19 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
       if (newDistrict) {
         console.log('建立新地點關聯:', newDistrict)
         
+        // ✅ 修正：驗證地點 ID 格式並建立關聯
+        const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(newDistrict)
+        
+        if (!isValidUUID) {
+          console.error('無效的地點 ID 格式:', newDistrict)
+          updateResults.push({ 
+            type: 'DistrictCase', 
+            success: false, 
+            error: `無效的地點 ID: ${newDistrict}` 
+          })
+          return
+        }
+
         // 建立新的地點關聯
         const { error: insertError } = await supabase
           .from('DistrictCase')
@@ -2476,7 +2511,6 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
       updateResults.push({ type: 'DistrictCase', success: false, error: error.message })
     }
   }
-
 
   /**
    * 安全的住家里別更新方法
