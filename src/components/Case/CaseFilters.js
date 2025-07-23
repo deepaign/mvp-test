@@ -74,34 +74,51 @@ function CaseFilters({ team, onFiltersChange, onSearch, onReset }) {
       endDate: customDateRange.endDate
     }
 
-    // 注意：日期篩選現在由 CaseManagement 中的 applyDateFilter 處理
-    // 這裡只傳遞日期範圍類型和自定義範圍，實際篩選邏輯使用受理時間
+    // 🔧 修正：日期範圍計算邏輯
     const now = new Date()
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
     
     switch (filters.dateRange) {
-      case 'today':
-        params.startDate = today.toISOString()
-        params.endDate = new Date(today.getTime() + 24 * 60 * 60 * 1000 - 1).toISOString()
+      case 'today': {
+        // 今天 00:00:00 到 23:59:59
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+        const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999)
+        params.startDate = todayStart.toISOString()
+        params.endDate = todayEnd.toISOString()
         break
-      case 'week':
-        const weekStart = new Date(today)
-        weekStart.setDate(today.getDate() - today.getDay() + 1) // 週一
-        const weekEnd = new Date(weekStart)
-        weekEnd.setDate(weekStart.getDate() + 6) // 週日
+      }
+      
+      case 'week': {
+        // 本週：從週一 00:00:00 到週日 23:59:59
+        const currentDay = now.getDay() // 0=週日, 1=週一, ..., 6=週六
+        const mondayOffset = currentDay === 0 ? -6 : 1 - currentDay
+        const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + mondayOffset)
+        const weekEnd = new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000)
         weekEnd.setHours(23, 59, 59, 999)
         params.startDate = weekStart.toISOString()
         params.endDate = weekEnd.toISOString()
         break
-      case 'month':
-        const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
-        const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59)
+      }
+      
+      case 'month': {
+        // 本月：從月初 00:00:00 到月底 23:59:59
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+        const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999)
         params.startDate = monthStart.toISOString()
         params.endDate = monthEnd.toISOString()
         break
-      case 'custom':
+      }
+      
+      case 'custom': {
         // 使用自定義日期範圍，已在 customDateRange 中設定
+        // 確保結束日期包含整天
+        if (customDateRange.endDate && !customDateRange.endDate.includes('T23:59:59')) {
+          const endDate = new Date(customDateRange.endDate)
+          endDate.setHours(23, 59, 59, 999)
+          params.endDate = endDate.toISOString()
+        }
         break
+      }
+      
       default:
         // 'all' - 不設定日期範圍
         params.startDate = ''
@@ -142,9 +159,26 @@ function CaseFilters({ team, onFiltersChange, onSearch, onReset }) {
 
   // 處理自定義日期變更
   const handleCustomDateChange = (dateType, value) => {
+    console.log('自定義日期變更:', dateType, value)
+    
+    let processedValue = value
+    
+    // 🔧 修正：確保日期格式正確
+    if (value) {
+      if (dateType === 'startDate') {
+        // 開始日期設為 00:00:00
+        const startDate = new Date(value + 'T00:00:00')
+        processedValue = startDate.toISOString()
+      } else if (dateType === 'endDate') {
+        // 結束日期設為 23:59:59
+        const endDate = new Date(value + 'T23:59:59')
+        processedValue = endDate.toISOString()
+      }
+    }
+    
     setCustomDateRange(prev => ({
       ...prev,
-      [dateType]: value
+      [dateType]: processedValue
     }))
   }
 
@@ -363,7 +397,7 @@ function CaseFilters({ team, onFiltersChange, onSearch, onReset }) {
                 type="date"
                 className="date-input"
                 value={customDateRange.startDate ? customDateRange.startDate.split('T')[0] : ''}
-                onChange={(e) => handleCustomDateChange('startDate', e.target.value ? new Date(e.target.value).toISOString() : '')}
+                onChange={(e) => handleCustomDateChange('startDate', e.target.value)}
               />
             </div>
             <div className="date-picker-group">
@@ -372,7 +406,7 @@ function CaseFilters({ team, onFiltersChange, onSearch, onReset }) {
                 type="date"
                 className="date-input"
                 value={customDateRange.endDate ? customDateRange.endDate.split('T')[0] : ''}
-                onChange={(e) => handleCustomDateChange('endDate', e.target.value ? new Date(e.target.value + 'T23:59:59').toISOString() : '')}
+                onChange={(e) => handleCustomDateChange('endDate', e.target.value)}
               />
             </div>
           </div>

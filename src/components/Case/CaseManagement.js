@@ -28,7 +28,7 @@ function CaseManagement({ member, team }) {
   const [activeTab, setActiveTab] = useState('all')
   const [currentFilters, setCurrentFilters] = useState({})
   const [searchTerm, setSearchTerm] = useState('')
-  const [viewMode, setViewMode] = useState('card')
+  const [viewMode, setViewMode] = useState('list')
   const [showCaseModal, setShowCaseModal] = useState(false)
   const [sortConfig, setSortConfig] = useState({ field: 'created_at', direction: 'desc' })
   
@@ -69,9 +69,7 @@ function CaseManagement({ member, team }) {
       byStatus: {
         pending: validCases.filter(c => c.status === 'pending').length,
         processing: validCases.filter(c => c.status === 'processing').length,
-        completed: validCases.filter(c => c.status === 'completed').length,
-        resolved: validCases.filter(c => c.status === 'resolved').length,
-        closed: validCases.filter(c => c.status === 'closed').length
+        completed: validCases.filter(c => c.status === 'completed').length
       },
       byPriority: {
         urgent: validCases.filter(c => c.priority === 'urgent').length,
@@ -222,11 +220,71 @@ function CaseManagement({ member, team }) {
       return data
     }
 
+    console.log('🔍 日期篩選範圍:', {
+      type: filters.dateRange,
+      startDate: startDate?.toISOString(),
+      endDate: endDate?.toISOString()
+    })
+
     return data.filter(caseItem => {
-      if (!caseItem || !caseItem.created_at) return false
+      if (!caseItem) return false
       
-      const caseDate = new Date(caseItem.created_at)
+      let caseDate = null
       
+      // 🔧 修正：優先使用從 description 中提取的受理時間
+      if (caseItem.description && typeof CaseService.extractReceivedDateTime === 'function') {
+        const receivedDateTime = CaseService.extractReceivedDateTime(caseItem.description)
+        if (receivedDateTime.date) {
+          try {
+            // 組合受理日期和時間
+            const dateTimeString = receivedDateTime.time 
+              ? `${receivedDateTime.date}T${receivedDateTime.time}:00`
+              : `${receivedDateTime.date}T00:00:00`
+            caseDate = new Date(dateTimeString)
+            
+            if (isNaN(caseDate.getTime())) {
+              caseDate = null
+            }
+          } catch (error) {
+            console.warn('解析受理時間失敗:', error, receivedDateTime)
+            caseDate = null
+          }
+        }
+      }
+      
+      // 🔧 修正：如果沒有受理時間，回退到 start_date
+      if (!caseDate && caseItem.start_date) {
+        try {
+          caseDate = new Date(caseItem.start_date)
+          if (isNaN(caseDate.getTime())) {
+            caseDate = null
+          }
+        } catch (error) {
+          console.warn('解析 start_date 失敗:', error, caseItem.start_date)
+          caseDate = null
+        }
+      }
+      
+      // 🔧 修正：最後回退到 created_at
+      if (!caseDate && caseItem.created_at) {
+        try {
+          caseDate = new Date(caseItem.created_at)
+          if (isNaN(caseDate.getTime())) {
+            caseDate = null
+          }
+        } catch (error) {
+          console.warn('解析 created_at 失敗:', error, caseItem.created_at)
+          caseDate = null
+        }
+      }
+      
+      // 如果都沒有有效的日期，跳過這個案件
+      if (!caseDate) {
+        console.warn('案件沒有有效的日期資訊:', caseItem.id || '未知ID')
+        return false
+      }
+      
+      // 進行日期範圍比較
       if (startDate && caseDate < startDate) return false
       if (endDate && caseDate > endDate) return false
       

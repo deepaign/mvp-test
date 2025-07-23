@@ -24,10 +24,45 @@ export class CaseService {
         }
       }
 
-      console.log(`載入縣市成功，共 ${data?.length || 0} 筆`)
+      // 🔧 新增：自訂排序邏輯，直轄市優先
+      const sortedData = (data || []).sort((a, b) => {
+        // 定義六個直轄市的順序
+        const municipalities = [
+          '臺北市',
+          '新北市', 
+          '桃園市',
+          '臺中市',
+          '臺南市',
+          '高雄市'
+        ]
+        
+        const aIndex = municipalities.indexOf(a.name)
+        const bIndex = municipalities.indexOf(b.name)
+        
+        // 如果都是直轄市，按照預定義順序排序
+        if (aIndex !== -1 && bIndex !== -1) {
+          return aIndex - bIndex
+        }
+        
+        // 如果 a 是直轄市，b 不是，a 排前面
+        if (aIndex !== -1 && bIndex === -1) {
+          return -1
+        }
+        
+        // 如果 b 是直轄市，a 不是，b 排前面
+        if (aIndex === -1 && bIndex !== -1) {
+          return 1
+        }
+        
+        // 如果都不是直轄市，按照名稱字母順序排序
+        return a.name.localeCompare(b.name, 'zh-TW')
+      })
+
+      console.log(`載入縣市成功，共 ${sortedData.length} 筆（直轄市優先排序）`)
+      
       return {
         success: true,
-        data: data || [],
+        data: sortedData,
         error: null
       }
 
@@ -610,9 +645,7 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
         byStatus: {
           pending: validData.filter(c => c.status === 'pending').length,
           processing: validData.filter(c => c.status === 'processing').length,
-          completed: validData.filter(c => c.status === 'completed').length,
-          resolved: validData.filter(c => c.status === 'resolved').length,
-          closed: validData.filter(c => c.status === 'closed').length
+          completed: validData.filter(c => c.status === 'completed').length
         },
         byPriority: {
           urgent: validData.filter(c => c.priority === 'urgent').length,

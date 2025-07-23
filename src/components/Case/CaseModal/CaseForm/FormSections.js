@@ -100,8 +100,10 @@ export const BasicInfoSection = ({ formData, dropdownOptions, onChange }) => {
             <option value="pending">待處理</option>
             <option value="processing">處理中</option>
             <option value="completed">已完成</option>
+            {/* 🔧 移除以下兩個選項：
             <option value="resolved">已解決</option>
             <option value="closed">已結案</option>
+            */}
           </select>
         </div>
 
