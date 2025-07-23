@@ -512,7 +512,7 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
     try {
       console.log('=== CaseService.getCategories ===')
 
-      // 預設類別
+      // 預設類別 - 使用標準化的 ID
       const defaultCategories = [
         { id: 'traffic', name: '交通問題', isDefault: true },
         { id: 'environment', name: '環境問題', isDefault: true },
@@ -542,6 +542,7 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
         isDefault: false
       }))
 
+      // 過濾重複的類別（避免名稱衝突）
       const filteredCustomCategories = customCategories.filter(custom => 
         !defaultCategories.some(def => def.name === custom.name)
       )
@@ -1082,28 +1083,82 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
    * @param {string} categoryName - 類別名稱
    * @returns {Promise<Object>} 處理結果
    */
-  static async handleCategory(categoryName) {
+  static async handleCategory(categoryValue) {
     try {
-      console.log('=== CaseService.handleCategory ===')
-      console.log('類別名稱:', categoryName)
+      console.log('=== CaseService.handleCategory (修正版) ===')
+      console.log('輸入類別值:', categoryValue, '類型:', typeof categoryValue)
 
-      if (!categoryName) {
+      if (!categoryValue || categoryValue.toString().trim() === '') {
         return {
           success: false,
-          error: '類別名稱必填',
+          error: '類別值必填',
           data: null
         }
       }
 
-      // 檢查是否已存在
+      const normalizedValue = categoryValue.toString().trim()
+
+      // 檢查是否為預設類別 ID
+      const defaultCategories = [
+        { id: 'traffic', name: '交通問題' },
+        { id: 'environment', name: '環境問題' },
+        { id: 'security', name: '治安問題' },
+        { id: 'public_service', name: '民生服務' },
+        { id: 'legal_consultation', name: '法律諮詢' }
+      ]
+
+      const defaultCategory = defaultCategories.find(cat => 
+        cat.id === normalizedValue || cat.name === normalizedValue
+      )
+
+      if (defaultCategory) {
+        console.log('找到預設類別:', defaultCategory)
+        return {
+          success: true,
+          data: { id: defaultCategory.id, name: defaultCategory.name, isDefault: true },
+          error: null
+        }
+      }
+
+      // 檢查是否為有效的 UUID 格式
+      const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(normalizedValue)
+
+      if (isValidUUID) {
+        // 是 UUID，直接從資料庫查詢
+        const { data: existingCategory, error: searchError } = await supabase
+          .from('Category')
+          .select('id, name, description')
+          .eq('id', normalizedValue)
+          .single()
+
+        if (searchError && searchError.code !== 'PGRST116') {
+          console.error('根據 UUID 搜尋類別失敗:', searchError)
+          return {
+            success: false,
+            error: `搜尋類別失敗: ${searchError.message}`,
+            data: null
+          }
+        }
+
+        if (existingCategory) {
+          console.log('找到現有類別 (UUID):', existingCategory)
+          return {
+            success: true,
+            data: { ...existingCategory, isDefault: false },
+            error: null
+          }
+        }
+      }
+
+      // 不是 UUID，嘗試根據名稱查找或建立
       const { data: existingCategory, error: searchError } = await supabase
         .from('Category')
-        .select('*')
-        .eq('name', categoryName)
+        .select('id, name, description')
+        .eq('name', normalizedValue)
         .single()
 
       if (searchError && searchError.code !== 'PGRST116') {
-        console.error('搜尋類別失敗:', searchError)
+        console.error('根據名稱搜尋類別失敗:', searchError)
         return {
           success: false,
           error: `搜尋類別失敗: ${searchError.message}`,
@@ -1112,17 +1167,18 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
       }
 
       if (existingCategory) {
-        console.log('找到現有類別:', existingCategory)
+        console.log('找到現有類別 (名稱):', existingCategory)
         return {
           success: true,
-          data: existingCategory,
+          data: { ...existingCategory, isDefault: false },
           error: null
         }
       }
 
       // 建立新類別
+      console.log('建立新類別:', normalizedValue)
       const newCategoryData = {
-        name: categoryName,
+        name: normalizedValue,
         description: null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
@@ -1131,7 +1187,7 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
       const { data: newCategory, error: createError } = await supabase
         .from('Category')
         .insert([newCategoryData])
-        .select()
+        .select('id, name, description')
         .single()
 
       if (createError) {
@@ -1146,7 +1202,7 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
       console.log('建立類別成功:', newCategory)
       return {
         success: true,
-        data: newCategory,
+        data: { ...newCategory, isDefault: false },
         error: null
       }
 
@@ -2703,15 +2759,14 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
    */
   static async updateCaseCategorySafely(caseData, originalData, updateResults) {
     try {
-      console.log('=== updateCaseCategorySafely 開始 ===')
+      console.log('=== updateCaseCategorySafely (完全修正版) ===')
       console.log('新類別:', caseData.category)
       console.log('原類別:', originalData.category)
       
-      // 正規化類別值（移除空白字符和 null 處理）
+      // 正規化類別值
       const newCategory = caseData.category?.toString().trim() || null
       const oldCategory = originalData.category?.toString().trim() || null
       
-      // ✅ 修正：更嚴格的比較邏輯
       if (newCategory === oldCategory) {
         console.log('案件類別沒有變更，跳過更新')
         updateResults.push({ type: 'CategoryCase', success: true, message: '無變更' })
@@ -2736,62 +2791,63 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
 
       // 如果有新類別，建立新關聯
       if (newCategory) {
-        console.log('建立新類別關聯:', newCategory)
+        console.log('處理新類別關聯:', newCategory)
         
-        // ✅ 修正：直接使用類別 ID，並驗證格式
-        let categoryId = newCategory
+        // 使用統一的類別處理邏輯
+        const categoryResult = await this.handleCategory(newCategory)
         
-        // 檢查是否為有效的 UUID 格式
-        const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(newCategory)
-        
-        if (!isValidUUID) {
-          // 如果不是 UUID，嘗試根據名稱查找類別
-          console.log('類別值不是 UUID，嘗試查找對應類別:', newCategory)
+        if (categoryResult.success) {
+          const categoryData = categoryResult.data
+          console.log('類別處理成功，建立關聯:', categoryData)
           
-          const { data: categoryData, error: categoryError } = await supabase
-            .from('Category')
-            .select('id, name')
-            .eq('name', newCategory)
-            .single()
+          // 建立 CategoryCase 關聯
+          const { error: insertError } = await supabase
+            .from('CategoryCase')
+            .insert([{
+              case_id: caseData.id,
+              category_id: categoryData.id,
+              created_at: new Date().toISOString()
+            }])
 
-          if (categoryError || !categoryData) {
-            console.error('找不到對應的類別:', newCategory, categoryError)
+          if (insertError) {
+            console.error('建立新類別關聯失敗:', insertError)
             updateResults.push({ 
               type: 'CategoryCase', 
               success: false, 
-              error: `找不到類別: ${newCategory}` 
+              error: insertError.message 
             })
-            return
+          } else {
+            console.log('建立新類別關聯成功')
+            updateResults.push({ 
+              type: 'CategoryCase', 
+              success: true, 
+              data: categoryData 
+            })
           }
-          
-          categoryId = categoryData.id
-          console.log('找到類別 ID:', { id: categoryId, name: categoryData.name })
-        }
-
-        // 建立新的類別關聯
-        const { error: insertError } = await supabase
-          .from('CategoryCase')
-          .insert([{
-            case_id: caseData.id,
-            category_id: categoryId,
-            created_at: new Date().toISOString()
-          }])
-
-        if (insertError) {
-          console.error('建立新類別關聯失敗:', insertError)
-          updateResults.push({ type: 'CategoryCase', success: false, error: insertError.message })
         } else {
-          console.log('建立新類別關聯成功')
-          updateResults.push({ type: 'CategoryCase', success: true, data: { categoryId } })
+          console.error('類別處理失敗:', categoryResult.error)
+          updateResults.push({ 
+            type: 'CategoryCase', 
+            success: false, 
+            error: categoryResult.error 
+          })
         }
       } else {
         console.log('新類別為空，僅清除舊關聯')
-        updateResults.push({ type: 'CategoryCase', success: true, message: '已清除類別關聯' })
+        updateResults.push({ 
+          type: 'CategoryCase', 
+          success: true, 
+          message: '已清除類別關聯' 
+        })
       }
 
     } catch (error) {
       console.error('更新案件類別失敗:', error)
-      updateResults.push({ type: 'CategoryCase', success: false, error: error.message })
+      updateResults.push({ 
+        type: 'CategoryCase', 
+        success: false, 
+        error: error.message 
+      })
     }
   }
 

@@ -60,7 +60,7 @@ function CaseTextInput({ team, member, onSubmit, onCancel, onAIExtractionComplet
           title: data.extractedData["Petition Summary"] ? 
                  data.extractedData["Petition Summary"].substring(0, 50) + '...' : 
                  '通過 AI 摘要建立的案件',
-          description: data.extractedData["Petition Summary"] || textContent.trim(),
+          description: data.extractedData["Petition Description"] || textContent.trim(),
           petitionerName: data.extractedData["Petitioner's Name"] || '',
           contactPhone: data.extractedData["Contact Phone Number"] || '',
           petitionerAddress: data.extractedData["Petitioner's Home Address"] || '',

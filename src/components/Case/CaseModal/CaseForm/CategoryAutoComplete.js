@@ -1,12 +1,13 @@
 // src/components/Case/CaseModal/CaseForm/CategoryAutoComplete.js - 完整修正版
-import React, { useState, useEffect, useRef } from 'react'
+// 修正後的 CategoryAutoComplete.js
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import '../../../../styles/CategoryAutoComplete.css'
 
 const CategoryAutoComplete = ({ 
-  value, 
-  onChange, 
+  formData, 
   categories = [], 
-  placeholder = "請輸入或選擇案件類型", 
+  onChange, 
+  placeholder = "請選擇或輸入案件分類",
   required = false 
 }) => {
   const [inputValue, setInputValue] = useState('')
@@ -15,139 +16,124 @@ const CategoryAutoComplete = ({
   const inputRef = useRef(null)
   const dropdownRef = useRef(null)
 
-  // 當外部 value 變化時，更新 inputValue
+  // 初始化輸入值
   useEffect(() => {
-    if (value) {
-      console.log('CategoryAutoComplete 接收到 value:', value)
+    console.log('CategoryAutoComplete 初始化:', { formData, categories })
+    
+    if (formData.category) {
+      // 如果 formData.category 是 UUID，嘗試找到對應的名稱
+      const category = categories.find(cat => 
+        cat.id === formData.category || cat.name === formData.category
+      )
       
-      // 如果 value 是預設類型 ID，轉換為名稱顯示
-      const categoryMap = {
-        'traffic': '交通問題',
-        'environment': '環境問題',
-        'security': '治安問題',
-        'public_service': '民生服務',
-        'legal_consultation': '法律諮詢'
-      }
-      
-      if (categoryMap[value]) {
-        // 預設類別：顯示對應的中文名稱
-        setInputValue(categoryMap[value])
-        console.log('顯示預設類別名稱:', categoryMap[value])
+      if (category) {
+        setInputValue(category.name)
       } else {
-        // 自定義類別：
-        // 1. 如果 value 是 UUID，嘗試從 categories 中找到對應的名稱
-        // 2. 如果 value 是名稱，直接使用
-        const category = categories.find(c => c.id === value)
-        if (category) {
-          setInputValue(category.name)
-          console.log('從 categories 找到名稱:', category.name)
-        } else {
-          // 直接使用 value（可能是類別名稱）
-          setInputValue(value)
-          console.log('直接使用 value 作為顯示名稱:', value)
-        }
+        // 如果找不到對應的類別，可能是預設類別或新建類別
+        const categoryName = getCategoryDisplayName(formData.category)
+        setInputValue(categoryName)
       }
     } else {
       setInputValue('')
     }
-  }, [value, categories])
+  }, [formData.category, categories])
 
-  // 當 categories 或 inputValue 變化時，更新篩選結果
-  useEffect(() => {
-    if (!inputValue.trim()) {
+  // 獲取類別顯示名稱
+  const getCategoryDisplayName = (categoryValue) => {
+    if (!categoryValue) return ''
+    
+    // 預設類別對應
+    const defaultCategoryMap = {
+      'traffic': '交通問題',
+      'environment': '環境問題',
+      'security': '治安問題',
+      'public_service': '民生服務',
+      'legal_consultation': '法律諮詢'
+    }
+    
+    return defaultCategoryMap[categoryValue] || categoryValue
+  }
+
+  // 處理輸入變更
+  const handleInputChange = useCallback((e) => {
+    const value = e.target.value
+    setInputValue(value)
+    setIsOpen(true)
+    
+    // 過濾類別
+    if (value.trim() === '') {
       setFilteredCategories(categories)
     } else {
       const filtered = categories.filter(category =>
-        category.name.toLowerCase().includes(inputValue.toLowerCase())
+        category.name.toLowerCase().includes(value.toLowerCase())
       )
       setFilteredCategories(filtered)
     }
-  }, [categories, inputValue])
+  }, [categories])
 
-  // 點擊外部關閉下拉選單
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (
-        dropdownRef.current && 
-        !dropdownRef.current.contains(event.target) &&
-        inputRef.current &&
-        !inputRef.current.contains(event.target)
-      ) {
-        setIsOpen(false)
-      }
-    }
-
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
-
-  const handleInputChange = (e) => {
-    const newValue = e.target.value
-    setInputValue(newValue)
+  // 處理輸入焦點
+  const handleInputFocus = useCallback(() => {
     setIsOpen(true)
-    
-    // 即時回傳輸入值
-    if (onChange) {
-      onChange(newValue)
-    }
-  }
+    setFilteredCategories(categories)
+  }, [categories])
 
-  const handleInputFocus = () => {
-    setIsOpen(true)
-  }
-
-  const handleOptionClick = (category) => {
+  // 處理選項點擊
+  const handleOptionClick = useCallback((category) => {
     console.log('選擇類別:', category)
     setInputValue(category.name)
     setIsOpen(false)
     
-    // 回傳選中的類型
-    let returnValue
-    if (category.isDefault) {
-      // 預設類型：回傳預設 ID
-      returnValue = getDefaultCategoryId(category.name)
-    } else {
-      // 自定義類型：回傳類別名稱（編輯時）或 ID（新建時）
-      // 編輯案件時，我們傳回名稱讓系統能正確識別
-      returnValue = category.name
-    }
-    
-    console.log('回傳值:', returnValue)
-    
+    // 將選擇的類別傳遞給父組件
+    // 對於預設類別，傳遞 ID；對於自定義類別，傳遞 ID
     if (onChange) {
-      onChange(returnValue)
+      onChange(category.id)
     }
-  }
+  }, [onChange])
 
-  const handleKeyDown = (e) => {
+  // 處理鍵盤事件
+  const handleKeyDown = useCallback((e) => {
     if (e.key === 'Enter') {
       e.preventDefault()
-      setIsOpen(false)
       
-      // Enter 確認當前輸入值
-      if (onChange) {
-        onChange(inputValue)
+      if (filteredCategories.length > 0) {
+        // 選擇第一個匹配的類別
+        handleOptionClick(filteredCategories[0])
+      } else if (inputValue.trim()) {
+        // 創建新類別
+        console.log('創建新類別:', inputValue.trim())
+        setIsOpen(false)
+        if (onChange) {
+          onChange(inputValue.trim())
+        }
       }
     } else if (e.key === 'Escape') {
       setIsOpen(false)
     }
-  }
+  }, [filteredCategories, inputValue, handleOptionClick, onChange])
 
-  const getDefaultCategoryId = (categoryName) => {
-    const nameToIdMap = {
-      '交通問題': 'traffic',
-      '環境問題': 'environment',
-      '治安問題': 'security',
-      '民生服務': 'public_service',
-      '法律諮詢': 'legal_consultation'
-    }
-    return nameToIdMap[categoryName] || categoryName
-  }
+  // 處理失去焦點
+  const handleBlur = useCallback((e) => {
+    // 延遲關閉，以便點擊選項能正常工作
+    setTimeout(() => {
+      if (!dropdownRef.current?.contains(document.activeElement)) {
+        setIsOpen(false)
+        
+        // 如果輸入值不為空但沒有匹配的類別，則創建新類別
+        if (inputValue.trim() && !categories.some(cat => cat.name === inputValue.trim())) {
+          console.log('失去焦點後創建新類別:', inputValue.trim())
+          if (onChange) {
+            onChange(inputValue.trim())
+          }
+        }
+      }
+    }, 200)
+  }, [inputValue, categories, onChange])
 
-  const highlightMatch = (text, query) => {
-    if (!query.trim()) return text
+  // 高亮匹配文字
+  const highlightMatch = (text, searchTerm) => {
+    if (!searchTerm) return text
     
-    const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi')
+    const regex = new RegExp(`(${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi')
     const parts = text.split(regex)
     
     return parts.map((part, index) => {
@@ -156,14 +142,6 @@ const CategoryAutoComplete = ({
         <span key={key} className="category-highlight">{part}</span> : 
         part
     })
-  }
-
-  const handleCreateNewCategory = () => {
-    setIsOpen(false)
-    // Enter 確認當前輸入值作為新類型
-    if (onChange) {
-      onChange(inputValue)
-    }
   }
 
   // 過濾出預設類型和自定義類型
@@ -178,82 +156,91 @@ const CategoryAutoComplete = ({
         value={inputValue}
         onChange={handleInputChange}
         onFocus={handleInputFocus}
+        onBlur={handleBlur}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
         required={required}
+        className="category-input"
       />
       
-      {isOpen && (
+      {isOpen && (filteredCategories.length > 0 || inputValue.trim()) && (
         <div ref={dropdownRef} className="category-dropdown">
           {/* 預設類型 */}
-          {defaultCategories.map((category, index) => {
-            const key = `default-${category.id || index}`
-            return (
-              <div
-                key={key}
-                onClick={() => handleOptionClick(category)}
-                className="category-option default"
-                role="option"
-                aria-selected="false"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    handleOptionClick(category)
-                  }
-                }}
-              >
-                <div className="category-option-name">
-                  {highlightMatch(category.name, inputValue)}
-                </div>
-              </div>
-            )
-          })}
+          {defaultCategories.length > 0 && (
+            <>
+              <div className="category-group-header">預設分類</div>
+              {defaultCategories.map((category, index) => {
+                const key = `default-${category.id || index}`
+                return (
+                  <div
+                    key={key}
+                    onClick={() => handleOptionClick(category)}
+                    className="category-option default"
+                    role="option"
+                    aria-selected="false"
+                    tabIndex={0}
+                  >
+                    <div className="category-option-name">
+                      {highlightMatch(category.name, inputValue)}
+                    </div>
+                  </div>
+                )
+              })}
+            </>
+          )}
           
           {/* 自定義類型 */}
-          {customCategories.map((category, index) => {
-            const key = `custom-${category.id || index}`
-            return (
+          {customCategories.length > 0 && (
+            <>
+              {defaultCategories.length > 0 && <div className="category-divider" />}
+              <div className="category-group-header">自定義分類</div>
+              {customCategories.map((category, index) => {
+                const key = `custom-${category.id || index}`
+                return (
+                  <div
+                    key={key}
+                    onClick={() => handleOptionClick(category)}
+                    className="category-option custom"
+                    role="option"
+                    aria-selected="false"
+                    tabIndex={0}
+                  >
+                    <div className="category-option-name">
+                      {highlightMatch(category.name, inputValue)}
+                    </div>
+                  </div>
+                )
+              })}
+            </>
+          )}
+          
+          {/* 新建類別選項 */}
+          {inputValue.trim() && !categories.some(cat => 
+            cat.name.toLowerCase() === inputValue.toLowerCase()
+          ) && (
+            <>
+              {(defaultCategories.length > 0 || customCategories.length > 0) && 
+                <div className="category-divider" />
+              }
               <div
-                key={key}
-                onClick={() => handleOptionClick(category)}
-                className="category-option custom"
+                onClick={() => {
+                  console.log('點擊新建類別:', inputValue.trim())
+                  setIsOpen(false)
+                  if (onChange) {
+                    onChange(inputValue.trim())
+                  }
+                }}
+                className="category-option create-new"
                 role="option"
                 aria-selected="false"
                 tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    handleOptionClick(category)
-                  }
-                }}
               >
                 <div className="category-option-name">
-                  {highlightMatch(category.name, inputValue)}
+                  <span className="create-icon">+ </span>
+                  新建分類: "{inputValue.trim()}"
                 </div>
               </div>
-            )
-          })}
-          
-          {/* 如果沒有匹配項目且有輸入值，顯示建立新類型選項 */}
-          {filteredCategories.length === 0 && inputValue.trim() && (
-            <div 
-              className="category-empty-state"
-              onClick={handleCreateNewCategory}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault()
-                  handleCreateNewCategory()
-                }
-              }}
-              tabIndex={0}
-              role="option"
-              aria-selected="false"
-            >
-              <div className="empty-text">
-                按 Enter 建立 &quot;{inputValue}&quot;
-              </div>
-            </div>
+            </>
           )}
         </div>
       )}

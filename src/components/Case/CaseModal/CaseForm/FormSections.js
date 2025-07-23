@@ -368,6 +368,15 @@ export const CaseContentSection = ({ formData, dropdownOptions, onChange }) => {
     onChange('description', value)
   }, [onChange])
 
+  // 處理案件類別變更 - 修正版
+  const handleCategoryChange = useCallback((categoryValue) => {
+    console.log('案件類別變更:', categoryValue)
+    // 如果是字串，直接使用；如果是物件，取其 id 或 name
+    const finalValue = typeof categoryValue === 'object' ? 
+      (categoryValue.id || categoryValue.name) : categoryValue
+    onChange('category', finalValue)
+  }, [onChange])
+
   return (
     <div className="form-section">
       <h3 className="section-title">陳情內容</h3>
@@ -384,13 +393,35 @@ export const CaseContentSection = ({ formData, dropdownOptions, onChange }) => {
           />
         </div>
 
+        {/* 修正：提供兩種類別選擇方式，確保至少有一種能正常工作 */}
         <div className="form-field full-width">
-          <label htmlFor="category">案件分類</label>
-          <CategoryAutoComplete
-            formData={formData}
-            categories={safeOptions.categories}
-            onChange={onChange}
-          />
+          <label htmlFor="category">案件分類 <span className="required">*</span></label>
+          
+          {/* 優先使用自動完成組件 */}
+          {safeOptions.categories && safeOptions.categories.length > 0 ? (
+            <CategoryAutoComplete
+              formData={formData}
+              categories={safeOptions.categories}
+              onChange={handleCategoryChange}
+              placeholder="請選擇或輸入案件分類"
+              required
+            />
+          ) : (
+            /* 備用：傳統下拉選單 */
+            <select
+              id="category"
+              value={formData.category || ''}
+              onChange={(e) => onChange('category', e.target.value)}
+              required
+            >
+              <option value="">請選擇案件類別</option>
+              <option value="traffic">交通問題</option>
+              <option value="environment">環境問題</option>
+              <option value="security">治安問題</option>
+              <option value="public_service">民生服務</option>
+              <option value="legal_consultation">法律諮詢</option>
+            </select>
+          )}
         </div>
 
         <div className="form-field full-width">
@@ -432,27 +463,27 @@ export const CaseContentSection = ({ formData, dropdownOptions, onChange }) => {
                   {!formData.incidentCounty 
                     ? '請先選擇縣市' 
                     : safeOptions.incidentDistricts.length === 0 
-                      ? '無可用行政區' 
-                      : '請選擇行政區'
+                      ? '該縣市無可用區域'
+                      : '請選擇區域'
                   }
                 </option>
                 {safeOptions.incidentDistricts.map(district => (
                   <option key={district.id || district.name || Math.random()} value={district.id}>
-                    {district.name || '未命名行政區'}
+                    {district.name || '未命名區域'}
                   </option>
                 ))}
               </select>
             </div>
             <input
-              id="incidentLocation"
+              id="incidentAddress"
               type="text"
-              value={formData.incidentLocation || ''}
-              onChange={(e) => onChange('incidentLocation', e.target.value)}
-              placeholder="請輸入詳細地址"
-              className="address-input"
+              value={formData.incidentAddress || ''}
+              onChange={(e) => onChange('incidentAddress', e.target.value)}
+              placeholder="請輸入詳細事發地點"
             />
           </div>
         </div>
+
       </div>
     </div>
   )
