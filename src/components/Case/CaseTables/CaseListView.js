@@ -14,39 +14,58 @@ function CaseListView({
     return CaseService.extractCaseNumber(caseItem.description) || '-'
   }
 
-  // 提取事發地點 - 分割為縣市行政區和詳細地址
+  // 提取事發地點
   const getIncidentLocation = (caseItem) => {
     const fullLocation = CaseService.extractIncidentLocation(caseItem.description) || ''
-    
-    // 嘗試分離縣市行政區和詳細地址
     const locationParts = fullLocation.split(' ')
     if (locationParts.length >= 2) {
-      // 第一部分通常是縣市+行政區
-      const districtPart = locationParts[0]
-      // 剩下的是詳細地址
-      const addressPart = locationParts.slice(1).join(' ')
       return {
-        district: districtPart,
-        address: addressPart
+        district: locationParts[0],
+        address: locationParts.slice(1).join(' ')
       }
     }
-    
     return {
       district: fullLocation,
       address: ''
     }
   }
 
-  // 取得案件類別
+  // 🔧 修復：案件類別名稱對應
+  const getCategoryDisplayName = (categoryId, categoryName) => {
+    // 預設類別的中英文對應
+    const defaultCategoryMap = {
+      'traffic': '交通問題',
+      'environment': '環境問題', 
+      'security': '治安問題',
+      'public_service': '民生服務',
+      'legal_consultation': '法律諮詢'
+    }
+    
+    // 如果有中文名稱，直接使用
+    if (categoryName && categoryName !== categoryId) {
+      return categoryName
+    }
+    
+    // 如果是預設類別代碼，返回中文名稱
+    if (defaultCategoryMap[categoryId]) {
+      return defaultCategoryMap[categoryId]
+    }
+    
+    // 其他情況返回原值
+    return categoryId || categoryName || '-'
+  }
+
+  // 🔧 修復：取得案件類別（處理顯示問題）
   const getCategoryName = (caseItem) => {
     const categories = caseItem.CategoryCase || []
     if (categories.length > 0 && categories[0].Category) {
-      return categories[0].Category.name
+      const category = categories[0].Category
+      return getCategoryDisplayName(category.id, category.name)
     }
     return '-'
   }
 
-  // 取得陳情民眾（聯絡人1）
+  // 取得陳情民眾
   const getContactName = (caseItem) => {
     const contacts = caseItem.VoterCase || []
     if (contacts.length > 0 && contacts[0].Voter) {
@@ -64,41 +83,73 @@ function CaseListView({
     return '-'
   }
 
-  // 取得承辦人員
+  // 🔧 修復：取得承辦人員（確保正確從 CaseMember 取得）
   const getHandlerName = (caseItem) => {
-    const inCharge = caseItem.InChargeCase || []
-    const validRecord = inCharge.find(record => 
-      record.member_id && record.Member
-    )
+    console.log('🔍 檢查承辦人員 - 案件ID:', caseItem.id)
     
-    if (validRecord) {
-      return validRecord.Member.name
+    if (!caseItem.CaseMember || !Array.isArray(caseItem.CaseMember)) {
+      console.log('⚠️ 沒有 CaseMember 資料或不是陣列:', caseItem.CaseMember)
+      return '-'
     }
-    return '尚未指派'
+    
+    console.log('CaseMember 資料:', caseItem.CaseMember)
+    
+    const handlerRecord = caseItem.CaseMember.find(cm => cm.role === 'handler')
+    console.log('找到的承辦人員記錄:', handlerRecord)
+    
+    if (handlerRecord && handlerRecord.Member && handlerRecord.Member.name) {
+      console.log('✅ 承辦人員:', handlerRecord.Member.name)
+      return handlerRecord.Member.name
+    }
+    
+    console.log('⚠️ 沒有找到有效的承辦人員')
+    return '-'
+  }
+
+  // 🔧 修復：取得受理人員
+  const getReceiverName = (caseItem) => {
+    if (!caseItem.CaseMember || !Array.isArray(caseItem.CaseMember)) {
+      return '-'
+    }
+    
+    const receiverRecord = caseItem.CaseMember.find(cm => cm.role === 'receiver')
+    if (receiverRecord && receiverRecord.Member && receiverRecord.Member.name) {
+      return receiverRecord.Member.name
+    }
+    
+    return '-'
   }
 
   // 修正：格式化受理日期 - 從 description 中提取受理時間的日期部分
   const formatReceivedDate = (caseItem) => {
-    // 使用 CaseService 的 extractReceivedDateTime 方法從 description 中提取受理時間
-    const receivedDateTime = CaseService.extractReceivedDateTime(caseItem.description)
-    
-    // 如果有提取到受理日期，直接使用
-    if (receivedDateTime.date) {
-      return receivedDateTime.date
+    // 優先使用 start_date（受理日期）
+    if (caseItem.start_date) {
+      try {
+        const date = new Date(caseItem.start_date)
+        if (!isNaN(date.getTime())) {
+          // 使用台灣時區格式 YYYY-MM-DD
+          const year = date.getFullYear()
+          const month = String(date.getMonth() + 1).padStart(2, '0')
+          const day = String(date.getDate()).padStart(2, '0')
+          return `${year}-${month}-${day}`
+        }
+      } catch (error) {
+        console.warn('解析受理日期失敗:', error)
+      }
     }
     
-    // 如果 description 中沒有受理時間，回退到 created_at
+    // 備用：使用建立日期
     if (caseItem.created_at) {
       try {
         const date = new Date(caseItem.created_at)
-        return date.toLocaleDateString('zh-TW', {
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit'
-        }).replace(/\//g, '-')
+        if (!isNaN(date.getTime())) {
+          const year = date.getFullYear()
+          const month = String(date.getMonth() + 1).padStart(2, '0')
+          const day = String(date.getDate()).padStart(2, '0')
+          return `${year}-${month}-${day}`
+        }
       } catch (error) {
-        console.error('受理日期格式化失敗:', error)
-        return '-'
+        console.warn('解析建立日期失敗:', error)
       }
     }
     
@@ -123,6 +174,19 @@ function CaseListView({
       'completed': { text: '已完成', class: 'status-completed' }
     }
     return statusMap[status] || { text: '待處理', class: 'status-pending' }
+  }
+
+  
+
+  // 取得狀態顯示文字
+  const getStatusText = (status) => {
+    const statusMap = {
+      'new': '新進案件',
+      'in_progress': '處理中',
+      'transferred': '轉介中',
+      'closed': '已結案'
+    }
+    return statusMap[status] || status
   }
 
   if (loading) {

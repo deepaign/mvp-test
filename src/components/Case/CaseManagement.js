@@ -217,12 +217,6 @@ function CaseManagement({ member, team }) {
 
   // 🔧 安全的篩選函數
   const applyFilters = useCallback((data, filters, searchTerm, activeTab) => {
-    console.log('🔍 開始應用篩選條件...')
-    console.log('原始資料筆數:', data.length)
-    console.log('篩選條件:', filters)
-    console.log('搜尋關鍵字:', searchTerm)
-    console.log('活動分頁:', activeTab)
-
     const originalCount = data.length
     let filtered = Array.isArray(data) ? [...data] : []
 
@@ -287,23 +281,30 @@ function CaseManagement({ member, team }) {
     filtered = applyDateFilter(filtered, filters)
     console.log(`日期篩選: ${beforeDateFilter} -> ${filtered.length} 筆案件`)
 
-    // 案件類型篩選
+    // 案件類別篩選
     if (filters.category && filters.category !== 'all') {
       console.log('🔍 應用類別篩選:', filters.category)
       const beforeFilter = filtered.length
-      
       filtered = filtered.filter(caseItem => {
-        if (!caseItem) return false
+        if (!caseItem || !caseItem.CategoryCase) return false
         
         try {
           const categoryCase = Array.isArray(caseItem.CategoryCase) ? caseItem.CategoryCase : []
-          return categoryCase.some(cc => cc.Category?.name === filters.category)
+          return categoryCase.some(cc => cc.Category?.id === filters.category)
         } catch (error) {
           console.warn('類型篩選錯誤:', error, caseItem)
           return false
         }
       })
       console.log(`類別篩選: ${beforeFilter} -> ${filtered.length} 筆案件`)
+    }
+
+    // 狀態篩選
+    if (filters.status && filters.status !== 'all') {
+      console.log('🔍 應用狀態篩選:', filters.status)
+      const beforeFilter = filtered.length
+      filtered = filtered.filter(caseItem => caseItem && caseItem.status === filters.status)
+      console.log(`狀態篩選: ${beforeFilter} -> ${filtered.length} 筆案件`)
     }
 
     // 優先等級篩選
@@ -314,7 +315,7 @@ function CaseManagement({ member, team }) {
       console.log(`優先順序篩選: ${beforeFilter} -> ${filtered.length} 筆案件`)
     }
 
-    // 承辦人員篩選 - 使用 CaseMember 表
+    // 🔧 承辦人員篩選 - 使用 CaseMember 表
     if (filters.handler && filters.handler !== 'all') {
       console.log('🔍 應用承辦人員篩選:', filters.handler)
       const beforeFilter = filtered.length
@@ -373,69 +374,31 @@ function CaseManagement({ member, team }) {
   }, [applyDateFilter]) // ✅ 保留在依賴陣列中，因為現在有使用它
 
   // 預設排序邏輯 - 按照受理日期或案件編號排序（由新到舊）
-  // 修正：預設排序邏輯 - 改為按照受理時間排序（由新到舊）
+  // 🔧 修復：預設排序邏輯
   const applySorting = useCallback((data) => {
     return [...data].sort((a, b) => {
-      // 1. 優先使用受理時間排序
-      const receivedDateTimeA = CaseService.extractReceivedDateTime(a.description)
-      const receivedDateTimeB = CaseService.extractReceivedDateTime(b.description)
-      
-      let dateA = null
-      let dateB = null
-      
-      // 解析案件 A 的日期
-      if (receivedDateTimeA.date) {
-        try {
-          const timeStr = receivedDateTimeA.time || '00:00:00'
-          dateA = new Date(`${receivedDateTimeA.date}T${timeStr}`)
-        } catch (error) {
-          console.warn('案件 A 受理時間解析失敗:', receivedDateTimeA, error)
+      // 1. 優先按照受理時間排序（由新到舊）
+      if (a.start_date && b.start_date) {
+        const dateA = new Date(a.start_date)
+        const dateB = new Date(b.start_date)
+        if (dateA.getTime() !== dateB.getTime()) {
+          return dateB.getTime() - dateA.getTime() // 由新到舊
         }
       }
       
-      // 如果沒有受理時間，回退到 created_at
-      if (!dateA || isNaN(dateA.getTime())) {
-        try {
-          dateA = new Date(a.created_at || 0)
-        } catch (error) {
-          console.warn('案件 A created_at 解析失敗:', a.created_at, error)
-          dateA = new Date(0) // 設為最早的日期
-        }
+      // 2. 如果受理時間相同或缺失，則按照建立時間排序
+      if (a.created_at && b.created_at) {
+        const createdA = new Date(a.created_at)
+        const createdB = new Date(b.created_at)
+        return createdB.getTime() - createdA.getTime() // 由新到舊
       }
       
-      // 解析案件 B 的日期
-      if (receivedDateTimeB.date) {
-        try {
-          const timeStr = receivedDateTimeB.time || '00:00:00'
-          dateB = new Date(`${receivedDateTimeB.date}T${timeStr}`)
-        } catch (error) {
-          console.warn('案件 B 受理時間解析失敗:', receivedDateTimeB, error)
-        }
-      }
-      
-      // 如果沒有受理時間，回退到 created_at
-      if (!dateB || isNaN(dateB.getTime())) {
-        try {
-          dateB = new Date(b.created_at || 0)
-        } catch (error) {
-          console.warn('案件 B created_at 解析失敗:', b.created_at, error)
-          dateB = new Date(0) // 設為最早的日期
-        }
-      }
-      
-      // 2. 按照日期排序（由新到舊）
-      if (dateA.getTime() !== dateB.getTime()) {
-        return dateB.getTime() - dateA.getTime() // 新到舊
-      }
-      
-      // 3. 如果日期相同，則按照案件編號排序
-      const caseNumberA = CaseService.extractCaseNumber(a.description) || ''
-      const caseNumberB = CaseService.extractCaseNumber(b.description) || ''
-      
-      // 案件編號通常包含日期信息，按字串排序（降序 = 新到舊）
-      return caseNumberB.localeCompare(caseNumberA)
+      // 3. 最後按照案件編號排序
+      const numberA = CaseService.extractCaseNumber(a.description) || ''
+      const numberB = CaseService.extractCaseNumber(b.description) || ''
+      return numberB.localeCompare(numberA, 'zh-TW', { numeric: true })
     })
-  }, []) // 移除對 CaseService 的依賴，因為它是靜態方法
+  }, [])
 
   // 更新篩選後的案件列表
   useEffect(() => {
