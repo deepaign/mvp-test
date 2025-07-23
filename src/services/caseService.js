@@ -223,12 +223,17 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
         filters = {},
         searchTerm = '',
         page = 0,
-        limit = 20,
+        limit = 1000, // 設定較大的限制以載入所有案件
         sortConfig = { field: 'created_at', direction: 'desc' }
       } = options
 
-      console.log('🔍 CaseService.getCases - 修正版查詢開始')
-      console.log('查詢參數:', { groupId, status, filters, searchTerm, page, limit })
+      console.log('=== CaseService.getCases - 修復版 ===')
+      console.log('🔍 查詢參數:', { 
+        groupId, 
+        status, 
+        limit,
+        team_id: groupId 
+      })
 
       if (!groupId) {
         console.error('❌ 團隊 ID 為空，無法查詢')
@@ -239,8 +244,34 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
         }
       }
 
-      // ✅ 修正關聯資料查詢 - 根據實際資料庫結構
-      console.log('🔍 步驟 1: 建立修正後的關聯資料查詢...')
+      // 🔧 修復：先進行簡單查詢測試團隊ID是否正確
+      console.log('🔍 步驟 1: 測試基本查詢...')
+      const testQuery = await supabase
+        .from('Case')
+        .select('id, title, group_id, created_at')
+        .eq('group_id', groupId)
+        .limit(5)
+
+      console.log('基本查詢結果:', testQuery)
+      
+      if (testQuery.error) {
+        console.error('❌ 基本查詢失敗:', testQuery.error)
+        return {
+          success: false,
+          error: `查詢失敗: ${testQuery.error.message}`,
+          data: []
+        }
+      }
+
+      console.log(`✅ 基本查詢成功，找到 ${testQuery.data?.length || 0} 筆案件`)
+      console.log('案件預覽:', testQuery.data?.map(c => ({ 
+        id: c.id, 
+        title: c.title, 
+        group_id: c.group_id 
+      })))
+
+      // 🔧 修復：使用完整但安全的關聯查詢
+      console.log('🔍 步驟 2: 執行完整關聯查詢...')
       let query = supabase
         .from('Case')
         .select(`
@@ -249,8 +280,29 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
             id,
             Category (
               id,
+              name
+            )
+          ),
+          VoterCase (
+            id,
+            Voter (
+              id,
               name,
-              description
+              phone,
+              email,
+              address
+            )
+          ),
+          CaseMember (
+            id,
+            role,
+            member_id,
+            created_at,
+            updated_at,
+            Member (
+              id,
+              name,
+              auth_user_id
             )
           ),
           DistrictCase (
@@ -263,153 +315,191 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
                 name
               )
             )
-          ),
-          VoterCase (
-            id,
-            Voter (
-              id,
-              name,
-              phone,
-              email,
-              address,
-              gender,
-              job,
-              education,
-              line_id,
-              priority
-            )
-          ),
-          CaseVoter (
-            id,
-            participation_type,
-            feedback,
-            Voter (
-              id,
-              name,
-              phone,
-              email,
-              address,
-              gender,
-              job
-            )
-          ),
-          CaseMember (
-            id,
-            role,
-            member_id,
-            created_at,
-            Member (
-              id,
-              name,
-              auth_user_id,
-              role,
-              is_leader
-            )
           )
         `)
         .eq('group_id', groupId)
 
-      // 🔍 步驟 2: 應用篩選條件
-      console.log('🔍 步驟 2: 應用基本篩選條件...')
-      
-      // 狀態篩選
-      if (status && status !== 'all') {
+      // 🔧 修復：應用狀態篩選（如果不是查詢全部）
+      if (status !== 'all') {
         query = query.eq('status', status)
         console.log('應用狀態篩選:', status)
       }
 
-      // 全文搜尋
+      // 🔧 修復：應用搜尋條件
       if (searchTerm && searchTerm.trim()) {
         query = query.or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`)
         console.log('應用搜尋條件:', searchTerm)
       }
 
-      // 🔍 步驟 3: 應用排序
-      console.log('🔍 步驟 3: 應用排序...')
+      // 🔧 修復：應用排序
       const sortField = sortConfig.field || 'created_at'
-      const sortDirection = sortConfig.direction === 'asc' ? true : false
-      
+      const sortDirection = sortConfig.direction === 'asc'
       query = query.order(sortField, { ascending: sortDirection })
+      console.log('應用排序:', { field: sortField, direction: sortConfig.direction })
 
-      // 🔍 步驟 4: 應用分頁
+      // 🔧 修復：應用分頁（但載入足夠多的資料）
       if (page >= 0 && limit > 0) {
         const start = page * limit
         const end = start + limit - 1
         query = query.range(start, end)
-        console.log('分頁設定:', { page, limit, start, end })
+        console.log('應用分頁:', { page, limit, start, end })
       }
 
-      // 🔍 步驟 5: 執行查詢
-      console.log('🔍 步驟 5: 執行修正後的查詢...')
-      const queryStartTime = Date.now()
+      // 執行查詢
+      console.log('🔍 步驟 3: 執行最終查詢...')
       const { data, error, count } = await query
 
-      const queryDuration = Date.now() - queryStartTime
-      console.log('查詢執行結果:', {
-        成功: !error,
-        執行時間: `${queryDuration}ms`,
-        回傳筆數: data?.length || 0,
-        錯誤: error?.message
-      })
-
       if (error) {
-        console.error('❌ 修正後查詢失敗:', error)
+        console.error('❌ 完整查詢失敗:', error)
+        console.error('錯誤詳情:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        })
+        
+        // 🔧 修復：如果完整查詢失敗，退回到基本查詢
+        console.log('🔄 退回到基本查詢...')
+        const fallbackQuery = await supabase
+          .from('Case')
+          .select('*')
+          .eq('group_id', groupId)
+          .order('created_at', { ascending: false })
+
+        if (fallbackQuery.error) {
+          return {
+            success: false,
+            error: `查詢失敗: ${fallbackQuery.error.message}`,
+            data: []
+          }
+        }
+
+        console.log('✅ 基本查詢成功，回傳簡化資料')
         return {
-          success: false,
-          error: error.message,
-          data: []
+          success: true,
+          data: fallbackQuery.data || [],
+          warning: '部分關聯資料可能缺失'
         }
       }
 
-      // 🔍 步驟 6: 驗證修正後的資料結構
+      // 🔍 驗證查詢結果
+      console.log('🔍 步驟 4: 驗證查詢結果...')
+      console.log(`✅ 查詢成功，共找到 ${data?.length || 0} 筆案件`)
+      
       if (data && data.length > 0) {
-        console.log('🔍 步驟 6: 驗證修正後第一筆案件的資料結構...')
-        const firstCase = data[0]
-        
-        console.log('修正後資料結構檢查:', {
-          基本資訊: {
-            id: firstCase.id,
-            title: firstCase.title,
-            priority: firstCase.priority,
-            status: firstCase.status
+        console.log('第一筆案件資料結構檢查:', {
+          id: data[0].id,
+          title: data[0].title,
+          group_id: data[0].group_id,
+          created_at: data[0].created_at,
+          CategoryCase: {
+            exists: !!data[0].CategoryCase,
+            length: data[0].CategoryCase?.length || 0
           },
-          關聯資料: {
-            CategoryCase: firstCase.CategoryCase?.length || 0,
-            DistrictCase: firstCase.DistrictCase?.length || 0,
-            VoterCase: firstCase.VoterCase?.length || 0,
-            CaseVoter: firstCase.CaseVoter?.length || 0,
-            CaseMember: firstCase.CaseMember?.length || 0
+          VoterCase: {
+            exists: !!data[0].VoterCase,
+            length: data[0].VoterCase?.length || 0
           },
-          聯絡人資訊來源: {
-            從VoterCase: firstCase.VoterCase?.[0]?.Voter ? {
-              name: firstCase.VoterCase[0].Voter.name,
-              phone: firstCase.VoterCase[0].Voter.phone,
-              address: firstCase.VoterCase[0].Voter.address
-            } : null,
-            從CaseVoter: firstCase.CaseVoter?.[0]?.Voter ? {
-              name: firstCase.CaseVoter[0].Voter.name,
-              phone: firstCase.CaseVoter[0].Voter.phone,
-              participation_type: firstCase.CaseVoter[0].participation_type
-            } : null
+          CaseMember: {
+            exists: !!data[0].CaseMember,
+            length: data[0].CaseMember?.length || 0
+          },
+          DistrictCase: {
+            exists: !!data[0].DistrictCase,
+            length: data[0].DistrictCase?.length || 0
           }
         })
       }
 
-      console.log('✅ 修正後查詢完成，回傳資料')
       return {
         success: true,
         data: data || [],
-        count: count || data?.length || 0,
-        totalCount: count
+        count: data?.length || 0
       }
 
     } catch (error) {
-      console.error('❌ CaseService.getCases 發生異常:', error)
+      console.error('❌ getCases 發生異常:', error)
+      console.error('異常堆疊:', error.stack)
       return {
         success: false,
-        error: error.message,
+        error: `查詢異常: ${error.message}`,
         data: []
       }
+    }
+  }
+
+  // 🔧 新增：直接查詢資料庫的除錯方法
+  static async debugCaseQuery(groupId) {
+    console.log('=== 除錯案件查詢 ===')
+    console.log('團隊 ID:', groupId)
+    
+    try {
+      // 檢查 Case 表中是否有該團隊的資料
+      const caseCheck = await supabase
+        .from('Case')
+        .select('id, title, group_id, status, created_at')
+        .eq('group_id', groupId)
+      
+      console.log('Case 表查詢結果:', caseCheck)
+      
+      if (caseCheck.data && caseCheck.data.length > 0) {
+        console.log('✅ 找到案件資料:')
+        caseCheck.data.forEach((c, index) => {
+          console.log(`  ${index + 1}. ${c.title} (${c.id}) - ${c.status} - 建立於 ${c.created_at}`)
+        })
+        
+        // 檢查第一筆案件的關聯資料
+        const firstCaseId = caseCheck.data[0].id
+        console.log(`檢查案件 ${firstCaseId} 的關聯資料:`)
+        
+        // 檢查 CategoryCase
+        const categoryCheck = await supabase
+          .from('CategoryCase')
+          .select('*, Category(*)')
+          .eq('case_id', firstCaseId)
+        console.log('CategoryCase:', categoryCheck)
+        
+        // 檢查 VoterCase
+        const voterCheck = await supabase
+          .from('VoterCase')
+          .select('*, Voter(*)')
+          .eq('case_id', firstCaseId)
+        console.log('VoterCase:', voterCheck)
+        
+        // 檢查 CaseMember
+        const memberCheck = await supabase
+          .from('CaseMember')
+          .select('*, Member(*)')
+          .eq('case_id', firstCaseId)
+        console.log('CaseMember:', memberCheck)
+        
+        // 檢查 DistrictCase
+        const districtCheck = await supabase
+          .from('DistrictCase')
+          .select('*, District(*, County(*))')
+          .eq('case_id', firstCaseId)
+        console.log('DistrictCase:', districtCheck)
+        
+      } else {
+        console.log('❌ 沒有找到任何案件資料')
+        
+        // 檢查團隊是否存在
+        const groupCheck = await supabase
+          .from('Group')
+          .select('id, name')
+          .eq('id', groupId)
+        console.log('團隊檢查結果:', groupCheck)
+        
+        // 檢查所有案件（不限團隊）
+        const allCasesCheck = await supabase
+          .from('Case')
+          .select('id, title, group_id')
+          .limit(10)
+        console.log('所有案件預覽:', allCasesCheck)
+      }
+      
+    } catch (error) {
+      console.error('除錯查詢失敗:', error)
     }
   }
 
@@ -612,6 +702,19 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
         error: error.message,
         data: null
       }
+    }
+  }
+
+  /**
+   * 時間格式化輔助方法
+   */
+  static formatToTimetz(date, time) {
+    if (!date) return null
+    
+    if (time) {
+      return `${date}T${time}:00.000Z`
+    } else {
+      return `${date}T00:00:00.000Z`
     }
   }
 
@@ -1689,6 +1792,252 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
   }
 
   /**
+   * 建立案件及其關聯資料（完整實作）
+   * @param {Object} formData - 表單資料
+   * @param {Object} dropdownOptions - 下拉選單選項
+   * @returns {Promise<Object>} 建立結果
+   */
+  static async createCaseWithRelations(formData, dropdownOptions = {}) {
+    console.log('=== CaseService.createCaseWithRelations ===')
+    console.log('表單資料:', formData)
+    
+    try {
+      const results = []
+      
+      // ============ 步驟 1: 建立案件基本資料 ============
+      console.log('步驟 1: 建立案件基本資料...')
+      
+      // 準備案件基本資料
+      const caseData = {
+        title: formData.title?.trim() || '',
+        description: this.buildDescription(formData, dropdownOptions),
+        priority: formData.priority || 'normal',
+        status: formData.status || 'pending',
+        contact_type: formData.contactMethod || 'phone',
+        group_id: formData.teamId,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+
+      // 處理時間欄位
+      if (formData.receivedDate && formData.receivedTime) {
+        caseData.start_date = this.formatToTimetz(formData.receivedDate, formData.receivedTime)
+      }
+      
+      if (formData.closedDate && formData.closedTime) {
+        caseData.end_date = this.formatToTimetz(formData.closedDate, formData.closedTime)
+      }
+
+      console.log('準備建立的案件資料:', caseData)
+
+      // 建立案件
+      const { data: newCase, error: caseError } = await supabase
+        .from('Case')
+        .insert([caseData])
+        .select()
+        .single()
+
+      if (caseError) {
+        console.error('建立案件失敗:', caseError)
+        return {
+          success: false,
+          error: `建立案件失敗: ${caseError.message}`,
+          data: null
+        }
+      }
+
+      console.log('✅ 案件建立成功:', newCase)
+      results.push({ type: 'Case', success: true, data: newCase })
+
+      // ============ 步驟 2: 處理聯絡人資料 ============
+      console.log('步驟 2: 處理聯絡人資料...')
+      
+      const contactsToProcess = []
+      
+      // 聯絡人1
+      if (formData.contact1Name?.trim() && formData.contact1Phone?.trim()) {
+        contactsToProcess.push({
+          name: formData.contact1Name.trim(),
+          phone: formData.contact1Phone.trim(),
+          address: formData.homeAddress?.trim() || '',
+          isPrimary: true
+        })
+      }
+      
+      // 聯絡人2
+      if (formData.contact2Name?.trim() && formData.contact2Phone?.trim()) {
+        contactsToProcess.push({
+          name: formData.contact2Name.trim(),
+          phone: formData.contact2Phone.trim(),
+          address: '',
+          isPrimary: false
+        })
+      }
+
+      for (const contactData of contactsToProcess) {
+        try {
+          // 處理聯絡人
+          const contactResult = await this.handleContact(contactData, dropdownOptions, formData.homeDistrict)
+          
+          if (contactResult.success) {
+            console.log(`✅ 聯絡人處理成功:`, contactResult.data)
+            results.push({ type: 'Contact', success: true, data: contactResult.data })
+            
+            // 建立聯絡人與案件的關聯
+            const relationResult = await this.createVoterCaseRelation(newCase.id, contactResult.data.id)
+            
+            if (relationResult.success) {
+              console.log('✅ 聯絡人案件關聯建立成功')
+              results.push({ type: 'VoterCase', success: true, data: relationResult.data })
+            } else {
+              console.error('❌ 聯絡人案件關聯建立失敗:', relationResult.error)
+              results.push({ type: 'VoterCase', success: false, error: relationResult.error })
+            }
+          } else {
+            console.error('❌ 聯絡人處理失敗:', contactResult.error)
+            results.push({ type: 'Contact', success: false, error: contactResult.error })
+          }
+        } catch (contactError) {
+          console.error('❌ 處理聯絡人時發生錯誤:', contactError)
+          results.push({ type: 'Contact', success: false, error: contactError.message })
+        }
+      }
+
+      // ============ 步驟 3: 處理案件類別 ============
+      console.log('步驟 3: 處理案件類別...')
+      
+      if (formData.category?.trim()) {
+        try {
+          const categoryResult = await this.handleCategory(formData.category)
+          
+          if (categoryResult.success) {
+            console.log('✅ 案件類別處理成功:', categoryResult.data)
+            results.push({ type: 'Category', success: true, data: categoryResult.data })
+            
+            // 建立案件類別關聯
+            const categoryCaseResult = await this.createCaseCategoryRelation(newCase.id, categoryResult.data.id)
+            
+            if (categoryCaseResult.success) {
+              console.log('✅ 案件類別關聯建立成功')
+              results.push({ type: 'CategoryCase', success: true, data: categoryCaseResult.data })
+            } else {
+              console.error('❌ 案件類別關聯建立失敗:', categoryCaseResult.error)
+              results.push({ type: 'CategoryCase', success: false, error: categoryCaseResult.error })
+            }
+          } else {
+            console.error('❌ 案件類別處理失敗:', categoryResult.error)
+            results.push({ type: 'Category', success: false, error: categoryResult.error })
+          }
+        } catch (categoryError) {
+          console.error('❌ 處理案件類別時發生錯誤:', categoryError)
+          results.push({ type: 'Category', success: false, error: categoryError.message })
+        }
+      }
+
+      // ============ 步驟 4: 處理事發地點 ============
+      console.log('步驟 4: 處理事發地點...')
+      
+      if (formData.incidentDistrict?.trim()) {
+        try {
+          const districtCaseResult = await this.createDistrictCaseRelation(
+            newCase.id, 
+            formData.incidentCounty, 
+            formData.incidentDistrict
+          )
+          
+          if (districtCaseResult.success) {
+            console.log('✅ 事發地點關聯建立成功')
+            results.push({ type: 'DistrictCase', success: true, data: districtCaseResult.data })
+          } else {
+            console.error('❌ 事發地點關聯建立失敗:', districtCaseResult.error)
+            results.push({ type: 'DistrictCase', success: false, error: districtCaseResult.error })
+          }
+        } catch (districtError) {
+          console.error('❌ 處理事發地點時發生錯誤:', districtError)
+          results.push({ type: 'DistrictCase', success: false, error: districtError.message })
+        }
+      }
+
+      // ============ 步驟 5: 處理承辦人員 ============
+      console.log('步驟 5: 處理承辦人員...')
+      
+      const membersToProcess = []
+      
+      // 受理人員
+      if (formData.receiver?.trim()) {
+        membersToProcess.push({
+          member_id: formData.receiver,
+          role: 'receiver'
+        })
+      }
+      
+      // 承辦人員
+      if (formData.assignee?.trim()) {
+        membersToProcess.push({
+          member_id: formData.assignee,
+          role: 'handler'
+        })
+      }
+
+      for (const memberData of membersToProcess) {
+        try {
+          const caseMemberResult = await this.createCaseMemberRelation(newCase.id, memberData.member_id, memberData.role)
+          
+          if (caseMemberResult.success) {
+            console.log(`✅ ${memberData.role === 'receiver' ? '受理' : '承辦'}人員關聯建立成功`)
+            results.push({ type: 'CaseMember', success: true, data: caseMemberResult.data })
+          } else {
+            console.error(`❌ ${memberData.role === 'receiver' ? '受理' : '承辦'}人員關聯建立失敗:`, caseMemberResult.error)
+            results.push({ type: 'CaseMember', success: false, error: caseMemberResult.error })
+          }
+        } catch (memberError) {
+          console.error(`❌ 處理${memberData.role === 'receiver' ? '受理' : '承辦'}人員時發生錯誤:`, memberError)
+          results.push({ type: 'CaseMember', success: false, error: memberError.message })
+        }
+      }
+
+      // ============ 結果總結 ============
+      const successCount = results.filter(r => r.success).length
+      const failureCount = results.filter(r => !r.success).length
+      
+      console.log('=== 案件建立結果總結 ===')
+      console.log(`成功: ${successCount}, 失敗: ${failureCount}`)
+      console.log('詳細結果:', results)
+
+      // 如果主要案件建立成功，即使某些關聯失敗也視為成功
+      const mainCaseSuccess = results.find(r => r.type === 'Case')?.success || false
+      
+      if (mainCaseSuccess) {
+        const warnings = results.filter(r => !r.success).map(r => `${r.type}: ${r.error}`)
+        
+        return {
+          success: true,
+          data: {
+            case: newCase,
+            results: results,
+            warnings: warnings.length > 0 ? warnings : null
+          },
+          error: null
+        }
+      } else {
+        return {
+          success: false,
+          error: '案件建立失敗',
+          data: { results }
+        }
+      }
+
+    } catch (error) {
+      console.error('❌ createCaseWithRelations 發生嚴重錯誤:', error)
+      return {
+        success: false,
+        error: `案件建立過程發生錯誤: ${error.message}`,
+        data: null
+      }
+    }
+  }
+
+  /**
  * 將 timestamptz 分離為日期和時間
  * @param {string} timestamptz - timestamptz 字串
  * @returns {Object} { date: string, time: string }
@@ -1717,11 +2066,118 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
     }
   }
 
-/**
- * 準備案件資料用於建立或更新（處理 timestamptz 欄位）
- * @param {Object} formData - 表單資料
- * @returns {Object} 處理後的資料
- */
+  /**
+   * 建立案件成員關聯
+   * @param {string} caseId - 案件 ID  
+   * @param {string} memberId - 成員 ID
+   * @param {string} role - 角色 ('receiver' 或 'handler')
+   * @returns {Promise<Object>} 建立結果
+   */
+  static async createCaseMemberRelation(caseId, memberId, role) {
+    try {
+      console.log('=== CaseService.createCaseMemberRelation ===')
+      console.log('案件 ID:', caseId, '成員 ID:', memberId, '角色:', role)
+
+      if (!caseId || !memberId || !role) {
+        return {
+          success: false,
+          error: '案件 ID、成員 ID 和角色必填',
+          data: null
+        }
+      }
+
+      // 檢查是否已存在相同角色的關聯
+      const { data: existingRelation, error: searchError } = await supabase
+        .from('CaseMember')
+        .select('*')
+        .eq('case_id', caseId)
+        .eq('role', role)
+        .single()
+
+      if (searchError && searchError.code !== 'PGRST116') {
+        console.error('搜尋現有 CaseMember 關聯失敗:', searchError)
+        return {
+          success: false,
+          error: searchError.message,
+          data: null
+        }
+      }
+
+      if (existingRelation) {
+        // 更新現有關聯
+        const { data: updatedRelation, error: updateError } = await supabase
+          .from('CaseMember')
+          .update({
+            member_id: memberId,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingRelation.id)
+          .select()
+          .single()
+
+        if (updateError) {
+          console.error('更新 CaseMember 關聯失敗:', updateError)
+          return {
+            success: false,
+            error: updateError.message,
+            data: null
+          }
+        }
+
+        console.log('CaseMember 關聯更新成功')
+        return {
+          success: true,
+          data: updatedRelation,
+          error: null
+        }
+      } else {
+        // 建立新關聯
+        const relationData = {
+          case_id: caseId,
+          member_id: memberId,
+          role: role,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+
+        const { data: newRelation, error: createError } = await supabase
+          .from('CaseMember')
+          .insert([relationData])
+          .select()
+          .single()
+
+        if (createError) {
+          console.error('建立 CaseMember 關聯失敗:', createError)
+          return {
+            success: false,
+            error: createError.message,
+            data: null
+          }
+        }
+
+        console.log('CaseMember 關聯建立成功')
+        return {
+          success: true,
+          data: newRelation,
+          error: null
+        }
+      }
+
+    } catch (error) {
+      console.error('CaseService.createCaseMemberRelation 發生錯誤:', error)
+      return {
+        success: false,
+        error: error.message,
+        data: null
+      }
+    }
+  }
+
+  /**
+   * 準備案件資料用於建立或更新（處理 timestamptz 欄位）
+   * @param {Object} formData - 表單資料
+   * @returns {Object} 處理後的資料
+   */
   static prepareCaseDataForSubmit(caseData) {
       const preparedData = { ...caseData }
       

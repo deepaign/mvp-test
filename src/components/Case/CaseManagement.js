@@ -83,9 +83,9 @@ function CaseManagement({ member, team }) {
     setStats(newStats)
   }, [])
 
-  // 載入案件資料 - 只依賴 team.id
-  const loadCases = useCallback(async () => {
-    if (!team?.id || loadingRef.current) {
+  // 載入案件資料
+  const loadCases = useCallback(async (forceRefresh = false) => {
+    if (!team?.id || (loadingRef.current && !forceRefresh)) {
       console.warn('無法載入案件：', !team?.id ? '缺少團隊ID' : '正在載入中')
       return
     }
@@ -95,36 +95,55 @@ function CaseManagement({ member, team }) {
     setError('')
 
     try {
-      console.log('載入案件資料，團隊:', team.id)
+      console.log('=== loadCases 開始 ===')
+      console.log('團隊資訊:', { id: team.id, name: team.name })
       
+      // 🔧 新增：除錯查詢
+      await CaseService.debugCaseQuery(team.id)
+      
+      // 原有的查詢邏輯
       const result = await CaseService.getCases({
         groupId: team.id,
-        status: 'all', // 載入所有狀態
-        filters: {}, // 不在後端篩選
-        searchTerm: '', // 不在後端搜尋
+        status: 'all',
+        filters: {},
+        searchTerm: '',
         page: 0,
-        limit: 1000, // 載入足夠多的資料
+        limit: 1000,
         sortConfig: sortConfig
       })
 
+      console.log('getCases 查詢結果:', result)
+
       if (result.success) {
-        // 🔧 確保資料是陣列
         const casesData = Array.isArray(result.data) ? result.data : []
-        setAllCases(casesData)
-        console.log(`載入成功，共 ${casesData.length} 筆案件`)
         
-        // 更新統計資料
+        console.log(`✅ 成功載入 ${casesData.length} 筆案件`)
+        
+        // 顯示案件摘要
+        if (casesData.length > 0) {
+          console.log('案件摘要:')
+          casesData.slice(0, 5).forEach((c, index) => {
+            console.log(`  ${index + 1}. ${c.title} (${c.id}) - ${c.status}`)
+          })
+        }
+        
+        setAllCases(casesData)
         updateStats(casesData)
+        
+        if (forceRefresh) {
+          setCurrentPage(0)
+        }
+        
       } else {
-        console.error('載入案件失敗:', result.error)
-        setAllCases([]) // 🔧 設定空陣列而不是 undefined
+        console.error('❌ 載入案件失敗:', result.error)
+        setAllCases([])
         updateStats([])
         setError(result.error || '載入案件失敗')
       }
 
     } catch (error) {
-      console.error('載入案件發生錯誤:', error)
-      setAllCases([]) // 🔧 設定空陣列而不是 undefined
+      console.error('❌ loadCases 發生異常:', error)
+      setAllCases([])
       updateStats([])
       setError('載入案件時發生錯誤：' + error.message)
     } finally {
@@ -451,27 +470,61 @@ function CaseManagement({ member, team }) {
 
   // 同時修正 handleCaseCreated 函數保持一致性
   const handleCaseCreated = useCallback(async (newCaseData) => {
-    console.log('🔄 新案件已建立，開始重新載入列表...', {
+    console.log('🔄 新案件已建立，立即更新列表...', {
       newCaseId: newCaseData?.id,
       timestamp: new Date().toISOString()
     })
     
     try {
-      // 重新載入案件列表
-      await loadCases()
+      // 🎯 立即更新：先將新案件添加到現有列表的開頭
+      setAllCases(prevCases => {
+        // 準備新案件資料，確保格式正確
+        const newCase = {
+          ...newCaseData,
+          // 確保有必要的欄位
+          CategoryCase: [],
+          VoterCase: [],
+          CaseMember: [],
+          DistrictCase: [],
+          // 確保有正確的時間格式
+          created_at: newCaseData.created_at || new Date().toISOString(),
+          updated_at: newCaseData.updated_at || new Date().toISOString()
+        }
+        
+        // 將新案件加到列表開頭
+        const updatedCases = [newCase, ...prevCases]
+        console.log('✅ 立即添加新案件到列表，總數:', updatedCases.length)
+        
+        // 立即更新統計
+        updateStats(updatedCases)
+        
+        return updatedCases
+      })
       
-      console.log('✅ 案件列表重新載入完成')
-      
-    } catch (error) {
-      console.error('❌ 重新載入案件列表時發生錯誤:', error)
-      setError('新增後重新載入失敗：' + error.message)
-    } finally {
-      // 關閉建立模態框
+      // 關閉模態框
       setShowCaseModal(false)
       
-      console.log('🔄 新增模態框已關閉')
+      // 顯示成功提示
+      alert('案件建立成功！')
+      
+      // 🔄 背景重新載入完整資料（包含所有關聯）
+      setTimeout(async () => {
+        try {
+          console.log('🔄 背景重新載入完整案件資料...')
+          await loadCases()
+          console.log('✅ 背景重新載入完成')
+        } catch (error) {
+          console.error('❌ 背景重新載入失敗:', error)
+          // 背景載入失敗不影響用戶體驗，只記錄錯誤
+        }
+      }, 1000) // 1秒後背景載入
+      
+    } catch (error) {
+      console.error('❌ 處理新案件時發生錯誤:', error)
+      setError('處理新案件時發生錯誤：' + error.message)
+      setShowCaseModal(false)
     }
-  }, [loadCases])
+  }, [loadCases, updateStats])
 
   // 處理編輯案件
   const handleEditCase = useCallback((caseData) => {
@@ -780,7 +833,7 @@ function CaseManagement({ member, team }) {
         <CaseModal
           isOpen={showCaseModal}
           onClose={() => setShowCaseModal(false)}
-          onSubmit={handleCaseCreated}
+          onCaseCreated={handleCaseCreated}  // 🔧 修復：確保傳遞正確的回調
           team={team}
           member={member}
         />
@@ -801,6 +854,8 @@ function CaseManagement({ member, team }) {
         />
       )}
     </div>
+
+    
   )
 }
 

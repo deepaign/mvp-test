@@ -335,23 +335,39 @@ export function useCaseForm({ team, member, onSubmit, initialData }) {
     setIsSubmitting(true)
     
     try {
-      // 準備案件資料
+      // 🔧 修復：準備完整的案件資料，確保包含 teamId
       const caseData = {
         ...formData,
-        teamId: team?.id,
+        teamId: team?.id, // 確保有 teamId
         createdBy: member?.auth_user_id,
-        // 🆕 保留 AI 相關資訊
+        // 保留 AI 相關資訊
         createdByAI: formData.createdByAI || false,
         originalTranscript: formData.originalTranscript || '',
         aiExtractedData: formData.aiExtractedData || null
       }
       
+      // 🔧 修復：驗證必要資料
+      if (!caseData.teamId) {
+        throw new Error('團隊資訊缺失，請重新登入後再試')
+      }
+      
+      if (!caseData.title?.trim()) {
+        throw new Error('案件標題不能為空')
+      }
+      
+      if (!caseData.description?.trim()) {
+        throw new Error('案件描述不能為空')
+      }
+      
       console.log('準備提交的案件資料:', caseData)
       
+      // 🔧 修復：調用 onSubmit 並等待完成
       await onSubmit(caseData)
       
+      console.log('✅ 案件提交成功')
+      
     } catch (error) {
-      console.error('表單提交失敗:', error)
+      console.error('❌ 表單提交失敗:', error)
       alert('案件建立失敗：' + error.message)
     } finally {
       setIsSubmitting(false)
