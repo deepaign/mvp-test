@@ -263,16 +263,13 @@ const CaseEditModal = ({ isOpen, onClose, caseData, team, member, onCaseUpdated 
       if (caseData.CategoryCase && caseData.CategoryCase.length > 0) {
         const categoryData = caseData.CategoryCase[0].Category
         if (categoryData) {
-          category = categoryData.name
+          // 優先使用 ID，這樣在更新時不會有問題
+          category = categoryData.id
           console.log('找到類別:', {
             id: categoryData.id,
             name: categoryData.name
           })
-        } else {
-          console.log('⚠️ CategoryCase[0] 存在但沒有 Category 資料')
         }
-      } else {
-        console.log('⚠️ 沒有 CategoryCase 資料')
       }
 
       console.log('🔍 步驟 3: 處理聯絡人資訊...')
@@ -421,7 +418,9 @@ const CaseEditModal = ({ isOpen, onClose, caseData, team, member, onCaseUpdated 
           }
           console.log('事發地點:', {
             district: districtData.name,
-            county: districtData.County?.name
+            districtId: districtData.id,
+            county: districtData.County?.name,
+            countyId: districtData.County?.id
           })
         }
       }
@@ -572,6 +571,7 @@ const CaseEditModal = ({ isOpen, onClose, caseData, team, member, onCaseUpdated 
   }, [onClose])
 
   // 處理表單提交
+  // 修正為（移除 handleClose 依賴）：
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault()
     setIsSubmitting(true)
@@ -646,16 +646,34 @@ const CaseEditModal = ({ isOpen, onClose, caseData, team, member, onCaseUpdated 
       })
 
       if (result.success) {
-        console.log('案件更新成功')
+        console.log('✅ 案件更新成功')
         alert('案件更新成功！')
         
         if (onCaseUpdated) {
-          onCaseUpdated(updatedFormData)
+          console.log('🔄 呼叫 onCaseUpdated 回調...')
+          
+          try {
+            // 傳遞更新後的資料給父組件
+            await onCaseUpdated({
+              ...updatedFormData,
+              id: caseData.id,
+              updated_at: new Date().toISOString()
+            })
+            
+            console.log('✅ onCaseUpdated 回調執行完成')
+            
+          } catch (callbackError) {
+            console.error('❌ onCaseUpdated 回調執行失敗:', callbackError)
+            // 即使回調失敗，也不應該阻止關閉模態框
+          }
+        } else {
+          console.warn('⚠️ onCaseUpdated 回調函數未定義')
+          // 如果沒有回調函數，手動關閉模態框
+          onClose()
         }
         
-        handleClose()
       } else {
-        console.error('案件更新失敗:', result.error)
+        console.error('❌ 案件更新失敗:', result.error)
         setError('案件更新失敗：' + result.error)
       }
 
@@ -665,7 +683,7 @@ const CaseEditModal = ({ isOpen, onClose, caseData, team, member, onCaseUpdated 
     } finally {
       setIsSubmitting(false)
     }
-  }, [formData, originalData, team.id, caseData.id, dropdownOptions, onCaseUpdated, handleClose])
+  }, [formData, originalData, team.id, caseData.id, dropdownOptions, onCaseUpdated, onClose])
 
   // 處理取消
   const handleCancel = useCallback(() => {

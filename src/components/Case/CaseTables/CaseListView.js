@@ -106,20 +106,6 @@ function CaseListView({
     return '-'
   }
 
-  // 🔧 修復：取得受理人員
-  const getReceiverName = (caseItem) => {
-    if (!caseItem.CaseMember || !Array.isArray(caseItem.CaseMember)) {
-      return '-'
-    }
-    
-    const receiverRecord = caseItem.CaseMember.find(cm => cm.role === 'receiver')
-    if (receiverRecord && receiverRecord.Member && receiverRecord.Member.name) {
-      return receiverRecord.Member.name
-    }
-    
-    return '-'
-  }
-
   // 修正：格式化受理日期 - 從 description 中提取受理時間的日期部分
   const formatReceivedDate = (caseItem) => {
     // 優先使用 start_date（受理日期）
@@ -160,10 +146,11 @@ function CaseListView({
   const getPriorityDisplay = (priority) => {
     const priorityMap = {
       'urgent': { text: '緊急', class: 'priority-urgent' },
-      'normal': { text: '一般', class: 'priority-normal' },
+      'normal': { text: '一般', class: 'priority-normal' },  // 修正：普通 -> 一般
       'low': { text: '低', class: 'priority-low' }
+      // 移除 'high': { text: '高', class: 'priority-high' }
     }
-    return priorityMap[priority] || { text: '一般', class: 'priority-normal' }
+    return priorityMap[priority] || { text: '一般', class: 'priority-normal' }  // 預設改為「一般」
   }
 
   // 取得狀態顯示
@@ -174,19 +161,6 @@ function CaseListView({
       'completed': { text: '已完成', class: 'status-completed' }
     }
     return statusMap[status] || { text: '待處理', class: 'status-pending' }
-  }
-
-  
-
-  // 取得狀態顯示文字
-  const getStatusText = (status) => {
-    const statusMap = {
-      'new': '新進案件',
-      'in_progress': '處理中',
-      'transferred': '轉介中',
-      'closed': '已結案'
-    }
-    return statusMap[status] || status
   }
 
   if (loading) {

@@ -109,10 +109,11 @@ function CaseCardView({
   const getPriorityDisplay = (priority) => {
     const priorityMap = {
       'urgent': { text: '緊急', class: 'priority-urgent' },
-      'normal': { text: '一般', class: 'priority-normal' },
+      'normal': { text: '一般', class: 'priority-normal' },  // 修正：普通 -> 一般
       'low': { text: '低', class: 'priority-low' }
+      // 移除 'high': { text: '高', class: 'priority-high' }
     }
-    return priorityMap[priority] || { text: '一般', class: 'priority-normal' }
+    return priorityMap[priority] || { text: '一般', class: 'priority-normal' }  // 預設改為「一般」
   }
 
   // 取得狀態顯示

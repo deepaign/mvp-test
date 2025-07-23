@@ -212,6 +212,9 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
  * @param {number} options.limit - 每頁筆數
  * @returns {Promise<Object>} 查詢結果
  */
+  /**
+   * 取得案件列表（含分頁和篩選）- 修正 VoterCase 查詢
+   */
   static async getCases(options = {}) {
     try {
       const {
@@ -220,17 +223,12 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
         filters = {},
         searchTerm = '',
         page = 0,
-        limit = 20
+        limit = 20,
+        sortConfig = { field: 'created_at', direction: 'desc' }
       } = options
 
-      console.log('=== CaseService.getCases ===')
+      console.log('🔍 CaseService.getCases - 修正版查詢開始')
       console.log('查詢參數:', { groupId, status, filters, searchTerm, page, limit })
-      
-      // 🔍 新增：詳細參數檢查
-      console.log('🔍 參數詳細檢查:')
-      console.log('  - groupId 類型:', typeof groupId, '值:', groupId)
-      console.log('  - groupId 是否為空:', !groupId)
-      console.log('  - filters 內容:', JSON.stringify(filters, null, 2))
 
       if (!groupId) {
         console.error('❌ 團隊 ID 為空，無法查詢')
@@ -241,150 +239,121 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
         }
       }
 
-      // 🔍 新增：先測試基本連線和基礎查詢
-      console.log('🔍 步驟 1: 測試基本查詢...')
-      const { data: basicTest, error: basicError, count: basicCount } = await supabase
-        .from('Case')
-        .select('id, title, group_id', { count: 'exact' })
-        .eq('group_id', groupId)
-        .limit(3)
-
-      console.log('基本查詢結果:', {
-        成功: !basicError,
-        錯誤: basicError?.message,
-        找到筆數: basicTest?.length || 0,
-        總計筆數: basicCount,
-        範例資料: basicTest?.slice(0, 2)
-      })
-
-      if (basicError) {
-        console.error('❌ 基本查詢失敗:', basicError)
-        return {
-          success: false,
-          error: `基本查詢失敗: ${basicError.message}`,
-          data: []
-        }
-      }
-
-      if (!basicTest || basicTest.length === 0) {
-        console.warn('⚠️ 基本查詢成功但沒有找到任何案件')
-        console.log('  - 請檢查 group_id 是否正確')
-        console.log('  - 請檢查資料庫中是否有該團隊的案件')
-        return {
-          success: true,
-          data: [],
-          count: 0,
-          page,
-          limit,
-          error: null
-        }
-      }
-
-      console.log('✅ 基本查詢成功，開始完整查詢...')
-
-      // 建立基礎查詢 - 修正查詢以包含 Voter.address
-      console.log('🔍 步驟 2: 建立完整查詢...')
+      // ✅ 修正關聯資料查詢 - 根據實際資料庫結構
+      console.log('🔍 步驟 1: 建立修正後的關聯資料查詢...')
       let query = supabase
-      .from('Case')
-      .select(`
-        *,
-        CategoryCase (
-          Category (
+        .from('Case')
+        .select(`
+          *,
+          CategoryCase (
             id,
-            name
-          )
-        ),
-        VoterCase (
-          Voter (
-            id,
-            name,
-            phone,
-            address
-          )
-        ),
-        CaseMember (
-          role,
-          member_id,
-          Member (
-            id,
-            name
-          )
-        ),
-        DistrictCase (
-          District (
-            id,
-            name,
-            County (
+            Category (
               id,
-              name
+              name,
+              description
+            )
+          ),
+          DistrictCase (
+            id,
+            District (
+              id,
+              name,
+              County (
+                id,
+                name
+              )
+            )
+          ),
+          VoterCase (
+            id,
+            Voter (
+              id,
+              name,
+              phone,
+              email,
+              address,
+              gender,
+              job,
+              education,
+              line_id,
+              priority
+            )
+          ),
+          CaseVoter (
+            id,
+            participation_type,
+            feedback,
+            Voter (
+              id,
+              name,
+              phone,
+              email,
+              address,
+              gender,
+              job
+            )
+          ),
+          CaseMember (
+            id,
+            role,
+            member_id,
+            created_at,
+            Member (
+              id,
+              name,
+              auth_user_id,
+              role,
+              is_leader
             )
           )
-        )
-      `)
-      // 添加基本篩選條件
-      if (groupId) {
-        query = query.eq('group_id', groupId)
-      }
+        `)
+        .eq('group_id', groupId)
 
-      console.log('查詢建立完成，group_id:', groupId)
-
-      // 狀態篩選 - 在資料庫層級處理
-      if (status !== 'all') {
-        console.log('🔍 應用狀態篩選:', status)
+      // 🔍 步驟 2: 應用篩選條件
+      console.log('🔍 步驟 2: 應用基本篩選條件...')
+      
+      // 狀態篩選
+      if (status && status !== 'all') {
         query = query.eq('status', status)
+        console.log('應用狀態篩選:', status)
       }
 
-      // 搜尋篩選 - 在資料庫層級處理
+      // 全文搜尋
       if (searchTerm && searchTerm.trim()) {
-        console.log('🔍 應用搜尋篩選:', searchTerm)
         query = query.or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`)
+        console.log('應用搜尋條件:', searchTerm)
       }
 
-      // 日期篩選 - 在資料庫層級處理（根據 created_at）
-      if (filters.dateRange && filters.dateRange !== 'all') {
-        console.log('🔍 處理日期篩選:', filters.dateRange)
-        const dateFilter = this.buildDateFilter(filters.dateRange, filters.startDate, filters.endDate)
-        console.log('日期篩選結果:', dateFilter)
-        if (dateFilter.startDate && dateFilter.endDate) {
-          console.log('應用日期篩選:', dateFilter)
-          query = query
-            .gte('created_at', dateFilter.startDate)
-            .lte('created_at', dateFilter.endDate)
-        }
-      }
+      // 🔍 步驟 3: 應用排序
+      console.log('🔍 步驟 3: 應用排序...')
+      const sortField = sortConfig.field || 'created_at'
+      const sortDirection = sortConfig.direction === 'asc' ? true : false
+      
+      query = query.order(sortField, { ascending: sortDirection })
 
-      // 排序（預設由新到舊）
-      console.log('🔍 應用排序: created_at desc')
-      query = query.order('created_at', { ascending: false })
-
-      // 分頁
+      // 🔍 步驟 4: 應用分頁
       if (page >= 0 && limit > 0) {
         const start = page * limit
         const end = start + limit - 1
-        console.log('🔍 應用分頁:', { page, limit, start, end })
         query = query.range(start, end)
+        console.log('分頁設定:', { page, limit, start, end })
       }
 
-      console.log('🔍 步驟 3: 執行完整查詢...')
+      // 🔍 步驟 5: 執行查詢
+      console.log('🔍 步驟 5: 執行修正後的查詢...')
       const queryStartTime = Date.now()
-      const { data, error } = await query
-      const queryDuration = Date.now() - queryStartTime
+      const { data, error, count } = await query
 
-      console.log('完整查詢執行結果:', {
+      const queryDuration = Date.now() - queryStartTime
+      console.log('查詢執行結果:', {
         成功: !error,
         執行時間: `${queryDuration}ms`,
-        錯誤: error?.message,
-        回傳筆數: data?.length || 0
+        回傳筆數: data?.length || 0,
+        錯誤: error?.message
       })
 
       if (error) {
-        console.error('❌ 查詢案件失敗:', error)
-        console.error('錯誤詳細資訊:', {
-          code: error.code,
-          details: error.details,
-          hint: error.hint,
-          message: error.message
-        })
+        console.error('❌ 修正後查詢失敗:', error)
         return {
           success: false,
           error: error.message,
@@ -392,133 +361,50 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
         }
       }
 
-      console.log(`✅ 查詢成功，共 ${data?.length || 0} 筆案件`)
-      
-      // 🔍 新增：資料結構驗證
+      // 🔍 步驟 6: 驗證修正後的資料結構
       if (data && data.length > 0) {
-        console.log('🔍 步驟 4: 驗證資料結構...')
+        console.log('🔍 步驟 6: 驗證修正後第一筆案件的資料結構...')
         const firstCase = data[0]
         
-        console.log('第一筆案件基本資訊:', {
-          id: firstCase.id,
-          title: firstCase.title,
-          group_id: firstCase.group_id,
-          status: firstCase.status,
-          created_at: firstCase.created_at
-        })
-        
-        console.log('關聯資料檢查:', {
-          CategoryCase: Array.isArray(firstCase.CategoryCase) ? firstCase.CategoryCase.length : 'null',
-          VoterCase: Array.isArray(firstCase.VoterCase) ? firstCase.VoterCase.length : 'null',
-          CaseMember: Array.isArray(firstCase.CaseMember) ? firstCase.CaseMember.length : 'null'
-        })
-        
-        // 驗證是否成功取得 address 資料
-        if (firstCase.VoterCase && firstCase.VoterCase[0] && firstCase.VoterCase[0].Voter) {
-          console.log('✅ 成功取得 Voter 資料，包含 address:', {
-            name: firstCase.VoterCase[0].Voter.name,
-            phone: firstCase.VoterCase[0].Voter.phone,
-            address: firstCase.VoterCase[0].Voter.address
-          })
-        } else {
-          console.log('⚠️ 第一筆案件沒有 Voter 資料')
-        }
-      } else {
-        console.log('⚠️ 查詢成功但沒有回傳任何資料')
-      }
-      
-      console.log('🔍 步驟 5: 開始前端篩選...')
-      
-      // 在前端進行多重篩選（交集邏輯）
-      let filteredData = data || []
-      const originalCount = filteredData.length
-      console.log(`開始前端篩選，原始筆數: ${originalCount}`)
-      
-      // 案件類型篩選
-      if (filters.category && filters.category !== 'all') {
-        console.log('🔍 應用案件類型篩選:', filters.category)
-        const beforeFilter = filteredData.length
-        filteredData = filteredData.filter(caseItem => {
-          const categories = caseItem.CategoryCase || []
-          
-          // 檢查預設類型
-          if (['traffic', 'environment', 'security', 'public_service', 'legal_consultation'].includes(filters.category)) {
-            const targetCategoryName = this.getCategoryName(filters.category)
-            const result = categories.some(cat => cat.Category && cat.Category.name === targetCategoryName)
-            return result
-          } else {
-            // 檢查自定義類型
-            const result = categories.some(cat => cat.Category && cat.Category.id === filters.category)
-            return result
+        console.log('修正後資料結構檢查:', {
+          基本資訊: {
+            id: firstCase.id,
+            title: firstCase.title,
+            priority: firstCase.priority,
+            status: firstCase.status
+          },
+          關聯資料: {
+            CategoryCase: firstCase.CategoryCase?.length || 0,
+            DistrictCase: firstCase.DistrictCase?.length || 0,
+            VoterCase: firstCase.VoterCase?.length || 0,
+            CaseVoter: firstCase.CaseVoter?.length || 0,
+            CaseMember: firstCase.CaseMember?.length || 0
+          },
+          聯絡人資訊來源: {
+            從VoterCase: firstCase.VoterCase?.[0]?.Voter ? {
+              name: firstCase.VoterCase[0].Voter.name,
+              phone: firstCase.VoterCase[0].Voter.phone,
+              address: firstCase.VoterCase[0].Voter.address
+            } : null,
+            從CaseVoter: firstCase.CaseVoter?.[0]?.Voter ? {
+              name: firstCase.CaseVoter[0].Voter.name,
+              phone: firstCase.CaseVoter[0].Voter.phone,
+              participation_type: firstCase.CaseVoter[0].participation_type
+            } : null
           }
         })
-        console.log(`案件類型篩選: ${beforeFilter} -> ${filteredData.length} 筆案件`)
       }
 
-      // 優先順序篩選
-      if (filters.priority && filters.priority !== 'all') {
-        console.log('🔍 應用優先順序篩選:', filters.priority)
-        const beforeFilter = filteredData.length
-        filteredData = filteredData.filter(caseItem => caseItem.priority === filters.priority)
-        console.log(`優先順序篩選: ${beforeFilter} -> ${filteredData.length} 筆案件`)
-      }
-
-      // 承辦人員篩選
-      if (filters.assignee && filters.assignee !== 'all') {
-        console.log('🔍 應用承辦人員篩選:', filters.assignee)
-        const beforeFilter = filteredData.length
-        
-        if (filters.assignee === 'unassigned') {
-          // 篩選尚未指派承辦人員的案件
-          filteredData = filteredData.filter(caseItem => {
-            const inCharge = caseItem.InChargeCase || []
-            
-            if (inCharge.length === 0) {
-              return true // 沒有 InChargeCase 記錄
-            }
-            
-            // 檢查是否所有記錄都沒有有效的 member_id
-            const hasAssignedMember = inCharge.some(ic => ic.member_id !== null && ic.member_id !== undefined)
-            return !hasAssignedMember
-          })
-        } else {
-          // 篩選指定承辦人員的案件
-          filteredData = filteredData.filter(caseItem => {
-            const inCharge = caseItem.InChargeCase || []
-            
-            // 檢查是否有符合指定 member_id 的記錄
-            return inCharge.some(ic => ic.member_id === filters.assignee)
-          })
-        }
-        console.log(`承辦人員篩選: ${beforeFilter} -> ${filteredData.length} 筆案件`)
-      }
-
-      console.log('🔍 步驟 6: 篩選完成')
-      console.log(`篩選摘要: 原始 ${originalCount} -> 最終 ${filteredData.length} 筆案件`)
-      console.log(`最終篩選結果：${filteredData.length} 筆案件`)
-
-      const finalResult = {
+      console.log('✅ 修正後查詢完成，回傳資料')
+      return {
         success: true,
-        data: filteredData,
-        count: filteredData.length,
-        page,
-        limit,
-        error: null
+        data: data || [],
+        count: count || data?.length || 0,
+        totalCount: count
       }
-
-      console.log('🔍 最終回傳結果:', {
-        success: finalResult.success,
-        count: finalResult.count,
-        page: finalResult.page,
-        limit: finalResult.limit,
-        hasData: Array.isArray(finalResult.data) && finalResult.data.length > 0
-      })
-      
-      return finalResult
 
     } catch (error) {
-      console.error('❌ CaseService.getCases 發生錯誤:', error)
-      console.error('錯誤堆疊:', error.stack)
+      console.error('❌ CaseService.getCases 發生異常:', error)
       return {
         success: false,
         error: error.message,
@@ -1653,6 +1539,144 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
   }
 
   /**
+ * 統一的案件資料轉換函數
+ * 確保列表檢視和編輯檢視使用相同的資料轉換邏輯
+ */
+  static convertCaseDataForDisplay(caseData) {
+    if (!caseData) return null
+
+    console.log('🔄 修正版資料轉換:', caseData.id)
+
+    // 提取基本資訊
+    const basicInfo = {
+      id: caseData.id,
+      title: caseData.title || '',
+      description: caseData.description || '',
+      priority: caseData.priority || 'normal',
+      status: caseData.status || 'pending',
+      contact_type: caseData.contact_type || 'phone',
+      start_date: caseData.start_date,
+      end_date: caseData.end_date,
+      created_at: caseData.created_at,
+      updated_at: caseData.updated_at
+    }
+
+    // 提取案件類別
+    let category = {
+      id: null,
+      name: '未分類'
+    }
+    if (caseData.CategoryCase && caseData.CategoryCase.length > 0) {
+      const categoryData = caseData.CategoryCase[0].Category
+      if (categoryData) {
+        category = {
+          id: categoryData.id,
+          name: categoryData.name || '未分類'
+        }
+      }
+    }
+
+    // 提取事發地點
+    let district = {
+      id: null,
+      name: '未指定',
+      county: {
+        id: null,
+        name: ''
+      }
+    }
+    if (caseData.DistrictCase && caseData.DistrictCase.length > 0) {
+      const districtData = caseData.DistrictCase[0].District
+      if (districtData) {
+        district = {
+          id: districtData.id,
+          name: districtData.name || '未指定',
+          county: {
+            id: districtData.County?.id || null,
+            name: districtData.County?.name || ''
+          }
+        }
+      }
+    }
+
+    // ✅ 修正聯絡人資訊提取 - 優先使用 VoterCase，備用 CaseVoter
+    let contacts = []
+    
+    // 優先從 VoterCase 提取（基本關聯）
+    if (caseData.VoterCase && caseData.VoterCase.length > 0) {
+      contacts = caseData.VoterCase.map(vc => ({
+        id: vc.Voter?.id,
+        name: vc.Voter?.name || '',
+        phone: vc.Voter?.phone || '',
+        email: vc.Voter?.email || '',
+        address: vc.Voter?.address || '',
+        source: 'VoterCase'
+      })).filter(contact => contact.id)
+    }
+    
+    // 如果 VoterCase 沒有資料，從 CaseVoter 提取（包含參與類型）
+    if (contacts.length === 0 && caseData.CaseVoter && caseData.CaseVoter.length > 0) {
+      contacts = caseData.CaseVoter.map(cv => ({
+        id: cv.Voter?.id,
+        name: cv.Voter?.name || '',
+        phone: cv.Voter?.phone || '',
+        email: cv.Voter?.email || '',
+        address: cv.Voter?.address || '',
+        participation_type: cv.participation_type,
+        feedback: cv.feedback,
+        source: 'CaseVoter'
+      })).filter(contact => contact.id)
+    }
+
+    // 提取人員指派
+    let members = {
+      receiver: null,
+      handler: null,
+      all: []
+    }
+    if (caseData.CaseMember && caseData.CaseMember.length > 0) {
+      members.all = caseData.CaseMember.map(cm => ({
+        role: cm.role,
+        member_id: cm.member_id,
+        member_name: cm.Member?.name || '未知',
+        created_at: cm.created_at
+      }))
+
+      const receiverRecord = caseData.CaseMember.find(cm => cm.role === 'receiver')
+      const handlerRecord = caseData.CaseMember.find(cm => cm.role === 'handler')
+
+      if (receiverRecord && receiverRecord.Member) {
+        members.receiver = {
+          id: receiverRecord.member_id,
+          name: receiverRecord.Member.name
+        }
+      }
+
+      if (handlerRecord && handlerRecord.Member) {
+        members.handler = {
+          id: handlerRecord.member_id,
+          name: handlerRecord.Member.name
+        }
+      }
+    }
+
+    // 從描述中提取結構化資訊
+    const caseNumber = this.extractCaseNumber(basicInfo.description)
+    const incidentLocation = this.extractIncidentLocation(basicInfo.description)
+
+    return {
+      ...basicInfo,
+      caseNumber,
+      incidentLocation,
+      category,
+      district,
+      contacts,
+      members,
+      raw: caseData
+    }
+  }
+
+  /**
  * 將 timestamptz 分離為日期和時間
  * @param {string} timestamptz - timestamptz 字串
  * @returns {Object} { date: string, time: string }
@@ -2204,31 +2228,90 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
   /**
    * 安全的案件類別更新方法
    */
+  // === 修正 1: src/services/caseService.js - 修正案件類別更新邏輯 ===
+
+  /**
+   * 安全的案件類別更新方法 - 修正版
+   */
   static async updateCaseCategorySafely(caseData, originalData, updateResults) {
     try {
-      if (caseData.category !== originalData.category) {
-        console.log('案件類別有變更，執行更新:', caseData.category)
-        
-        // 先刪除舊的類別關聯
-        await supabase
-          .from('CategoryCase')
-          .delete()
-          .eq('case_id', caseData.id)
-
-        // 如果有新類別，建立新關聯
-        if (caseData.category) {
-          const categoryResult = await this.handleCategory(caseData.category)
-          
-          if (categoryResult.success) {
-            await this.createCategoryCaseRelation(caseData.id, categoryResult.data.id)
-            updateResults.push({ type: 'CategoryCase', success: true, data: categoryResult.data })
-          } else {
-            updateResults.push({ type: 'CategoryCase', success: false, error: categoryResult.error })
-          }
-        } else {
-          updateResults.push({ type: 'CategoryCase', success: true, message: '已清除類別關聯' })
-        }
+      console.log('=== updateCaseCategorySafely 開始 ===')
+      console.log('新類別:', caseData.category)
+      console.log('原類別:', originalData.category)
+      
+      // 比較類別是否有變更（考慮空值情況）
+      const newCategory = caseData.category?.trim() || null
+      const oldCategory = originalData.category?.trim() || null
+      
+      if (newCategory === oldCategory) {
+        console.log('案件類別沒有變更，跳過更新')
+        updateResults.push({ type: 'CategoryCase', success: true, message: '無變更' })
+        return
       }
+
+      console.log('案件類別有變更，執行更新')
+
+      // 先刪除所有舊的類別關聯
+      const { error: deleteError } = await supabase
+        .from('CategoryCase')
+        .delete()
+        .eq('case_id', caseData.id)
+
+      if (deleteError) {
+        console.error('刪除舊類別關聯失敗:', deleteError)
+        updateResults.push({ type: 'CategoryCase', success: false, error: deleteError.message })
+        return
+      }
+
+      console.log('刪除舊類別關聯成功')
+
+      // 如果有新類別，建立新關聯
+      if (newCategory) {
+        console.log('建立新類別關聯:', newCategory)
+        
+        // ✅ 修正：直接使用類別 ID，不需要處理類別名稱
+        let categoryId = newCategory
+        
+        // 如果傳入的是類別名稱，需要先查找對應的 ID
+        if (!newCategory.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+          // 看起來不是 UUID，可能是類別名稱，需要查找對應的類別
+          const { data: categoryData, error: categoryError } = await supabase
+            .from('Category')
+            .select('id')
+            .eq('name', newCategory)
+            .single()
+
+          if (categoryError || !categoryData) {
+            console.error('找不到對應的類別:', newCategory, categoryError)
+            updateResults.push({ type: 'CategoryCase', success: false, error: `找不到類別: ${newCategory}` })
+            return
+          }
+          
+          categoryId = categoryData.id
+          console.log('找到類別 ID:', categoryId)
+        }
+
+        // 建立新的類別關聯
+        const { error: insertError } = await supabase
+          .from('CategoryCase')
+          .insert([{
+            case_id: caseData.id,
+            category_id: categoryId,
+            created_at: new Date().toISOString()
+          }])
+
+        if (insertError) {
+          console.error('建立新類別關聯失敗:', insertError)
+          updateResults.push({ type: 'CategoryCase', success: false, error: insertError.message })
+        } else {
+          console.log('建立新類別關聯成功')
+          updateResults.push({ type: 'CategoryCase', success: true, data: { categoryId } })
+        }
+      } else {
+        console.log('新類別為空，僅清除舊關聯')
+        updateResults.push({ type: 'CategoryCase', success: true, message: '已清除類別關聯' })
+      }
+
     } catch (error) {
       console.error('更新案件類別失敗:', error)
       updateResults.push({ type: 'CategoryCase', success: false, error: error.message })
@@ -2328,38 +2411,66 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
   /**
    * 安全的事發地點更新方法
    */
+  /**
+ * 安全的事發地點更新方法 - 修正版
+ */
   static async updateIncidentLocationSafely(caseData, originalData, updateResults) {
     try {
-      if (caseData.incidentDistrict !== originalData.incidentDistrict) {
-        console.log('事發地點有變更，執行更新:', caseData.incidentDistrict)
-        
-        // 先刪除舊的地點關聯
-        await supabase
-          .from('DistrictCase')
-          .delete()
-          .eq('case_id', caseData.id)
-
-        // 如果有新地點，建立新關聯
-        if (caseData.incidentDistrict) {
-          const { error: districtError } = await supabase
-            .from('DistrictCase')
-            .insert([{
-              case_id: caseData.id,
-              district_id: caseData.incidentDistrict,
-              created_at: new Date().toISOString()
-            }])
-
-          if (districtError) {
-            console.error('DistrictCase 建立失敗:', districtError)
-            updateResults.push({ type: 'DistrictCase', success: false, error: districtError.message })
-          } else {
-            console.log('DistrictCase 建立成功')
-            updateResults.push({ type: 'DistrictCase', success: true })
-          }
-        } else {
-          updateResults.push({ type: 'DistrictCase', success: true, message: '已清除地點關聯' })
-        }
+      console.log('=== updateIncidentLocationSafely 開始 ===')
+      console.log('新事發地點:', caseData.incidentDistrict)
+      console.log('原事發地點:', originalData.incidentDistrict)
+      
+      // 比較事發地點是否有變更
+      const newDistrict = caseData.incidentDistrict?.trim() || null
+      const oldDistrict = originalData.incidentDistrict?.trim() || null
+      
+      if (newDistrict === oldDistrict) {
+        console.log('事發地點沒有變更，跳過更新')
+        updateResults.push({ type: 'DistrictCase', success: true, message: '無變更' })
+        return
       }
+
+      console.log('事發地點有變更，執行更新')
+
+      // 先刪除所有舊的地點關聯
+      const { error: deleteError } = await supabase
+        .from('DistrictCase')
+        .delete()
+        .eq('case_id', caseData.id)
+
+      if (deleteError) {
+        console.error('刪除舊地點關聯失敗:', deleteError)
+        updateResults.push({ type: 'DistrictCase', success: false, error: deleteError.message })
+        return
+      }
+
+      console.log('刪除舊地點關聯成功')
+
+      // 如果有新地點，建立新關聯
+      if (newDistrict) {
+        console.log('建立新地點關聯:', newDistrict)
+        
+        // 建立新的地點關聯
+        const { error: insertError } = await supabase
+          .from('DistrictCase')
+          .insert([{
+            case_id: caseData.id,
+            district_id: newDistrict,
+            created_at: new Date().toISOString()
+          }])
+
+        if (insertError) {
+          console.error('建立新地點關聯失敗:', insertError)
+          updateResults.push({ type: 'DistrictCase', success: false, error: insertError.message })
+        } else {
+          console.log('建立新地點關聯成功')
+          updateResults.push({ type: 'DistrictCase', success: true, data: { districtId: newDistrict } })
+        }
+      } else {
+        console.log('新地點為空，僅清除舊關聯')
+        updateResults.push({ type: 'DistrictCase', success: true, message: '已清除地點關聯' })
+      }
+
     } catch (error) {
       console.error('更新事發地點失敗:', error)
       updateResults.push({ type: 'DistrictCase', success: false, error: error.message })

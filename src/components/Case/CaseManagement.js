@@ -422,27 +422,55 @@ function CaseManagement({ member, team }) {
     }
   }, [team?.id, loadCases])
 
-  // 處理案件更新
-  const handleCaseUpdated = useCallback((updatedCaseData) => {
-    console.log('案件已更新:', updatedCaseData)
+  const handleCaseUpdated = useCallback(async (updatedCaseData) => {
+    console.log('🔄 案件已更新，開始重新載入列表...', {
+      updatedCaseId: updatedCaseData?.id,
+      timestamp: new Date().toISOString()
+    })
     
-    // 重新載入案件列表以確保資料一致性
-    loadCases()
-    
-    // 關閉編輯模態框
-    setShowEditModal(false)
-    setEditingCase(null)
+    try {
+      // 重新載入案件列表以確保資料一致性
+      await loadCases()
+      
+      console.log('✅ 案件列表重新載入完成')
+      
+      // 可選：顯示成功提示
+      // alert('案件更新成功，列表已刷新')
+      
+    } catch (error) {
+      console.error('❌ 重新載入案件列表時發生錯誤:', error)
+      setError('更新後重新載入失敗：' + error.message)
+    } finally {
+      // 關閉編輯模態框
+      setShowEditModal(false)
+      setEditingCase(null)
+      
+      console.log('🔄 編輯模態框已關閉')
+    }
   }, [loadCases])
 
-  // 處理案件建立
-  const handleCaseCreated = useCallback((newCaseData) => {
-    console.log('新案件已建立:', newCaseData)
+  // 同時修正 handleCaseCreated 函數保持一致性
+  const handleCaseCreated = useCallback(async (newCaseData) => {
+    console.log('🔄 新案件已建立，開始重新載入列表...', {
+      newCaseId: newCaseData?.id,
+      timestamp: new Date().toISOString()
+    })
     
-    // 重新載入案件列表
-    loadCases()
-    
-    // 關閉建立模態框
-    setShowCaseModal(false)
+    try {
+      // 重新載入案件列表
+      await loadCases()
+      
+      console.log('✅ 案件列表重新載入完成')
+      
+    } catch (error) {
+      console.error('❌ 重新載入案件列表時發生錯誤:', error)
+      setError('新增後重新載入失敗：' + error.message)
+    } finally {
+      // 關閉建立模態框
+      setShowCaseModal(false)
+      
+      console.log('🔄 新增模態框已關閉')
+    }
   }, [loadCases])
 
   // 處理編輯案件
@@ -768,8 +796,8 @@ function CaseManagement({ member, team }) {
           }}
           caseData={editingCase}
           team={team}
-          member={member}  // 添加這一行
-          onCaseUpdated={handleCaseUpdated}
+          member={member}
+          onCaseUpdated={handleCaseUpdated}  // 確保這裡正確傳遞
         />
       )}
     </div>
