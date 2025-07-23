@@ -16,9 +16,17 @@ const getValidArray = (promiseResult, name) => {
   if (promiseResult.status === 'fulfilled' && promiseResult.value.success) {
     let data = promiseResult.value.data
     
-    // 處理 TeamService.getTeamMembers 的特殊格式
-    if (name === '團隊成員' && promiseResult.value.members) {
-      data = promiseResult.value.members
+    // 🔧 修復：處理團隊成員的特殊格式，但不假設有 members 欄位
+    if (name === '團隊成員') {
+      // 優先使用 data 欄位，這是 getTeamMembers() 實際返回的
+      if (Array.isArray(promiseResult.value.data)) {
+        data = promiseResult.value.data
+      } else if (Array.isArray(promiseResult.value.members)) {
+        data = promiseResult.value.members
+      } else {
+        console.warn('團隊成員資料格式異常:', promiseResult.value)
+        data = []
+      }
     }
     
     if (Array.isArray(data)) {
@@ -26,7 +34,12 @@ const getValidArray = (promiseResult, name) => {
       return data
     }
   }
-  console.warn(`${name}載入失敗或無資料:`, promiseResult.reason || promiseResult.value?.error)
+  
+  console.warn(`${name}載入失敗或無資料:`, {
+    status: promiseResult.status,
+    reason: promiseResult.reason,
+    value: promiseResult.value
+  })
   return []
 }
 
@@ -119,7 +132,8 @@ const CaseEditModal = ({ isOpen, onClose, caseData, team, member, onCaseUpdated 
         const loadStartTime = Date.now()
         
         const [membersResult, categoriesResult, countiesResult] = await Promise.allSettled([
-          TeamService.getTeamMembers(team.id, memberId), // 使用修正後的 memberId
+          // 🔧 修復：移除參數，使用無參數的 getTeamMembers()
+          TeamService.getTeamMembers(),
           CaseService.getCategories(),
           CaseService.getCounties()
         ])
