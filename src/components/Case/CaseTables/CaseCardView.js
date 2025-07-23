@@ -77,28 +77,24 @@ function CaseCardView({
     return '尚未指派'
   }
 
-  // 修正：格式化受理日期 - 從 description 中提取受理時間的日期部分
+  // 修正：格式化受理日期 - 直接使用資料庫的 start_date
   const formatReceivedDate = (caseItem) => {
-    // 使用 CaseService 的 extractReceivedDateTime 方法從 description 中提取受理時間
-    const receivedDateTime = CaseService.extractReceivedDateTime(caseItem.description)
-    
-    // 如果有提取到受理日期，直接使用
-    if (receivedDateTime.date) {
-      return receivedDateTime.date
+    // 優先使用 start_date（受理日期）
+    if (caseItem.start_date) {
+      try {
+        // 🔧 修正：直接從 ISO 字串中提取日期部分，避免時區轉換
+        return caseItem.start_date.split('T')[0] // 直接取 YYYY-MM-DD 部分
+      } catch (error) {
+        console.warn('解析受理日期失敗:', error)
+      }
     }
     
-    // 如果 description 中沒有受理時間，回退到 created_at
+    // 備用：使用建立日期
     if (caseItem.created_at) {
       try {
-        const date = new Date(caseItem.created_at)
-        return date.toLocaleDateString('zh-TW', {
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit'
-        }).replace(/\//g, '-')
+        return caseItem.created_at.split('T')[0]
       } catch (error) {
-        console.error('受理日期格式化失敗:', error)
-        return '-'
+        console.warn('解析建立日期失敗:', error)
       }
     }
     

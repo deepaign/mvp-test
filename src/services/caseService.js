@@ -746,9 +746,10 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
     if (!date) return null
     
     if (time) {
-      return `${date}T${time}:00.000Z`
+      // 🔧 修正：保持本地時間，不進行時區轉換
+      return `${date}T${time}:00.000+08:00` // 明確指定台灣時區
     } else {
-      return `${date}T00:00:00.000Z`
+      return `${date}T00:00:00.000+08:00`
     }
   }
 
@@ -2230,16 +2231,10 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
     }
     
     try {
-      const dateTime = new Date(timestamptz)
-      
-      if (isNaN(dateTime.getTime())) {
-        console.warn('無效的 timestamptz 格式:', timestamptz)
-        return { date: '', time: '' }
-      }
-      
-      // 轉換為本地時間
-      const date = dateTime.toISOString().split('T')[0] // YYYY-MM-DD
-      const time = dateTime.toTimeString().split(' ')[0].substring(0, 5) // HH:MM
+      // 🔧 修正：直接從 ISO 字串解析，避免時區轉換
+      const date = timestamptz.split('T')[0] // YYYY-MM-DD
+      const timePart = timestamptz.split('T')[1]
+      const time = timePart ? timePart.substring(0, 5) : '00:00' // HH:MM
       
       return { date, time }
     } catch (error) {

@@ -111,14 +111,9 @@ function CaseListView({
     // 優先使用 start_date（受理日期）
     if (caseItem.start_date) {
       try {
-        const date = new Date(caseItem.start_date)
-        if (!isNaN(date.getTime())) {
-          // 使用台灣時區格式 YYYY-MM-DD
-          const year = date.getFullYear()
-          const month = String(date.getMonth() + 1).padStart(2, '0')
-          const day = String(date.getDate()).padStart(2, '0')
-          return `${year}-${month}-${day}`
-        }
+        // 🔧 修正：直接從 ISO 字串中提取日期部分，避免時區轉換
+        const dateStr = caseItem.start_date.split('T')[0] // 直接取 YYYY-MM-DD 部分
+        return dateStr
       } catch (error) {
         console.warn('解析受理日期失敗:', error)
       }
@@ -127,13 +122,8 @@ function CaseListView({
     // 備用：使用建立日期
     if (caseItem.created_at) {
       try {
-        const date = new Date(caseItem.created_at)
-        if (!isNaN(date.getTime())) {
-          const year = date.getFullYear()
-          const month = String(date.getMonth() + 1).padStart(2, '0')
-          const day = String(date.getDate()).padStart(2, '0')
-          return `${year}-${month}-${day}`
-        }
+        const dateStr = caseItem.created_at.split('T')[0]
+        return dateStr
       } catch (error) {
         console.warn('解析建立日期失敗:', error)
       }

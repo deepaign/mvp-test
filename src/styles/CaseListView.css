@@ -25,7 +25,7 @@
   background: #f8f9fa;
   border-bottom: 2px solid #e9ecef;
   padding: 10px 8px;
-  text-align: left;
+  text-align: center;
   font-weight: 500; /* 與 Dashboard 標題一致 */
   color: #333; /* 與 Dashboard 保持一致的深色 */
   white-space: nowrap;
@@ -102,6 +102,7 @@
   font-size: 0.85rem; /* 與標題協調的大小 */
   font-weight: 400; /* 統一字體粗細 */
   color: #333; /* 統一文字顏色 */
+  text-align: center; /* 統一文字對齊方式 */
   font-family: inherit;
 }
 

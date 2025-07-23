@@ -16,8 +16,8 @@ function CaseCard({ stats }) {
   const cardData = [
     {
       id: 'upcoming',
-      title: '即將到期',
-      count: 0 // 目前顯示 0，未來根據提醒時間計算
+      title: '所有案件', // 從「即將到期」改為「所有案件」
+      count: safeStats.total // 從固定的 0 改為顯示總案件數
     },
     {
       id: 'pending',
