@@ -217,17 +217,35 @@ function CaseManagement({ member, team }) {
 
   // 🔧 安全的篩選函數
   const applyFilters = useCallback((data, filters, searchTerm, activeTab) => {
-    // 確保 data 是陣列
+    console.log('🔍 開始應用篩選條件...')
+    console.log('原始資料筆數:', data.length)
+    console.log('篩選條件:', filters)
+    console.log('搜尋關鍵字:', searchTerm)
+    console.log('活動分頁:', activeTab)
+
+    const originalCount = data.length
     let filtered = Array.isArray(data) ? [...data] : []
 
-    // 狀態標籤篩選（activeTab）
+    // 分頁篩選
     if (activeTab && activeTab !== 'all') {
-      filtered = filtered.filter(caseItem => caseItem && caseItem.status === activeTab)
+      console.log('🔍 應用分頁篩選:', activeTab)
+      const beforeFilter = filtered.length
+      
+      filtered = filtered.filter(caseItem => {
+        if (activeTab === 'pending') return caseItem.status === 'pending'
+        if (activeTab === 'processing') return caseItem.status === 'processing'
+        if (activeTab === 'completed') return caseItem.status === 'completed'
+        return true
+      })
+      console.log(`分頁篩選: ${beforeFilter} -> ${filtered.length} 筆案件`)
     }
 
-    // 搜尋篩選
+    // 搜尋關鍵字篩選
     if (searchTerm && searchTerm.trim()) {
-      const searchLower = searchTerm.toLowerCase().trim()
+      console.log('🔍 應用搜尋篩選:', searchTerm)
+      const beforeFilter = filtered.length
+      const searchLower = searchTerm.trim().toLowerCase()
+      
       filtered = filtered.filter(caseItem => {
         if (!caseItem) return false
         
@@ -260,13 +278,20 @@ function CaseManagement({ member, team }) {
           return false
         }
       })
+      console.log(`搜尋篩選: ${beforeFilter} -> ${filtered.length} 筆案件`)
     }
 
-    // 日期篩選
+    // ✅ 正確使用 applyDateFilter
+    console.log('🔍 應用日期篩選')
+    const beforeDateFilter = filtered.length
     filtered = applyDateFilter(filtered, filters)
+    console.log(`日期篩選: ${beforeDateFilter} -> ${filtered.length} 筆案件`)
 
     // 案件類型篩選
     if (filters.category && filters.category !== 'all') {
+      console.log('🔍 應用類別篩選:', filters.category)
+      const beforeFilter = filtered.length
+      
       filtered = filtered.filter(caseItem => {
         if (!caseItem) return false
         
@@ -278,45 +303,74 @@ function CaseManagement({ member, team }) {
           return false
         }
       })
+      console.log(`類別篩選: ${beforeFilter} -> ${filtered.length} 筆案件`)
     }
 
     // 優先等級篩選
     if (filters.priority && filters.priority !== 'all') {
+      console.log('🔍 應用優先順序篩選:', filters.priority)
+      const beforeFilter = filtered.length
       filtered = filtered.filter(caseItem => caseItem && caseItem.priority === filters.priority)
+      console.log(`優先順序篩選: ${beforeFilter} -> ${filtered.length} 筆案件`)
     }
 
-    // 承辦人員篩選
+    // 承辦人員篩選 - 使用 CaseMember 表
     if (filters.handler && filters.handler !== 'all') {
-      filtered = filtered.filter(caseItem => {
-        if (!caseItem) return false
-        
-        try {
-          const inChargeCase = Array.isArray(caseItem.InChargeCase) ? caseItem.InChargeCase : []
-          return inChargeCase.some(ic => ic.Member?.id === filters.handler)
-        } catch (error) {
-          console.warn('承辦人員篩選錯誤:', error, caseItem)
-          return false
-        }
-      })
+      console.log('🔍 應用承辦人員篩選:', filters.handler)
+      const beforeFilter = filtered.length
+      
+      if (filters.handler === 'unassigned') {
+        // 篩選尚未指派承辦人員的案件
+        filtered = filtered.filter(caseItem => {
+          if (!caseItem || !caseItem.CaseMember) return true
+          
+          try {
+            const handlerMembers = caseItem.CaseMember.filter(cm => cm.role === 'handler')
+            return handlerMembers.length === 0 || !handlerMembers.some(cm => cm.member_id)
+          } catch (error) {
+            console.warn('承辦人員篩選錯誤:', error, caseItem)
+            return false
+          }
+        })
+      } else {
+        // 篩選指定承辦人員的案件
+        filtered = filtered.filter(caseItem => {
+          if (!caseItem || !caseItem.CaseMember) return false
+          
+          try {
+            const handlerMembers = caseItem.CaseMember.filter(cm => cm.role === 'handler')
+            return handlerMembers.some(cm => cm.member_id === filters.handler)
+          } catch (error) {
+            console.warn('承辦人員篩選錯誤:', error, caseItem)
+            return false
+          }
+        })
+      }
+      console.log(`承辦人員篩選: ${beforeFilter} -> ${filtered.length} 筆案件`)
     }
 
-    // 受理人員篩選
+    // 受理人員篩選 - 使用 CaseMember 表
     if (filters.receiver && filters.receiver !== 'all') {
+      console.log('🔍 應用受理人員篩選:', filters.receiver)
+      const beforeFilter = filtered.length
+      
       filtered = filtered.filter(caseItem => {
-        if (!caseItem) return false
+        if (!caseItem || !caseItem.CaseMember) return false
         
         try {
-          const acceptanceCase = Array.isArray(caseItem.AcceptanceCase) ? caseItem.AcceptanceCase : []
-          return acceptanceCase.some(ac => ac.Member?.id === filters.receiver)
+          const receiverMembers = caseItem.CaseMember.filter(cm => cm.role === 'receiver')
+          return receiverMembers.some(cm => cm.member_id === filters.receiver)
         } catch (error) {
           console.warn('受理人員篩選錯誤:', error, caseItem)
           return false
         }
       })
+      console.log(`受理人員篩選: ${beforeFilter} -> ${filtered.length} 筆案件`)
     }
 
+    console.log(`篩選摘要: 原始 ${originalCount} -> 最終 ${filtered.length} 筆案件`)
     return filtered
-  }, [applyDateFilter])
+  }, [applyDateFilter]) // ✅ 保留在依賴陣列中，因為現在有使用它
 
   // 預設排序邏輯 - 按照受理日期或案件編號排序（由新到舊）
   // 修正：預設排序邏輯 - 改為按照受理時間排序（由新到舊）
