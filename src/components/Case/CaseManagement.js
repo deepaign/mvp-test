@@ -83,9 +83,9 @@ function CaseManagement({ member, team }) {
     setStats(newStats)
   }, [])
 
-  // 載入案件資料 - 只依賴 team.id
-  const loadCases = useCallback(async () => {
-    if (!team?.id || loadingRef.current) {
+  // 載入案件資料
+  const loadCases = useCallback(async (forceRefresh = false) => {
+    if (!team?.id || (loadingRef.current && !forceRefresh)) {
       console.warn('無法載入案件：', !team?.id ? '缺少團隊ID' : '正在載入中')
       return
     }
@@ -95,36 +95,55 @@ function CaseManagement({ member, team }) {
     setError('')
 
     try {
-      console.log('載入案件資料，團隊:', team.id)
+      console.log('=== loadCases 開始 ===')
+      console.log('團隊資訊:', { id: team.id, name: team.name })
       
+      // 🔧 新增：除錯查詢
+      await CaseService.debugCaseQuery(team.id)
+      
+      // 原有的查詢邏輯
       const result = await CaseService.getCases({
         groupId: team.id,
-        status: 'all', // 載入所有狀態
-        filters: {}, // 不在後端篩選
-        searchTerm: '', // 不在後端搜尋
+        status: 'all',
+        filters: {},
+        searchTerm: '',
         page: 0,
-        limit: 1000, // 載入足夠多的資料
+        limit: 1000,
         sortConfig: sortConfig
       })
 
+      console.log('getCases 查詢結果:', result)
+
       if (result.success) {
-        // 🔧 確保資料是陣列
         const casesData = Array.isArray(result.data) ? result.data : []
-        setAllCases(casesData)
-        console.log(`載入成功，共 ${casesData.length} 筆案件`)
         
-        // 更新統計資料
+        console.log(`✅ 成功載入 ${casesData.length} 筆案件`)
+        
+        // 顯示案件摘要
+        if (casesData.length > 0) {
+          console.log('案件摘要:')
+          casesData.slice(0, 5).forEach((c, index) => {
+            console.log(`  ${index + 1}. ${c.title} (${c.id}) - ${c.status}`)
+          })
+        }
+        
+        setAllCases(casesData)
         updateStats(casesData)
+        
+        if (forceRefresh) {
+          setCurrentPage(0)
+        }
+        
       } else {
-        console.error('載入案件失敗:', result.error)
-        setAllCases([]) // 🔧 設定空陣列而不是 undefined
+        console.error('❌ 載入案件失敗:', result.error)
+        setAllCases([])
         updateStats([])
         setError(result.error || '載入案件失敗')
       }
 
     } catch (error) {
-      console.error('載入案件發生錯誤:', error)
-      setAllCases([]) // 🔧 設定空陣列而不是 undefined
+      console.error('❌ loadCases 發生異常:', error)
+      setAllCases([])
       updateStats([])
       setError('載入案件時發生錯誤：' + error.message)
     } finally {
@@ -217,17 +236,29 @@ function CaseManagement({ member, team }) {
 
   // 🔧 安全的篩選函數
   const applyFilters = useCallback((data, filters, searchTerm, activeTab) => {
-    // 確保 data 是陣列
+    const originalCount = data.length
     let filtered = Array.isArray(data) ? [...data] : []
 
-    // 狀態標籤篩選（activeTab）
+    // 分頁篩選
     if (activeTab && activeTab !== 'all') {
-      filtered = filtered.filter(caseItem => caseItem && caseItem.status === activeTab)
+      console.log('🔍 應用分頁篩選:', activeTab)
+      const beforeFilter = filtered.length
+      
+      filtered = filtered.filter(caseItem => {
+        if (activeTab === 'pending') return caseItem.status === 'pending'
+        if (activeTab === 'processing') return caseItem.status === 'processing'
+        if (activeTab === 'completed') return caseItem.status === 'completed'
+        return true
+      })
+      console.log(`分頁篩選: ${beforeFilter} -> ${filtered.length} 筆案件`)
     }
 
-    // 搜尋篩選
+    // 搜尋關鍵字篩選
     if (searchTerm && searchTerm.trim()) {
-      const searchLower = searchTerm.toLowerCase().trim()
+      console.log('🔍 應用搜尋篩選:', searchTerm)
+      const beforeFilter = filtered.length
+      const searchLower = searchTerm.trim().toLowerCase()
+      
       filtered = filtered.filter(caseItem => {
         if (!caseItem) return false
         
@@ -260,128 +291,133 @@ function CaseManagement({ member, team }) {
           return false
         }
       })
+      console.log(`搜尋篩選: ${beforeFilter} -> ${filtered.length} 筆案件`)
     }
 
-    // 日期篩選
+    // ✅ 正確使用 applyDateFilter
+    console.log('🔍 應用日期篩選')
+    const beforeDateFilter = filtered.length
     filtered = applyDateFilter(filtered, filters)
+    console.log(`日期篩選: ${beforeDateFilter} -> ${filtered.length} 筆案件`)
 
-    // 案件類型篩選
+    // 案件類別篩選
     if (filters.category && filters.category !== 'all') {
+      console.log('🔍 應用類別篩選:', filters.category)
+      const beforeFilter = filtered.length
       filtered = filtered.filter(caseItem => {
-        if (!caseItem) return false
+        if (!caseItem || !caseItem.CategoryCase) return false
         
         try {
           const categoryCase = Array.isArray(caseItem.CategoryCase) ? caseItem.CategoryCase : []
-          return categoryCase.some(cc => cc.Category?.name === filters.category)
+          return categoryCase.some(cc => cc.Category?.id === filters.category)
         } catch (error) {
           console.warn('類型篩選錯誤:', error, caseItem)
           return false
         }
       })
+      console.log(`類別篩選: ${beforeFilter} -> ${filtered.length} 筆案件`)
+    }
+
+    // 狀態篩選
+    if (filters.status && filters.status !== 'all') {
+      console.log('🔍 應用狀態篩選:', filters.status)
+      const beforeFilter = filtered.length
+      filtered = filtered.filter(caseItem => caseItem && caseItem.status === filters.status)
+      console.log(`狀態篩選: ${beforeFilter} -> ${filtered.length} 筆案件`)
     }
 
     // 優先等級篩選
     if (filters.priority && filters.priority !== 'all') {
+      console.log('🔍 應用優先順序篩選:', filters.priority)
+      const beforeFilter = filtered.length
       filtered = filtered.filter(caseItem => caseItem && caseItem.priority === filters.priority)
+      console.log(`優先順序篩選: ${beforeFilter} -> ${filtered.length} 筆案件`)
     }
 
-    // 承辦人員篩選
+    // 🔧 承辦人員篩選 - 使用 CaseMember 表
     if (filters.handler && filters.handler !== 'all') {
-      filtered = filtered.filter(caseItem => {
-        if (!caseItem) return false
-        
-        try {
-          const inChargeCase = Array.isArray(caseItem.InChargeCase) ? caseItem.InChargeCase : []
-          return inChargeCase.some(ic => ic.Member?.id === filters.handler)
-        } catch (error) {
-          console.warn('承辦人員篩選錯誤:', error, caseItem)
-          return false
-        }
-      })
+      console.log('🔍 應用承辦人員篩選:', filters.handler)
+      const beforeFilter = filtered.length
+      
+      if (filters.handler === 'unassigned') {
+        // 篩選尚未指派承辦人員的案件
+        filtered = filtered.filter(caseItem => {
+          if (!caseItem || !caseItem.CaseMember) return true
+          
+          try {
+            const handlerMembers = caseItem.CaseMember.filter(cm => cm.role === 'handler')
+            return handlerMembers.length === 0 || !handlerMembers.some(cm => cm.member_id)
+          } catch (error) {
+            console.warn('承辦人員篩選錯誤:', error, caseItem)
+            return false
+          }
+        })
+      } else {
+        // 篩選指定承辦人員的案件
+        filtered = filtered.filter(caseItem => {
+          if (!caseItem || !caseItem.CaseMember) return false
+          
+          try {
+            const handlerMembers = caseItem.CaseMember.filter(cm => cm.role === 'handler')
+            return handlerMembers.some(cm => cm.member_id === filters.handler)
+          } catch (error) {
+            console.warn('承辦人員篩選錯誤:', error, caseItem)
+            return false
+          }
+        })
+      }
+      console.log(`承辦人員篩選: ${beforeFilter} -> ${filtered.length} 筆案件`)
     }
 
-    // 受理人員篩選
+    // 受理人員篩選 - 使用 CaseMember 表
     if (filters.receiver && filters.receiver !== 'all') {
+      console.log('🔍 應用受理人員篩選:', filters.receiver)
+      const beforeFilter = filtered.length
+      
       filtered = filtered.filter(caseItem => {
-        if (!caseItem) return false
+        if (!caseItem || !caseItem.CaseMember) return false
         
         try {
-          const acceptanceCase = Array.isArray(caseItem.AcceptanceCase) ? caseItem.AcceptanceCase : []
-          return acceptanceCase.some(ac => ac.Member?.id === filters.receiver)
+          const receiverMembers = caseItem.CaseMember.filter(cm => cm.role === 'receiver')
+          return receiverMembers.some(cm => cm.member_id === filters.receiver)
         } catch (error) {
           console.warn('受理人員篩選錯誤:', error, caseItem)
           return false
         }
       })
+      console.log(`受理人員篩選: ${beforeFilter} -> ${filtered.length} 筆案件`)
     }
 
+    console.log(`篩選摘要: 原始 ${originalCount} -> 最終 ${filtered.length} 筆案件`)
     return filtered
-  }, [applyDateFilter])
+  }, [applyDateFilter]) // ✅ 保留在依賴陣列中，因為現在有使用它
 
   // 預設排序邏輯 - 按照受理日期或案件編號排序（由新到舊）
-  // 修正：預設排序邏輯 - 改為按照受理時間排序（由新到舊）
+  // 🔧 修復：預設排序邏輯
   const applySorting = useCallback((data) => {
     return [...data].sort((a, b) => {
-      // 1. 優先使用受理時間排序
-      const receivedDateTimeA = CaseService.extractReceivedDateTime(a.description)
-      const receivedDateTimeB = CaseService.extractReceivedDateTime(b.description)
-      
-      let dateA = null
-      let dateB = null
-      
-      // 解析案件 A 的日期
-      if (receivedDateTimeA.date) {
-        try {
-          const timeStr = receivedDateTimeA.time || '00:00:00'
-          dateA = new Date(`${receivedDateTimeA.date}T${timeStr}`)
-        } catch (error) {
-          console.warn('案件 A 受理時間解析失敗:', receivedDateTimeA, error)
+      // 1. 優先按照受理時間排序（由新到舊）
+      if (a.start_date && b.start_date) {
+        const dateA = new Date(a.start_date)
+        const dateB = new Date(b.start_date)
+        if (dateA.getTime() !== dateB.getTime()) {
+          return dateB.getTime() - dateA.getTime() // 由新到舊
         }
       }
       
-      // 如果沒有受理時間，回退到 created_at
-      if (!dateA || isNaN(dateA.getTime())) {
-        try {
-          dateA = new Date(a.created_at || 0)
-        } catch (error) {
-          console.warn('案件 A created_at 解析失敗:', a.created_at, error)
-          dateA = new Date(0) // 設為最早的日期
-        }
+      // 2. 如果受理時間相同或缺失，則按照建立時間排序
+      if (a.created_at && b.created_at) {
+        const createdA = new Date(a.created_at)
+        const createdB = new Date(b.created_at)
+        return createdB.getTime() - createdA.getTime() // 由新到舊
       }
       
-      // 解析案件 B 的日期
-      if (receivedDateTimeB.date) {
-        try {
-          const timeStr = receivedDateTimeB.time || '00:00:00'
-          dateB = new Date(`${receivedDateTimeB.date}T${timeStr}`)
-        } catch (error) {
-          console.warn('案件 B 受理時間解析失敗:', receivedDateTimeB, error)
-        }
-      }
-      
-      // 如果沒有受理時間，回退到 created_at
-      if (!dateB || isNaN(dateB.getTime())) {
-        try {
-          dateB = new Date(b.created_at || 0)
-        } catch (error) {
-          console.warn('案件 B created_at 解析失敗:', b.created_at, error)
-          dateB = new Date(0) // 設為最早的日期
-        }
-      }
-      
-      // 2. 按照日期排序（由新到舊）
-      if (dateA.getTime() !== dateB.getTime()) {
-        return dateB.getTime() - dateA.getTime() // 新到舊
-      }
-      
-      // 3. 如果日期相同，則按照案件編號排序
-      const caseNumberA = CaseService.extractCaseNumber(a.description) || ''
-      const caseNumberB = CaseService.extractCaseNumber(b.description) || ''
-      
-      // 案件編號通常包含日期信息，按字串排序（降序 = 新到舊）
-      return caseNumberB.localeCompare(caseNumberA)
+      // 3. 最後按照案件編號排序
+      const numberA = CaseService.extractCaseNumber(a.description) || ''
+      const numberB = CaseService.extractCaseNumber(b.description) || ''
+      return numberB.localeCompare(numberA, 'zh-TW', { numeric: true })
     })
-  }, []) // 移除對 CaseService 的依賴，因為它是靜態方法
+  }, [])
 
   // 更新篩選後的案件列表
   useEffect(() => {
@@ -405,28 +441,90 @@ function CaseManagement({ member, team }) {
     }
   }, [team?.id, loadCases])
 
-  // 處理案件更新
-  const handleCaseUpdated = useCallback((updatedCaseData) => {
-    console.log('案件已更新:', updatedCaseData)
+  const handleCaseUpdated = useCallback(async (updatedCaseData) => {
+    console.log('🔄 案件已更新，開始重新載入列表...', {
+      updatedCaseId: updatedCaseData?.id,
+      timestamp: new Date().toISOString()
+    })
     
-    // 重新載入案件列表以確保資料一致性
-    loadCases()
-    
-    // 關閉編輯模態框
-    setShowEditModal(false)
-    setEditingCase(null)
+    try {
+      // 重新載入案件列表以確保資料一致性
+      await loadCases()
+      
+      console.log('✅ 案件列表重新載入完成')
+      
+      // 可選：顯示成功提示
+      // alert('案件更新成功，列表已刷新')
+      
+    } catch (error) {
+      console.error('❌ 重新載入案件列表時發生錯誤:', error)
+      setError('更新後重新載入失敗：' + error.message)
+    } finally {
+      // 關閉編輯模態框
+      setShowEditModal(false)
+      setEditingCase(null)
+      
+      console.log('🔄 編輯模態框已關閉')
+    }
   }, [loadCases])
 
-  // 處理案件建立
-  const handleCaseCreated = useCallback((newCaseData) => {
-    console.log('新案件已建立:', newCaseData)
+  // 同時修正 handleCaseCreated 函數保持一致性
+  const handleCaseCreated = useCallback(async (newCaseData) => {
+    console.log('🔄 新案件已建立，立即更新列表...', {
+      newCaseId: newCaseData?.id,
+      timestamp: new Date().toISOString()
+    })
     
-    // 重新載入案件列表
-    loadCases()
-    
-    // 關閉建立模態框
-    setShowCaseModal(false)
-  }, [loadCases])
+    try {
+      // 🎯 立即更新：先將新案件添加到現有列表的開頭
+      setAllCases(prevCases => {
+        // 準備新案件資料，確保格式正確
+        const newCase = {
+          ...newCaseData,
+          // 確保有必要的欄位
+          CategoryCase: [],
+          VoterCase: [],
+          CaseMember: [],
+          DistrictCase: [],
+          // 確保有正確的時間格式
+          created_at: newCaseData.created_at || new Date().toISOString(),
+          updated_at: newCaseData.updated_at || new Date().toISOString()
+        }
+        
+        // 將新案件加到列表開頭
+        const updatedCases = [newCase, ...prevCases]
+        console.log('✅ 立即添加新案件到列表，總數:', updatedCases.length)
+        
+        // 立即更新統計
+        updateStats(updatedCases)
+        
+        return updatedCases
+      })
+      
+      // 關閉模態框
+      setShowCaseModal(false)
+      
+      // 顯示成功提示
+      alert('案件建立成功！')
+      
+      // 🔄 背景重新載入完整資料（包含所有關聯）
+      setTimeout(async () => {
+        try {
+          console.log('🔄 背景重新載入完整案件資料...')
+          await loadCases()
+          console.log('✅ 背景重新載入完成')
+        } catch (error) {
+          console.error('❌ 背景重新載入失敗:', error)
+          // 背景載入失敗不影響用戶體驗，只記錄錯誤
+        }
+      }, 1000) // 1秒後背景載入
+      
+    } catch (error) {
+      console.error('❌ 處理新案件時發生錯誤:', error)
+      setError('處理新案件時發生錯誤：' + error.message)
+      setShowCaseModal(false)
+    }
+  }, [loadCases, updateStats])
 
   // 處理編輯案件
   const handleEditCase = useCallback((caseData) => {
@@ -735,7 +833,7 @@ function CaseManagement({ member, team }) {
         <CaseModal
           isOpen={showCaseModal}
           onClose={() => setShowCaseModal(false)}
-          onSubmit={handleCaseCreated}
+          onCaseCreated={handleCaseCreated}  // 🔧 修復：確保傳遞正確的回調
           team={team}
           member={member}
         />
@@ -751,11 +849,13 @@ function CaseManagement({ member, team }) {
           }}
           caseData={editingCase}
           team={team}
-          member={member}  // 添加這一行
-          onCaseUpdated={handleCaseUpdated}
+          member={member}
+          onCaseUpdated={handleCaseUpdated}  // 確保這裡正確傳遞
         />
       )}
     </div>
+
+    
   )
 }
 

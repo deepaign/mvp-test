@@ -110,7 +110,8 @@ Your task is to carefully read the above transcript and extract the following ke
 8. Second Petitioner's Chinese Name (if applicable)
 9. Second Petitioner's Contact Phone (if applicable)
 10. Incident Location (in Chinese)
-11. Petition Summary (in Chinese)
+11. Petition Summary (in Chinese with very short sentences)
+12. Petition Description (in Chinese with whole descriptions to the petition)
 
 Before providing your final answer, wrap your extraction process inside <extraction_process> tags. For each key information item:
 
@@ -138,7 +139,8 @@ Here's an example of how your output should be structured:
   "Second Petitioner's Chinese Name": "陳大天",
   "Second Petitioner's Contact Phone": "0981491346",
   "Incident Location": "長安東路與復興北路交叉口",
-  "Petition Summary": ""
+  "Petition Summary": "長安東路交通問題",
+  "Petition Description": ""
 }
 
 Remember:

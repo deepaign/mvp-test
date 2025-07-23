@@ -155,13 +155,13 @@
 }
 
 .priority-normal {
-  background: #fef9e7; /* 參考通知按鈕的黃色 */
+  background: #fef9e7;
   color: #f39c12;
   border-color: #ffeaa7;
 }
 
 .priority-low {
-  background: #e8f5e8; /* 參考行事曆按鈕的綠色 */
+  background: #e8f5e8;
   color: #27ae60;
   border-color: #86efac;
 }

@@ -24,7 +24,7 @@ const ensureSafeOptions = (options) => {
   }
 }
 
-// 基本資訊區段
+// 基本資訊區段 - 完整版
 export const BasicInfoSection = ({ formData, dropdownOptions, onChange }) => {
   const safeOptions = ensureSafeOptions(dropdownOptions)
 
@@ -32,6 +32,8 @@ export const BasicInfoSection = ({ formData, dropdownOptions, onChange }) => {
     <div className="form-section">
       <h3 className="section-title">基本資訊</h3>
       <div className="form-grid">
+        
+        {/* 第一行：案件編號 + 案件標題 */}
         <div className="form-field">
           <label htmlFor="caseNumber">案件編號</label>
           <input
@@ -43,45 +45,85 @@ export const BasicInfoSection = ({ formData, dropdownOptions, onChange }) => {
           />
         </div>
 
-        <div className="form-field">
-          <label htmlFor="contactMethod">聯絡方式 <span className="required">*</span></label>
+        {/* <div className="form-field">
+          <label htmlFor="title">案件標題 <span className="required">*</span></label>
+          <input
+            id="title"
+            type="text"
+            value={formData.title || ''}
+            onChange={(e) => onChange('title', e.target.value)}
+            placeholder="請輸入案件標題"
+            required
+          />
+        </div> */}
+
+        {/* 第二行：案件類別 + 優先順序 */}
+        {/* <div className="form-field">
+          <label htmlFor="category">案件類別 <span className="required">*</span></label>
           <select
-            id="contactMethod"
-            value={formData.contactMethod || 'phone'}
-            onChange={(e) => onChange('contactMethod', e.target.value)}
+            id="category"
+            value={formData.category || ''}
+            onChange={(e) => onChange('category', e.target.value)}
+            required
+          >
+            <option value="">請選擇案件類別</option>
+            {safeOptions.categories.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.name}
+              </option>
+            ))}
+          </select>
+        </div> */}
+
+        <div className="form-field">
+          <label htmlFor="priority">優先順序</label>
+          <select
+            id="priority"
+            value={formData.priority || 'normal'}
+            onChange={(e) => onChange('priority', e.target.value)}
+          >
+            <option value="low">低</option>
+            <option value="normal">一般</option>
+            <option value="urgent">緊急</option>
+          </select>
+        </div>
+
+        {/* 第三行：處理狀態 + 聯絡方式 */}
+        <div className="form-field">
+          <label htmlFor="status">處理狀態 <span className="required">*</span></label>
+          <select
+            id="status"
+            value={formData.status || 'pending'}
+            onChange={(e) => onChange('status', e.target.value)}
+            required
+          >
+            <option value="pending">待處理</option>
+            <option value="processing">處理中</option>
+            <option value="completed">已完成</option>
+            <option value="resolved">已解決</option>
+            <option value="closed">已結案</option>
+          </select>
+        </div>
+
+        <div className="form-field">
+          <label htmlFor="contactType">聯絡方式 <span className="required">*</span></label>
+          <select
+            id="contactType"
+            value={formData.contactType || 'phone'}
+            onChange={(e) => onChange('contactType', e.target.value)}
             required
           >
             <option value="phone">電話</option>
             <option value="email">電子郵件</option>
             <option value="line">LINE</option>
             <option value="facebook">Facebook</option>
-            <option value="visit">現場拜訪</option>
+            <option value="in_person">親自來訪</option>
+            <option value="letter">書面陳情</option>
             <option value="other">其他</option>
           </select>
         </div>
 
-        <div className="form-field">
-          <label htmlFor="receivedDate">受理日期 <span className="required">*</span></label>
-          <div className="datetime-group">
-            <input
-              id="receivedDate"
-              type="date"
-              className="date-input"
-              value={formData.receivedDate || ''}
-              onChange={(e) => onChange('receivedDate', e.target.value)}
-              required
-            />
-            <input
-              id="receivedTime"
-              type="time"
-              className="time-input"
-              value={formData.receivedTime || ''}
-              onChange={(e) => onChange('receivedTime', e.target.value)}
-              required
-            />
-          </div>
-        </div>
-
+        {/* 第四行：受理人員 + 承辦人員 */}
         <div className="form-field">
           <label htmlFor="receiver">受理人員 <span className="required">*</span></label>
           <select
@@ -91,9 +133,9 @@ export const BasicInfoSection = ({ formData, dropdownOptions, onChange }) => {
             required
           >
             <option value="">請選擇受理人員</option>
-            {safeOptions.members.map(member => (
-              <option key={member.id || member.auth_user_id || Math.random()} value={member.id || member.auth_user_id}>
-                {member.name || member.display_name || '未命名成員'}
+            {safeOptions.members.map((member) => (
+              <option key={member.id} value={member.id}>
+                {member.name}
               </option>
             ))}
           </select>
@@ -107,54 +149,150 @@ export const BasicInfoSection = ({ formData, dropdownOptions, onChange }) => {
             onChange={(e) => onChange('handler', e.target.value)}
           >
             <option value="">請選擇承辦人員</option>
-            {safeOptions.members.map(member => (
-              <option key={member.id || member.auth_user_id || Math.random()} value={member.id || member.auth_user_id}>
-                {member.name || member.display_name || '未命名成員'}
+            {safeOptions.members.map((member) => (
+              <option key={member.id} value={member.id}>
+                {member.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* 第五行：受理日期 + 受理時間 */}
+        <div className="form-field">
+          <label htmlFor="receivedDate">受理日期 <span className="required">*</span></label>
+          <input
+            id="receivedDate"
+            type="date"
+            value={formData.receivedDate || ''}
+            onChange={(e) => onChange('receivedDate', e.target.value)}
+            required
+          />
+        </div>
+
+        <div className="form-field">
+          <label htmlFor="receivedTime">受理時間 <span className="required">*</span></label>
+          <input
+            id="receivedTime"
+            type="time"
+            value={formData.receivedTime || ''}
+            onChange={(e) => onChange('receivedTime', e.target.value)}
+            required
+          />
+        </div>
+
+        {/* 第六行：結案日期 + 結案時間 */}
+        <div className="form-field">
+          <label htmlFor="closedDate">結案日期</label>
+          <input
+            id="closedDate"
+            type="date"
+            value={formData.closedDate || ''}
+            onChange={(e) => onChange('closedDate', e.target.value)}
+          />
+        </div>
+
+        <div className="form-field">
+          <label htmlFor="closedTime">結案時間</label>
+          <input
+            id="closedTime"
+            type="time"
+            value={formData.closedTime || ''}
+            onChange={(e) => onChange('closedTime', e.target.value)}
+          />
+        </div>
+
+        {/* 第七行：居住縣市 + 居住行政區 */}
+        {/* <div className="form-field">
+          <label htmlFor="homeCounty">居住縣市</label>
+          <select
+            id="homeCounty"
+            value={formData.homeCounty || ''}
+            onChange={(e) => onChange('homeCounty', e.target.value)}
+          >
+            <option value="">請選擇縣市</option>
+            {safeOptions.counties.map((county) => (
+              <option key={county.id} value={county.id}>
+                {county.name}
               </option>
             ))}
           </select>
         </div>
 
         <div className="form-field">
-          <label htmlFor="priority">優先等級 <span className="required">*</span></label>
+          <label htmlFor="homeDistrict">居住行政區</label>
           <select
-            id="priority"
-            value={formData.priority || 'normal'}
-            onChange={(e) => onChange('priority', e.target.value)}
-            required
+            id="homeDistrict"
+            value={formData.homeDistrict || ''}
+            onChange={(e) => onChange('homeDistrict', e.target.value)}
+            disabled={!formData.homeCounty}
           >
-            <option value="low">低</option>
-            <option value="normal">普通</option>
-            <option value="high">高</option>
-            <option value="urgent">緊急</option>
+            <option value="">請選擇行政區</option>
+            {safeOptions.homeDistricts.map((district) => (
+              <option key={district.id} value={district.id}>
+                {district.name}
+              </option>
+            ))}
           </select>
-        </div>
+        </div> */}
 
-        <div className="form-field">
-          <label htmlFor="status">處理狀態 <span className="required">*</span></label>
-          <select
-            id="status"
-            value={formData.status || 'pending'}
-            onChange={(e) => onChange('status', e.target.value)}
-            required
-          >
-            <option value="pending">待處理</option>
-            <option value="processing">處理中</option>
-            <option value="completed">已完成</option>
-            <option value="closed">已結案</option>
-          </select>
-        </div>
-
-        <div className="form-field">
-          <label htmlFor="processingStatus">詳細處理狀態</label>
+        {/* 第八行：居住地址（跨兩欄） */}
+        {/* <div className="form-field full-width">
+          <label htmlFor="homeAddress">居住地址</label>
           <input
-            id="processingStatus"
+            id="homeAddress"
             type="text"
-            value={formData.processingStatus || ''}
-            onChange={(e) => onChange('processingStatus', e.target.value)}
-            placeholder="請輸入詳細處理狀態"
+            value={formData.homeAddress || ''}
+            onChange={(e) => onChange('homeAddress', e.target.value)}
+            placeholder="請輸入詳細地址"
           />
+        </div> */}
+
+        {/* 第九行：事發縣市 + 事發行政區 */}
+        {/* <div className="form-field">
+          <label htmlFor="incidentCounty">事發縣市</label>
+          <select
+            id="incidentCounty"
+            value={formData.incidentCounty || ''}
+            onChange={(e) => onChange('incidentCounty', e.target.value)}
+          >
+            <option value="">請選擇縣市</option>
+            {safeOptions.counties.map((county) => (
+              <option key={county.id} value={county.id}>
+                {county.name}
+              </option>
+            ))}
+          </select>
         </div>
+
+        <div className="form-field">
+          <label htmlFor="incidentDistrict">事發行政區</label>
+          <select
+            id="incidentDistrict"
+            value={formData.incidentDistrict || ''}
+            onChange={(e) => onChange('incidentDistrict', e.target.value)}
+            disabled={!formData.incidentCounty}
+          >
+            <option value="">請選擇行政區</option>
+            {safeOptions.incidentDistricts.map((district) => (
+              <option key={district.id} value={district.id}>
+                {district.name}
+              </option>
+            ))}
+          </select>
+        </div> */}
+
+        {/* 第十行：事發地點（跨兩欄） */}
+        {/* <div className="form-field full-width">
+          <label htmlFor="incidentLocation">事發地點</label>
+          <input
+            id="incidentLocation"
+            type="text"
+            value={formData.incidentLocation || ''}
+            onChange={(e) => onChange('incidentLocation', e.target.value)}
+            placeholder="請輸入詳細事發地點"
+          />
+        </div> */}
+
       </div>
     </div>
   )
@@ -230,6 +368,13 @@ export const CaseContentSection = ({ formData, dropdownOptions, onChange }) => {
     onChange('description', value)
   }, [onChange])
 
+  // 處理案件類別變更 - 修正版
+  const handleCategoryChange = useCallback((categoryValue) => {
+    console.log('案件類別變更:', categoryValue)
+    // 統一處理：直接傳遞類別值，讓後端統一處理
+    onChange('category', categoryValue)
+  }, [onChange])
+
   return (
     <div className="form-section">
       <h3 className="section-title">陳情內容</h3>
@@ -246,13 +391,35 @@ export const CaseContentSection = ({ formData, dropdownOptions, onChange }) => {
           />
         </div>
 
+        {/* 修正：提供兩種類別選擇方式，確保至少有一種能正常工作 */}
         <div className="form-field full-width">
-          <label htmlFor="category">案件分類</label>
-          <CategoryAutoComplete
-            formData={formData}
-            categories={safeOptions.categories}
-            onChange={onChange}
-          />
+          <label htmlFor="category">案件分類 <span className="required">*</span></label>
+          
+          {/* 優先使用自動完成組件 */}
+          {safeOptions.categories && safeOptions.categories.length > 0 ? (
+            <CategoryAutoComplete
+              formData={formData}
+              categories={safeOptions.categories}
+              onChange={handleCategoryChange}
+              placeholder="請選擇或輸入案件分類"
+              required
+            />
+          ) : (
+            /* 備用：傳統下拉選單 */
+            <select
+              id="category"
+              value={formData.category || ''}
+              onChange={(e) => onChange('category', e.target.value)}
+              required
+            >
+              <option value="">請選擇案件類別</option>
+              <option value="traffic">交通問題</option>
+              <option value="environment">環境問題</option>
+              <option value="security">治安問題</option>
+              <option value="public_service">民生服務</option>
+              <option value="legal_consultation">法律諮詢</option>
+            </select>
+          )}
         </div>
 
         <div className="form-field full-width">
@@ -294,27 +461,27 @@ export const CaseContentSection = ({ formData, dropdownOptions, onChange }) => {
                   {!formData.incidentCounty 
                     ? '請先選擇縣市' 
                     : safeOptions.incidentDistricts.length === 0 
-                      ? '無可用行政區' 
-                      : '請選擇行政區'
+                      ? '該縣市無可用區域'
+                      : '請選擇區域'
                   }
                 </option>
                 {safeOptions.incidentDistricts.map(district => (
                   <option key={district.id || district.name || Math.random()} value={district.id}>
-                    {district.name || '未命名行政區'}
+                    {district.name || '未命名區域'}
                   </option>
                 ))}
               </select>
             </div>
             <input
-              id="incidentLocation"
+              id="incidentAddress"
               type="text"
-              value={formData.incidentLocation || ''}
-              onChange={(e) => onChange('incidentLocation', e.target.value)}
-              placeholder="請輸入詳細地址"
-              className="address-input"
+              value={formData.incidentAddress || ''}
+              onChange={(e) => onChange('incidentAddress', e.target.value)}
+              placeholder="請輸入詳細事發地點"
             />
           </div>
         </div>
+
       </div>
     </div>
   )

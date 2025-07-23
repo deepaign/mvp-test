@@ -118,62 +118,110 @@ export function useCaseForm({ team, member, onSubmit, initialData }) {
   // 🔧 輔助函數：確保陣列是安全的
   const ensureArray = useCallback((data, dataType) => {
     if (Array.isArray(data)) {
+      console.log(`✅ ${dataType}是有效陣列，包含 ${data.length} 筆資料`)
       return data
     }
     
-    console.warn(`${dataType} 不是陣列，使用空陣列:`, data)
+    console.warn(`⚠️ ${dataType}不是陣列，實際類型:`, typeof data, '，內容:', data)
     return []
   }, [])
 
   // 載入下拉選單資料
   const loadDropdownData = useCallback(async () => {
-    if (!team?.id || !member?.auth_user_id) {
-      console.warn('團隊ID或成員ID為空，無法載入下拉選單資料')
-      return
-    }
+    // 🔧 修復：移除不必要的參數檢查，因為 getTeamMembers() 不需要參數
+    console.log('載入下拉選單資料...')
+    console.log('團隊資訊:', { teamId: team?.id, teamName: team?.name })
+    console.log('成員資訊:', { memberId: member?.id, authUserId: member?.auth_user_id, memberName: member?.name })
 
     setLoading(true)
-    console.log('載入下拉選單資料...')
 
     try {
       const [membersResult, categoriesResult, countiesResult] = await Promise.allSettled([
-        TeamService.getTeamMembers(team.id, member.auth_user_id),
+        // 🔧 修復：不傳遞任何參數，因為 getTeamMembers() 是無參數的
+        TeamService.getTeamMembers(),
         CaseService.getCategories(),
         CaseService.getCounties()
       ])
 
+      console.log('=== 載入結果分析 ===')
+      console.log('團隊成員載入結果:', membersResult)
+      console.log('案件類別載入結果:', categoriesResult)
+      console.log('縣市載入結果:', countiesResult)
+
+      // 🔧 修復：正確處理團隊成員結果
+      let teamMembers = []
+      if (membersResult.status === 'fulfilled') {
+        const memberData = membersResult.value
+        console.log('團隊成員 API 回應詳細資訊:', memberData)
+        
+        if (memberData && memberData.success) {
+          // 🔧 根據實際的 API 回應格式處理
+          if (Array.isArray(memberData.data)) {
+            teamMembers = memberData.data
+            console.log('✅ 從 data 欄位取得團隊成員:', teamMembers.length, '筆')
+          } else if (Array.isArray(memberData.members)) {
+            teamMembers = memberData.members
+            console.log('✅ 從 members 欄位取得團隊成員:', teamMembers.length, '筆')
+          } else {
+            console.warn('⚠️ 團隊成員資料格式異常:', memberData)
+          }
+          
+          // 顯示成員詳細資訊
+          if (teamMembers.length > 0) {
+            console.log('團隊成員列表:')
+            teamMembers.forEach((member, index) => {
+              console.log(`  ${index + 1}. ${member.name || member.member_name} (ID: ${member.id || member.member_id})`)
+            })
+          }
+        } else {
+          console.error('❌ 團隊成員 API 回應失敗:', memberData?.error || memberData?.message || '未知錯誤')
+        }
+      } else {
+        console.error('❌ 團隊成員 API 調用失敗:', membersResult.reason)
+      }
+
+      // 🔧 處理案件類別
+      let categories = []
+      if (categoriesResult.status === 'fulfilled' && categoriesResult.value.success) {
+        categories = categoriesResult.value.data || []
+      }
+
+      // 🔧 處理縣市資料
+      let counties = []
+      if (countiesResult.status === 'fulfilled' && countiesResult.value.success) {
+        counties = countiesResult.value.data || []
+      }
+
       const newOptions = {
-        members: ensureArray(
-          membersResult.status === 'fulfilled' && membersResult.value.success 
-            ? (membersResult.value.members || membersResult.value.data)
-            : [], 
-          '團隊成員'
-        ),
-        categories: ensureArray(
-          categoriesResult.status === 'fulfilled' && categoriesResult.value.success 
-            ? categoriesResult.value.data 
-            : [], 
-          '案件類別'
-        ),
-        counties: ensureArray(
-          countiesResult.status === 'fulfilled' && countiesResult.value.success 
-            ? countiesResult.value.data 
-            : [], 
-          '縣市'
-        ),
+        members: ensureArray(teamMembers, '團隊成員'),
+        categories: ensureArray(categories, '案件類別'),
+        counties: ensureArray(counties, '縣市'),
         homeDistricts: [],
         incidentDistricts: []
       }
 
       setDropdownOptions(newOptions)
-      console.log('下拉選單資料載入完成')
+      
+      console.log('✅ 下拉選單資料載入完成:', {
+        members: newOptions.members.length,
+        categories: newOptions.categories.length,
+        counties: newOptions.counties.length
+      })
+
+      // 🔧 如果團隊成員為空，顯示警告
+      if (newOptions.members.length === 0) {
+        console.warn('⚠️ 沒有載入到任何團隊成員，請檢查：')
+        console.warn('  1. 用戶是否已正確加入團隊')
+        console.warn('  2. 團隊中是否有其他活躍成員')
+        console.warn('  3. 資料庫連接是否正常')
+      }
 
     } catch (error) {
-      console.error('載入下拉選單資料失敗:', error)
+      console.error('💥 載入下拉選單資料發生異常:', error)
     } finally {
       setLoading(false)
     }
-  }, [team?.id, member?.auth_user_id, ensureArray])
+  }, [ensureArray])
 
   // 載入行政區資料
   const loadDistricts = useCallback(async (countyId, type) => {
@@ -287,23 +335,39 @@ export function useCaseForm({ team, member, onSubmit, initialData }) {
     setIsSubmitting(true)
     
     try {
-      // 準備案件資料
+      // 🔧 修復：準備完整的案件資料，確保包含 teamId
       const caseData = {
         ...formData,
-        teamId: team?.id,
+        teamId: team?.id, // 確保有 teamId
         createdBy: member?.auth_user_id,
-        // 🆕 保留 AI 相關資訊
+        // 保留 AI 相關資訊
         createdByAI: formData.createdByAI || false,
         originalTranscript: formData.originalTranscript || '',
         aiExtractedData: formData.aiExtractedData || null
       }
       
+      // 🔧 修復：驗證必要資料
+      if (!caseData.teamId) {
+        throw new Error('團隊資訊缺失，請重新登入後再試')
+      }
+      
+      if (!caseData.title?.trim()) {
+        throw new Error('案件標題不能為空')
+      }
+      
+      if (!caseData.description?.trim()) {
+        throw new Error('案件描述不能為空')
+      }
+      
       console.log('準備提交的案件資料:', caseData)
       
+      // 🔧 修復：調用 onSubmit 並等待完成
       await onSubmit(caseData)
       
+      console.log('✅ 案件提交成功')
+      
     } catch (error) {
-      console.error('表單提交失敗:', error)
+      console.error('❌ 表單提交失敗:', error)
       alert('案件建立失敗：' + error.message)
     } finally {
       setIsSubmitting(false)
@@ -312,11 +376,10 @@ export function useCaseForm({ team, member, onSubmit, initialData }) {
 
   // useEffect hooks
   useEffect(() => {
-    if (team?.id && member?.auth_user_id) {
-      console.log('團隊或成員變更，載入下拉選單資料')
-      loadDropdownData()
-    }
-  }, [loadDropdownData, team?.id, member?.auth_user_id])
+    // 🔧 修復：只要組件載入就執行，不依賴 team 和 member 的特定屬性
+    console.log('開始載入下拉選單資料')
+    loadDropdownData()
+  }, [loadDropdownData])
 
   useEffect(() => {
     if (formData.homeCounty) {
