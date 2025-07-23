@@ -373,42 +373,46 @@ static async getCasesWithFilters({ teamId, filters = {}, searchTerm = '', page =
       // 建立基礎查詢 - 修正查詢以包含 Voter.address
       console.log('🔍 步驟 2: 建立完整查詢...')
       let query = supabase
-        .from('Case')
-        .select(`
-          *,
-          CategoryCase (
-            Category (
+      .from('Case')
+      .select(`
+        *,
+        CategoryCase (
+          Category (
+            id,
+            name
+          )
+        ),
+        VoterCase (
+          Voter (
+            id,
+            name,
+            phone,
+            address
+          )
+        ),
+        CaseMember (
+          role,
+          member_id,
+          Member (
+            id,
+            name
+          )
+        ),
+        DistrictCase (
+          District (
+            id,
+            name,
+            County (
               id,
               name
-            )
-          ),
-          CaseMember (
-            Member (
-              id,
-              name
-            ),
-            role
-          ),
-          VoterCase (
-            Voter (
-              id,
-              name,
-              phone,
-              address
-            )
-          ),
-          DistrictCase (
-            District (
-              id,
-              name,
-              County (
-                id,
-                name
-              )
             )
           )
-        `)
-        .eq('group_id', groupId)
+        )
+      `)
+      // 添加基本篩選條件
+      if (groupId) {
+        query = query.eq('group_id', groupId)
+      }
 
       console.log('查詢建立完成，group_id:', groupId)
 
@@ -1435,18 +1439,9 @@ static async getCasesWithFilters({ teamId, filters = {}, searchTerm = '', page =
    */
   static async getCaseById(caseId, teamId) {
     try {
-      console.log('=== CaseService.getCaseById (完全修復版本) ===')
-      console.log('查詢案件 ID:', caseId, '團隊 ID:', teamId)
+      console.log('=== CaseService.getCaseById (修復版本) ===')
+      console.log('查詢案件:', { caseId, teamId })
 
-      if (!caseId) {
-        return {
-          success: false,
-          error: '案件 ID 必填',
-          data: null
-        }
-      }
-
-      // ✅ 修復：查詢案件及其所有關聯資料，使用正確的查詢條件
       const { data: caseData, error } = await supabase
         .from('Case')
         .select(`
@@ -1466,14 +1461,26 @@ static async getCasesWithFilters({ teamId, filters = {}, searchTerm = '', page =
             )
           ),
           CaseMember (
+            role,
+            member_id,
             Member (
               id,
               name
             )
+          ),
+          DistrictCase (
+            District (
+              id,
+              name,
+              County (
+                id,
+                name
+              )
+            )
           )
         `)
         .eq('id', caseId)
-        .eq('group_id', teamId) // ✅ 使用 group_id 而不是 team_id
+        .eq('group_id', teamId)
         .single()
 
       if (error) {
@@ -1523,7 +1530,7 @@ static async getCasesWithFilters({ teamId, filters = {}, searchTerm = '', page =
    */
   static async convertCaseToFormData(caseData) {
     try {
-      console.log('=== convertCaseToFormData (完全修復版本) ===')
+      console.log('=== convertCaseToFormData (修復版本) ===')
       console.log('原始案件資料:', caseData)
 
       // 使用 extractPureDescription 確保只顯示純描述內容
@@ -1556,42 +1563,35 @@ static async getCasesWithFilters({ teamId, filters = {}, searchTerm = '', page =
         }
       }
 
+      // 修復：正確處理 CaseMember 資料
       let receiver = ''
+      let handler = ''
+      
       if (caseData.CaseMember && Array.isArray(caseData.CaseMember)) {
+        console.log('CaseMember 原始資料:', caseData.CaseMember)
+        
+        // 查找受理人員
         const receiverRecord = caseData.CaseMember.find(cm => cm.role === 'receiver')
         if (receiverRecord) {
           receiver = receiverRecord.member_id || ''
-          if (receiverRecord.Member) {
-            console.log('找到受理人員:', { 
-              id: receiver, 
-              name: receiverRecord.Member.name,
-              role: receiverRecord.role 
-            })
-          } else {
-            console.log('受理人員 ID:', receiver, '但沒有 Member 詳細資料')
-          }
+          console.log('找到受理人員:', { 
+            id: receiver, 
+            name: receiverRecord.Member?.name,
+            role: receiverRecord.role 
+          })
         } else {
           console.log('⚠️ 沒有找到角色為 receiver 的 CaseMember 記錄')
         }
-      } else {
-        console.log('⚠️ 沒有 CaseMember 資料或格式錯誤')
-      }
-
-      // 獲取承辦人員 ID (使用 CaseMember)
-      let handler = ''
-      if (caseData.CaseMember && Array.isArray(caseData.CaseMember)) {
+        
+        // 查找承辦人員
         const handlerRecord = caseData.CaseMember.find(cm => cm.role === 'handler')
         if (handlerRecord) {
           handler = handlerRecord.member_id || ''
-          if (handlerRecord.Member) {
-            console.log('找到承辦人員:', { 
-              id: handler, 
-              name: handlerRecord.Member.name,
-              role: handlerRecord.role 
-            })
-          } else {
-            console.log('承辦人員 ID:', handler, '但沒有 Member 詳細資料')
-          }
+          console.log('找到承辦人員:', { 
+            id: handler, 
+            name: handlerRecord.Member?.name,
+            role: handlerRecord.role 
+          })
         } else {
           console.log('⚠️ 沒有找到角色為 handler 的 CaseMember 記錄')
         }
@@ -1599,7 +1599,7 @@ static async getCasesWithFilters({ teamId, filters = {}, searchTerm = '', page =
         console.log('⚠️ 沒有 CaseMember 資料或格式錯誤')
       }
 
-      // ✅ 修復：正確處理時間欄位對應
+      // 處理時間欄位
       let receivedDate = '', receivedTime = '', closedDate = '', closedTime = ''
       
       // start_date -> receivedDate/receivedTime
@@ -1607,13 +1607,8 @@ static async getCasesWithFilters({ teamId, filters = {}, searchTerm = '', page =
         try {
           const startDateTime = new Date(caseData.start_date)
           if (!isNaN(startDateTime.getTime())) {
-            receivedDate = startDateTime.toISOString().split('T')[0] // YYYY-MM-DD
-            receivedTime = startDateTime.toTimeString().split(' ')[0].substring(0, 5) // HH:MM
-            console.log('解析受理時間:', { 
-              original: caseData.start_date, 
-              date: receivedDate, 
-              time: receivedTime 
-            })
+            receivedDate = startDateTime.toISOString().split('T')[0]
+            receivedTime = startDateTime.toTimeString().split(' ')[0].substring(0, 5)
           }
         } catch (error) {
           console.warn('解析受理時間失敗:', error)
@@ -1625,37 +1620,26 @@ static async getCasesWithFilters({ teamId, filters = {}, searchTerm = '', page =
         try {
           const endDateTime = new Date(caseData.end_date)
           if (!isNaN(endDateTime.getTime())) {
-            closedDate = endDateTime.toISOString().split('T')[0] // YYYY-MM-DD
-            closedTime = endDateTime.toTimeString().split(' ')[0].substring(0, 5) // HH:MM
-            console.log('解析結案時間:', { 
-              original: caseData.end_date, 
-              date: closedDate, 
-              time: closedTime 
-            })
+            closedDate = endDateTime.toISOString().split('T')[0]
+            closedTime = endDateTime.toTimeString().split(' ')[0].substring(0, 5)
           }
         } catch (error) {
           console.warn('解析結案時間失敗:', error)
         }
       }
 
-      // 組裝表單資料 - 確保所有欄位都正確對應
+      // 組裝表單資料
       const formData = {
         id: caseData.id,
         caseNumber: caseNumber,
         title: caseData.title || '',
-        description: pureDescription, // ✅ 只顯示純描述，不包含系統生成內容
+        description: pureDescription,
         category: category,
         priority: caseData.priority || 'normal',
         status: caseData.status || 'pending',
-        contactMethod: caseData.contact_type || 'phone',
+        contactType: caseData.contact_type || 'phone',
         
-        // ✅ 修復：使用正確的時間欄位對應
-        receivedDate: receivedDate,
-        receivedTime: receivedTime,
-        closedDate: closedDate,
-        closedTime: closedTime,
-        
-        // 人員資訊
+        // 修復：確保正確的人員資料
         receiver: receiver,
         handler: handler,
         
@@ -1665,42 +1649,22 @@ static async getCasesWithFilters({ teamId, filters = {}, searchTerm = '', page =
         contact2Name: contact2Name,
         contact2Phone: contact2Phone,
         
+        // 時間資訊
+        receivedDate: receivedDate,
+        receivedTime: receivedTime,
+        closedDate: closedDate,
+        closedTime: closedTime,
+        
         // 地點資訊
         incidentLocation: incidentLocation,
-        
-        // ❌ 移除不存在的欄位
-        // processingStatus: 資料庫沒有此欄位
-        // hasAttachment: 資料庫沒有此欄位
       }
 
-      console.log('轉換後的表單資料:', formData)
+      console.log('✅ convertCaseToFormData 完成，最終表單資料:', formData)
       return formData
 
     } catch (error) {
       console.error('convertCaseToFormData 轉換失敗:', error)
-      
-      // 錯誤處理：返回基本的表單結構，確保不包含不存在的欄位
-      return {
-        id: caseData.id,
-        title: caseData.title || '',
-        description: this.extractPureDescription(caseData.description || ''),
-        priority: caseData.priority || 'normal',
-        status: caseData.status || 'pending',
-        contactMethod: caseData.contact_type || 'phone',
-        receivedDate: '',
-        receivedTime: '',
-        closedDate: '',
-        closedTime: '',
-        contact1Name: '',
-        contact1Phone: '',
-        contact2Name: '',
-        contact2Phone: '',
-        caseNumber: '',
-        category: '',
-        receiver: '',
-        handler: '',
-        incidentLocation: '',
-      }
+      throw error
     }
   }
 
@@ -2061,45 +2025,98 @@ static async getCasesWithFilters({ teamId, filters = {}, searchTerm = '', page =
   // 修正：改善 updateCaseWithRelations 方法以解決所有問題
   static async updateCaseMemberReceiver(caseData, originalData, updateResults) {
     try {
-      console.log('=== updateCaseMemberReceiver ===')
+      console.log('=== updateCaseMemberReceiver (修復版本) ===')
       console.log('新受理人員:', caseData.receiver)
       console.log('原受理人員:', originalData.receiver)
       
+      // 正規化 ID 值（處理 null, undefined, 空字串）
+      const newReceiver = caseData.receiver?.trim() || null
+      const oldReceiver = originalData.receiver?.trim() || null
+      
       // 檢查是否有變更
-      if (caseData.receiver === originalData.receiver) {
+      if (newReceiver === oldReceiver) {
         console.log('受理人員沒有變更，跳過更新')
+        updateResults.push({ type: 'CaseMember-Receiver', success: true, message: '無變更' })
         return
       }
 
       console.log('受理人員有變更，執行更新')
       const now = new Date().toISOString()
 
-      // 1. 先刪除現有的受理人員記錄
-      const { error: deleteError } = await supabase
+      // 1. 先查詢現有的受理人員記錄
+      const { data: existingRecords, error: queryError } = await supabase
         .from('CaseMember')
-        .delete()
+        .select('id, member_id')
         .eq('case_id', caseData.id)
         .eq('role', 'receiver')
 
-      if (deleteError) {
-        console.error('刪除舊的受理人員記錄失敗:', deleteError)
+      if (queryError) {
+        console.error('查詢現有受理人員記錄失敗:', queryError)
         updateResults.push({ 
-          type: 'CaseMember-Receiver-Delete', 
+          type: 'CaseMember-Receiver', 
           success: false, 
-          error: deleteError.message 
+          error: queryError.message 
         })
         return
       }
 
-      console.log('刪除舊的受理人員記錄成功')
+      console.log('現有受理人員記錄:', existingRecords)
 
-      // 2. 如果有新的受理人員，插入新記錄
-      if (caseData.receiver) {
+      // 2. 刪除現有的受理人員記錄
+      if (existingRecords && existingRecords.length > 0) {
+        const { error: deleteError } = await supabase
+          .from('CaseMember')
+          .delete()
+          .eq('case_id', caseData.id)
+          .eq('role', 'receiver')
+
+        if (deleteError) {
+          console.error('刪除舊的受理人員記錄失敗:', deleteError)
+          updateResults.push({ 
+            type: 'CaseMember-Receiver', 
+            success: false, 
+            error: deleteError.message 
+          })
+          return
+        }
+
+        console.log('刪除舊的受理人員記錄成功')
+      }
+
+      // 3. 如果有新的受理人員，插入新記錄
+      if (newReceiver) {
+        // 先驗證 member_id 是否存在
+        const { data: memberExists, error: memberCheckError } = await supabase
+          .from('Member')
+          .select('id')
+          .eq('id', newReceiver)
+          .single()
+
+        if (memberCheckError && memberCheckError.code !== 'PGRST116') {
+          console.error('驗證成員存在性失敗:', memberCheckError)
+          updateResults.push({ 
+            type: 'CaseMember-Receiver', 
+            success: false, 
+            error: `驗證成員失敗: ${memberCheckError.message}` 
+          })
+          return
+        }
+
+        if (!memberExists) {
+          console.error('指定的成員不存在:', newReceiver)
+          updateResults.push({ 
+            type: 'CaseMember-Receiver', 
+            success: false, 
+            error: '指定的受理人員不存在' 
+          })
+          return
+        }
+
         const { error: insertError } = await supabase
           .from('CaseMember')
           .insert([{
             case_id: caseData.id,
-            member_id: caseData.receiver,
+            member_id: newReceiver,
             role: 'receiver',
             created_at: now,
             updated_at: now
@@ -2108,7 +2125,7 @@ static async getCasesWithFilters({ teamId, filters = {}, searchTerm = '', page =
         if (insertError) {
           console.error('插入新的受理人員記錄失敗:', insertError)
           updateResults.push({ 
-            type: 'CaseMember-Receiver-Insert', 
+            type: 'CaseMember-Receiver', 
             success: false, 
             error: insertError.message 
           })
@@ -2118,7 +2135,7 @@ static async getCasesWithFilters({ teamId, filters = {}, searchTerm = '', page =
         }
       } else {
         console.log('新受理人員為空，僅刪除舊記錄')
-        updateResults.push({ type: 'CaseMember-Receiver', success: true })
+        updateResults.push({ type: 'CaseMember-Receiver', success: true, message: '已清除受理人員' })
       }
 
     } catch (error) {
@@ -2371,45 +2388,98 @@ static async getCasesWithFilters({ teamId, filters = {}, searchTerm = '', page =
    */
   static async updateCaseMemberHandler(caseData, originalData, updateResults) {
     try {
-      console.log('=== updateCaseMemberHandler ===')
+      console.log('=== updateCaseMemberHandler (修復版本) ===')
       console.log('新承辦人員:', caseData.handler)
       console.log('原承辦人員:', originalData.handler)
       
+      // 正規化 ID 值（處理 null, undefined, 空字串）
+      const newHandler = caseData.handler?.trim() || null
+      const oldHandler = originalData.handler?.trim() || null
+      
       // 檢查是否有變更
-      if (caseData.handler === originalData.handler) {
+      if (newHandler === oldHandler) {
         console.log('承辦人員沒有變更，跳過更新')
+        updateResults.push({ type: 'CaseMember-Handler', success: true, message: '無變更' })
         return
       }
 
       console.log('承辦人員有變更，執行更新')
       const now = new Date().toISOString()
 
-      // 1. 先刪除現有的承辦人員記錄
-      const { error: deleteError } = await supabase
+      // 1. 先查詢現有的承辦人員記錄
+      const { data: existingRecords, error: queryError } = await supabase
         .from('CaseMember')
-        .delete()
+        .select('id, member_id')
         .eq('case_id', caseData.id)
         .eq('role', 'handler')
 
-      if (deleteError) {
-        console.error('刪除舊的承辦人員記錄失敗:', deleteError)
+      if (queryError) {
+        console.error('查詢現有承辦人員記錄失敗:', queryError)
         updateResults.push({ 
-          type: 'CaseMember-Handler-Delete', 
+          type: 'CaseMember-Handler', 
           success: false, 
-          error: deleteError.message 
+          error: queryError.message 
         })
         return
       }
 
-      console.log('刪除舊的承辦人員記錄成功')
+      console.log('現有承辦人員記錄:', existingRecords)
 
-      // 2. 如果有新的承辦人員，插入新記錄
-      if (caseData.handler) {
+      // 2. 刪除現有的承辦人員記錄
+      if (existingRecords && existingRecords.length > 0) {
+        const { error: deleteError } = await supabase
+          .from('CaseMember')
+          .delete()
+          .eq('case_id', caseData.id)
+          .eq('role', 'handler')
+
+        if (deleteError) {
+          console.error('刪除舊的承辦人員記錄失敗:', deleteError)
+          updateResults.push({ 
+            type: 'CaseMember-Handler', 
+            success: false, 
+            error: deleteError.message 
+          })
+          return
+        }
+
+        console.log('刪除舊的承辦人員記錄成功')
+      }
+
+      // 3. 如果有新的承辦人員，插入新記錄
+      if (newHandler) {
+        // 先驗證 member_id 是否存在
+        const { data: memberExists, error: memberCheckError } = await supabase
+          .from('Member')
+          .select('id')
+          .eq('id', newHandler)
+          .single()
+
+        if (memberCheckError && memberCheckError.code !== 'PGRST116') {
+          console.error('驗證成員存在性失敗:', memberCheckError)
+          updateResults.push({ 
+            type: 'CaseMember-Handler', 
+            success: false, 
+            error: `驗證成員失敗: ${memberCheckError.message}` 
+          })
+          return
+        }
+
+        if (!memberExists) {
+          console.error('指定的成員不存在:', newHandler)
+          updateResults.push({ 
+            type: 'CaseMember-Handler', 
+            success: false, 
+            error: '指定的承辦人員不存在' 
+          })
+          return
+        }
+
         const { error: insertError } = await supabase
           .from('CaseMember')
           .insert([{
             case_id: caseData.id,
-            member_id: caseData.handler,
+            member_id: newHandler,
             role: 'handler',
             created_at: now,
             updated_at: now
@@ -2418,7 +2488,7 @@ static async getCasesWithFilters({ teamId, filters = {}, searchTerm = '', page =
         if (insertError) {
           console.error('插入新的承辦人員記錄失敗:', insertError)
           updateResults.push({ 
-            type: 'CaseMember-Handler-Insert', 
+            type: 'CaseMember-Handler', 
             success: false, 
             error: insertError.message 
           })
@@ -2428,7 +2498,7 @@ static async getCasesWithFilters({ teamId, filters = {}, searchTerm = '', page =
         }
       } else {
         console.log('新承辦人員為空，僅刪除舊記錄')
-        updateResults.push({ type: 'CaseMember-Handler', success: true })
+        updateResults.push({ type: 'CaseMember-Handler', success: true, message: '已清除承辦人員' })
       }
 
     } catch (error) {
