@@ -65,7 +65,6 @@ export const BasicInfoSection = ({ formData, dropdownOptions, onChange }) => {
           >
             <option value="low">低</option>
             <option value="normal">一般</option>
-            <option value="high">高</option>
             <option value="urgent">緊急</option>
           </select>
         </div>
@@ -90,17 +89,99 @@ export const BasicInfoSection = ({ formData, dropdownOptions, onChange }) => {
           <label htmlFor="contactType">聯絡方式</label>
           <select
             id="contactType"
-            value={formData.contact_type || 'phone'}
-            onChange={(e) => onChange('contact_type', e.target.value)}
+            value={formData.contactType || 'phone'}
+            onChange={(e) => onChange('contactType', e.target.value)}
           >
             <option value="phone">電話</option>
-            <option value="line">Line</option>
+            <option value="email">電子郵件</option>
+            <option value="sms">簡訊</option>
+            <option value="line">LINE</option>
             <option value="facebook">Facebook</option>
-            <option value="email">Email</option>
-            <option value="in_person">當面</option>
-            <option value="other">其他</option>
+            <option value="in_person">親自來訪</option>
+            <option value="letter">書面陳情</option>
           </select>
         </div>
+
+        {/* ✅ 修復：新增受理人員欄位 */}
+        <div className="form-field">
+          <label htmlFor="receiver">受理人員</label>
+          <select
+            id="receiver"
+            value={formData.receiver || ''}
+            onChange={(e) => onChange('receiver', e.target.value)}
+          >
+            <option value="">請選擇受理人員</option>
+            {safeOptions.members.map(member => (
+              <option key={member.id} value={member.id}>
+                {member.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* ✅ 修復：新增承辦人員欄位 */}
+        <div className="form-field">
+          <label htmlFor="handler">承辦人員</label>
+          <select
+            id="handler"
+            value={formData.handler || ''}
+            onChange={(e) => onChange('handler', e.target.value)}
+          >
+            <option value="">請選擇承辦人員</option>
+            {safeOptions.members.map(member => (
+              <option key={member.id} value={member.id}>
+                {member.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* ✅ 修復：新增受理時間欄位 */}
+        <div className="form-field">
+          <label htmlFor="receivedDate">受理日期</label>
+          <input
+            id="receivedDate"
+            type="date"
+            value={formData.receivedDate || ''}
+            onChange={(e) => onChange('receivedDate', e.target.value)}
+          />
+        </div>
+
+        {/* ✅ 修復：新增受理時間欄位 */}
+        <div className="form-field">
+          <label htmlFor="receivedTime">受理時間</label>
+          <input
+            id="receivedTime"
+            type="time"
+            value={formData.receivedTime || ''}
+            onChange={(e) => onChange('receivedTime', e.target.value)}
+          />
+        </div>
+
+        {/* 結案日期（僅在案件狀態為已完成時顯示） */}
+        {(formData.status === 'completed' || formData.status === 'closed') && (
+          <>
+            <div className="form-field">
+              <label htmlFor="closedDate">結案日期</label>
+              <input
+                id="closedDate"
+                type="date"
+                value={formData.closedDate || ''}
+                onChange={(e) => onChange('closedDate', e.target.value)}
+              />
+            </div>
+
+            <div className="form-field">
+              <label htmlFor="closedTime">結案時間</label>
+              <input
+                id="closedTime"
+                type="time"
+                value={formData.closedTime || ''}
+                onChange={(e) => onChange('closedTime', e.target.value)}
+              />
+            </div>
+          </>
+        )}
 
       </div>
     </div>

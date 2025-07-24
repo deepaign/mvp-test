@@ -39,14 +39,14 @@ function CaseActionButton({ onViewModeChange, onAddCase }) {
   return (
     <div className="case-action-buttons">
       {/* 檢視模式切換按鈕 */}
-      <button
+      {/* <button
         className="view-mode-toggle-btn"
         onClick={handleViewModeToggle}
         title={`切換到${viewMode === 'card' ? '列表' : '卡片'}檢視`}
       >
         <span className="view-mode-icon">{icon}</span>
         <span className="view-mode-text">{text}</span>
-      </button>
+      </button> */}
 
       {/* 新增案件按鈕 */}
       <button
