@@ -1,8 +1,26 @@
-// src/components/Case/CaseFilters.js - 完整修正版本
-// 日期篩選已修正為基於 description 中的受理時間
+// src/components/Case/CaseFilters.js - 修正版：使用固定類別選項和正確的團隊成員 API
 import React, { useState, useEffect, useCallback } from 'react'
-import { CaseService } from '../../services/caseService'
+import { TeamService } from '../../services/teamService' // 🔧 使用 TeamService
 import '../../styles/CaseFilters.css'
+
+// 🔧 修正：直接定義固定類別選項，不依賴動態載入
+const FIXED_CATEGORIES = {
+  '3c39816e-31e7-440a-85e7-bf047e752907': '治安問題',
+  '78b565b8-4ee9-4292-96d6-18b09405a036': '民生服務',
+  '84b61b1f-2823-4ad8-9af2-e7ed3fd122ab': '環境問題',
+  'c274835f-29ec-4d75-b1ae-1fc941c829b1': '交通問題',
+  'c603a9fd-f508-4d45-87db-cac78ace9a68': '法律諮詢'
+};
+
+// 🔧 將固定類別轉換為選項格式
+const getFixedCategoryOptions = () => {
+  return Object.entries(FIXED_CATEGORIES).map(([id, name]) => ({
+    id,
+    name,
+    displayName: name,
+    isFixed: true
+  }));
+};
 
 function CaseFilters({ team, onFiltersChange, onSearch, onReset }) {
   const [filters, setFilters] = useState({
@@ -13,7 +31,7 @@ function CaseFilters({ team, onFiltersChange, onSearch, onReset }) {
   })
 
   const [filterOptions, setFilterOptions] = useState({
-    categories: [],
+    categories: getFixedCategoryOptions(), // 🔧 直接使用固定類別
     members: []
   })
 
@@ -26,27 +44,21 @@ function CaseFilters({ team, onFiltersChange, onSearch, onReset }) {
   const [loading, setLoading] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
 
-  // 載入篩選選項
+  // 🔧 修正：只載入團隊成員，類別直接使用固定選項
   const loadFilterOptions = useCallback(async () => {
     if (!team?.id) return
     
     setLoading(true)
     try {
-      const [categoriesResult, membersResult] = await Promise.all([
-        CaseService.getCategories(team.id),
-        CaseService.getTeamMembers(team.id)
-      ])
+      // 🔧 使用正確的 TeamService.getTeamMembers() 函數（無參數）
+      const membersResult = await TeamService.getTeamMembers()
+      
+      console.log('載入團隊成員結果:', membersResult)
 
-      console.log('載入篩選選項結果:', { categoriesResult, membersResult })
-
-      setFilterOptions({
-        categories: categoriesResult.success ? categoriesResult.data : [],
+      setFilterOptions(prev => ({
+        categories: getFixedCategoryOptions(), // 保持固定類別
         members: membersResult.success ? membersResult.data : []
-      })
-
-      if (!categoriesResult.success) {
-        console.error('載入案件類別失敗:', categoriesResult.error)
-      }
+      }))
 
       if (!membersResult.success) {
         console.error('載入團隊成員失敗:', membersResult.error)
@@ -55,13 +67,51 @@ function CaseFilters({ team, onFiltersChange, onSearch, onReset }) {
     } catch (error) {
       console.error('載入篩選選項失敗:', error)
       setFilterOptions({
-        categories: [],
+        categories: getFixedCategoryOptions(), // 即使出錯也保持固定類別
         members: []
       })
     } finally {
       setLoading(false)
     }
   }, [team?.id])
+
+  // 載入篩選選項
+  useEffect(() => {
+    loadFilterOptions()
+  }, [loadFilterOptions])
+
+  // 篩選條件變更時通知父組件
+  useEffect(() => {
+    const filterParams = buildFilterParams()
+    console.log('篩選參數變更:', filterParams)
+    
+    if (onFiltersChange) {
+      onFiltersChange(filterParams)
+    }
+  }, [filters, customDateRange])
+
+  // 處理篩選條件變更
+  const handleFilterChange = (key, value) => {
+    console.log(`篩選條件變更: ${key} = ${value}`)
+    
+    setFilters(prev => ({
+      ...prev,
+      [key]: value
+    }))
+
+    // 如果是日期範圍變更，處理日期選擇器顯示
+    if (key === 'dateRange') {
+      setShowDatePicker(value === 'custom')
+      
+      // 如果不是自定義範圍，清空自定義日期
+      if (value !== 'custom') {
+        setCustomDateRange({
+          startDate: '',
+          endDate: ''
+        })
+      }
+    }
+  }
 
   // 建構篩選參數
   const buildFilterParams = useCallback(() => {
@@ -74,77 +124,63 @@ function CaseFilters({ team, onFiltersChange, onSearch, onReset }) {
       endDate: customDateRange.endDate
     }
 
-    // 注意：日期篩選現在由 CaseManagement 中的 applyDateFilter 處理
-    // 這裡只傳遞日期範圍類型和自定義範圍，實際篩選邏輯使用受理時間
+    // 🔧 修正：日期範圍計算邏輯
     const now = new Date()
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
     
     switch (filters.dateRange) {
-      case 'today':
-        params.startDate = today.toISOString()
-        params.endDate = new Date(today.getTime() + 24 * 60 * 60 * 1000 - 1).toISOString()
+      case 'today': {
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+        const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999)
+        params.startDate = todayStart.toISOString()
+        params.endDate = todayEnd.toISOString()
         break
-      case 'week':
-        const weekStart = new Date(today)
-        weekStart.setDate(today.getDate() - today.getDay() + 1) // 週一
-        const weekEnd = new Date(weekStart)
-        weekEnd.setDate(weekStart.getDate() + 6) // 週日
+      }
+      
+      case 'week': {
+        const currentDay = now.getDay()
+        const mondayOffset = currentDay === 0 ? -6 : 1 - currentDay
+        const weekStart = new Date(now.getTime() + mondayOffset * 24 * 60 * 60 * 1000)
+        weekStart.setHours(0, 0, 0, 0)
+        
+        const weekEnd = new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000)
         weekEnd.setHours(23, 59, 59, 999)
+        
         params.startDate = weekStart.toISOString()
         params.endDate = weekEnd.toISOString()
         break
-      case 'month':
-        const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
-        const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59)
+      }
+      
+      case 'month': {
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+        const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999)
         params.startDate = monthStart.toISOString()
         params.endDate = monthEnd.toISOString()
         break
-      case 'custom':
-        // 使用自定義日期範圍，已在 customDateRange 中設定
-        break
-      default:
-        // 'all' - 不設定日期範圍
-        params.startDate = ''
-        params.endDate = ''
+      }
     }
 
+    console.log('建構篩選參數:', params)
     return params
   }, [filters, customDateRange])
 
-  // 載入篩選選項
-  useEffect(() => {
-    loadFilterOptions()
-  }, [loadFilterOptions])
-
-  // 當篩選條件變更時通知父組件
-  useEffect(() => {
-    const filterParams = buildFilterParams()
-    if (onFiltersChange) {
-      onFiltersChange(filterParams)
-    }
-  }, [buildFilterParams, onFiltersChange])
-
-  // 處理篩選條件變更
-  const handleFilterChange = (filterType, value) => {
-    setFilters(prev => ({
-      ...prev,
-      [filterType]: value
-    }))
-
-    // 如果選擇自定義日期範圍，顯示日期選擇器
-    if (filterType === 'dateRange' && value === 'custom') {
-      setShowDatePicker(true)
-    } else if (filterType === 'dateRange' && value !== 'custom') {
-      setShowDatePicker(false)
-      setCustomDateRange({ startDate: '', endDate: '' })
-    }
-  }
-
-  // 處理自定義日期變更
+  // 處理自定義日期範圍變更
   const handleCustomDateChange = (dateType, value) => {
+    console.log(`自定義日期變更: ${dateType} = ${value}`)
+    
+    let processedValue = value
+    if (value) {
+      if (dateType === 'startDate') {
+        const startDate = new Date(value + 'T00:00:00')
+        processedValue = startDate.toISOString()
+      } else if (dateType === 'endDate') {
+        const endDate = new Date(value + 'T23:59:59')
+        processedValue = endDate.toISOString()
+      }
+    }
+    
     setCustomDateRange(prev => ({
       ...prev,
-      [dateType]: value
+      [dateType]: processedValue
     }))
   }
 
@@ -163,7 +199,6 @@ function CaseFilters({ team, onFiltersChange, onSearch, onReset }) {
     setShowDatePicker(false)
     setSearchTerm('')
     
-    // 通知父組件重置
     if (onReset) {
       onReset()
     }
@@ -177,30 +212,22 @@ function CaseFilters({ team, onFiltersChange, onSearch, onReset }) {
     }
   }
 
+  // 🔧 修正：取得類別顯示名稱
+  const getCategoryDisplayName = useCallback((categoryId) => {
+    if (categoryId === 'all') return '全部'
+    
+    // 從固定類別中查找
+    return FIXED_CATEGORIES[categoryId] || categoryId
+  }, [])
+
   // 取得承辦人員名稱
   const getAssigneeName = useCallback((assigneeId) => {
     if (assigneeId === 'all') return '全部'
     if (assigneeId === 'unassigned') return '尚未指派'
     
-    // 從 members 陣列中找到對應的成員
     const member = filterOptions.members.find(m => m.id === assigneeId)
-    return member ? member.name : `ID:${assigneeId}` // 如果找不到名稱，顯示 ID
+    return member ? member.name : `ID:${assigneeId}`
   }, [filterOptions.members])
-
-  // 取得案件類別名稱
-  const getCategoryDisplayName = useCallback((categoryId) => {
-    if (categoryId === 'all') return '全部'
-    
-    // 先檢查是否為預設類型
-    const categoryName = CaseService.getCategoryName(categoryId)
-    if (categoryName !== categoryId) {
-      return categoryName // 是預設類型，返回轉換後的名稱
-    }
-    
-    // 不是預設類型，查找自定義類型
-    const category = filterOptions.categories.find(c => c.id === categoryId)
-    return category ? category.name : categoryId
-  }, [filterOptions.categories])
 
   // 取得日期範圍顯示名稱
   const getDateRangeDisplayName = (dateRange) => {
@@ -227,8 +254,12 @@ function CaseFilters({ team, onFiltersChange, onSearch, onReset }) {
       activeFilters.push(`日期: ${dateLabel}`)
     }
     if (filters.priority && filters.priority !== 'all') {
-      const priorityLabel = CaseService.getPriorityLabel(filters.priority)
-      activeFilters.push(`優先順序: ${priorityLabel}`)
+      const priorityMap = {
+        'urgent': '緊急',
+        'normal': '一般', 
+        'low': '低'
+      }
+      activeFilters.push(`優先順序: ${priorityMap[filters.priority] || filters.priority}`)
     }
     if (filters.assignee && filters.assignee !== 'all') {
       const assigneeName = getAssigneeName(filters.assignee)
@@ -252,7 +283,7 @@ function CaseFilters({ team, onFiltersChange, onSearch, onReset }) {
       {/* 主要篩選控制列 */}
       <div className="case-filters-main-row">
         <div className="case-filters-left">
-          {/* 篩選條件 */}
+          {/* 🔧 修正：案件類型篩選 - 使用固定選項 */}
           <div className="filter-group">
             <label className="filter-label">案件類型</label>
             <select 
@@ -264,7 +295,7 @@ function CaseFilters({ team, onFiltersChange, onSearch, onReset }) {
               <option value="all">全部</option>
               {filterOptions.categories.map(category => (
                 <option key={category.id} value={category.id}>
-                  {category.name}
+                  {category.displayName}
                 </option>
               ))}
             </select>
@@ -363,7 +394,7 @@ function CaseFilters({ team, onFiltersChange, onSearch, onReset }) {
                 type="date"
                 className="date-input"
                 value={customDateRange.startDate ? customDateRange.startDate.split('T')[0] : ''}
-                onChange={(e) => handleCustomDateChange('startDate', e.target.value ? new Date(e.target.value).toISOString() : '')}
+                onChange={(e) => handleCustomDateChange('startDate', e.target.value)}
               />
             </div>
             <div className="date-picker-group">
@@ -372,7 +403,7 @@ function CaseFilters({ team, onFiltersChange, onSearch, onReset }) {
                 type="date"
                 className="date-input"
                 value={customDateRange.endDate ? customDateRange.endDate.split('T')[0] : ''}
-                onChange={(e) => handleCustomDateChange('endDate', e.target.value ? new Date(e.target.value + 'T23:59:59').toISOString() : '')}
+                onChange={(e) => handleCustomDateChange('endDate', e.target.value)}
               />
             </div>
           </div>

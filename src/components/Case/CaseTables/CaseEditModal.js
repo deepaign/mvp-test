@@ -370,40 +370,46 @@ const CaseEditModal = ({ isOpen, onClose, caseData, team, member, onCaseUpdated 
       // 處理開始時間 (start_date -> receivedDate/receivedTime)
       if (caseData.start_date) {
         try {
-          const startDateTime = new Date(caseData.start_date)
-          if (!isNaN(startDateTime.getTime())) {
-            receivedDate = startDateTime.toISOString().split('T')[0] // YYYY-MM-DD
-            receivedTime = startDateTime.toTimeString().split(' ')[0].substring(0, 5) // HH:MM
-            console.log('✅ 解析開始時間成功:', { 
-              original: caseData.start_date, 
-              date: receivedDate, 
-              time: receivedTime 
-            })
-          } else {
-            console.log('❌ 開始時間格式無效')
+          // 🔧 修正：直接從 ISO 字串解析，避免時區問題
+          const isoString = caseData.start_date
+          receivedDate = isoString.split('T')[0] // YYYY-MM-DD
+          
+          // 提取時間部分，避免時區轉換
+          const timePart = isoString.split('T')[1]
+          if (timePart) {
+            receivedTime = timePart.substring(0, 5) // HH:MM
           }
+          
+          console.log('✅ 解析開始時間成功:', { 
+            original: caseData.start_date, 
+            date: receivedDate, 
+            time: receivedTime 
+          })
         } catch (error) {
           console.warn('❌ 解析開始時間失敗:', error)
         }
       } else {
         console.log('⚠️ 沒有 start_date 資料')
       }
-      
+
       // 處理結束時間 (end_date -> closedDate/closedTime)
       if (caseData.end_date) {
         try {
-          const endDateTime = new Date(caseData.end_date)
-          if (!isNaN(endDateTime.getTime())) {
-            closedDate = endDateTime.toISOString().split('T')[0] // YYYY-MM-DD
-            closedTime = endDateTime.toTimeString().split(' ')[0].substring(0, 5) // HH:MM
-            console.log('✅ 解析結束時間成功:', { 
-              original: caseData.end_date, 
-              date: closedDate, 
-              time: closedTime 
-            })
-          } else {
-            console.log('❌ 結束時間格式無效')
+          // 🔧 修正：直接從 ISO 字串解析，避免時區問題
+          const isoString = caseData.end_date
+          closedDate = isoString.split('T')[0] // YYYY-MM-DD
+          
+          // 提取時間部分，避免時區轉換
+          const timePart = isoString.split('T')[1]
+          if (timePart) {
+            closedTime = timePart.substring(0, 5) // HH:MM
           }
+          
+          console.log('✅ 解析結束時間成功:', { 
+            original: caseData.end_date, 
+            date: closedDate, 
+            time: closedTime 
+          })
         } catch (error) {
           console.warn('❌ 解析結束時間失敗:', error)
         }
