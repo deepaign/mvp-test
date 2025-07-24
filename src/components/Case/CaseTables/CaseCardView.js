@@ -220,51 +220,51 @@ function CaseCardView({
   }
 
   // 在表格行渲染中使用這些函數
-  const renderTableRow = (caseItem, index) => {
-    return (
-      <tr key={caseItem.id || index} className="case-row">
-        <td className="case-number">{CaseService.extractCaseNumber(caseItem.description) || '-'}</td>
-        <td className="case-title" title={caseItem.title}>{caseItem.title || '-'}</td>
-        <td className="contact-name">{getContactName(caseItem)}</td>
-        <td className="contact-phone">{getContactPhone(caseItem)}</td>
-        <td className="case-status">
-          <span className={`status-badge ${getStatusDisplay(caseItem.status).class}`}>
-            {getStatusDisplay(caseItem.status).text}
-          </span>
-        </td>
-        <td className="case-priority">
-          <span className={`priority-badge ${getPriorityDisplay(caseItem.priority).class}`}>
-            {getPriorityDisplay(caseItem.priority).text}
-          </span>
-        </td>
-        <td className="receiver-name">{getReceiverName(caseItem)}</td> {/* ✅ 新增 */}
-        <td className="handler-name">{getHandlerName(caseItem)}</td>
-        <td className="received-time">{formatReceivedDateTime(caseItem)}</td> {/* ✅ 新增 */}
-        <td className="case-actions">
-          <div className="action-buttons">
-            {canEdit && (
-              <button 
-                className="edit-btn action-btn"
-                onClick={() => onEdit(caseItem)}
-                title="編輯案件"
-              >
-                編輯
-              </button>
-            )}
-            {canDelete && (
-              <button 
-                className="delete-btn action-btn"
-                onClick={() => onDelete(caseItem.id)}
-                title="刪除案件"
-              >
-                刪除
-              </button>
-            )}
-          </div>
-        </td>
-      </tr>
-    )
-  }
+  // const renderTableRow = (caseItem, index) => {
+  //   return (
+  //     <tr key={caseItem.id || index} className="case-row">
+  //       <td className="case-number">{CaseService.extractCaseNumber(caseItem.description) || '-'}</td>
+  //       <td className="case-title" title={caseItem.title}>{caseItem.title || '-'}</td>
+  //       <td className="contact-name">{getContactName(caseItem)}</td>
+  //       <td className="contact-phone">{getContactPhone(caseItem)}</td>
+  //       <td className="case-status">
+  //         <span className={`status-badge ${getStatusDisplay(caseItem.status).class}`}>
+  //           {getStatusDisplay(caseItem.status).text}
+  //         </span>
+  //       </td>
+  //       <td className="case-priority">
+  //         <span className={`priority-badge ${getPriorityDisplay(caseItem.priority).class}`}>
+  //           {getPriorityDisplay(caseItem.priority).text}
+  //         </span>
+  //       </td>
+  //       <td className="receiver-name">{getReceiverName(caseItem)}</td> {/* ✅ 新增 */}
+  //       <td className="handler-name">{getHandlerName(caseItem)}</td>
+  //       <td className="received-time">{formatReceivedDateTime(caseItem)}</td> {/* ✅ 新增 */}
+  //       <td className="case-actions">
+  //         <div className="action-buttons">
+  //           {canEdit && (
+  //             <button 
+  //               className="edit-btn action-btn"
+  //               onClick={() => onEdit(caseItem)}
+  //               title="編輯案件"
+  //             >
+  //               編輯
+  //             </button>
+  //           )}
+  //           {canDelete && (
+  //             <button 
+  //               className="delete-btn action-btn"
+  //               onClick={() => onDelete(caseItem.id)}
+  //               title="刪除案件"
+  //             >
+  //               刪除
+  //             </button>
+  //           )}
+  //         </div>
+  //       </td>
+  //     </tr>
+  //   )
+  // }
 
   return (
     <div className="case-cards-container">
