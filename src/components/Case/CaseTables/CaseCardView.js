@@ -16,24 +16,23 @@ function CaseCardView({
 
   // 提取事發地點 - 分割為縣市行政區和詳細地址
   const getIncidentLocation = (caseItem) => {
-    const fullLocation = CaseService.extractIncidentLocation(caseItem.description) || ''
-    
-    // 嘗試分離縣市行政區和詳細地址
-    const locationParts = fullLocation.split(' ')
-    if (locationParts.length >= 2) {
-      // 第一部分通常是縣市+行政區
-      const districtPart = locationParts[0]
-      // 剩下的是詳細地址
-      const addressPart = locationParts.slice(1).join(' ')
-      return {
-        district: districtPart,
-        address: addressPart
+    if (caseItem.DistrictCase && caseItem.DistrictCase.length > 0) {
+      const districtData = caseItem.DistrictCase[0].District
+      if (districtData) {
+        const districtName = districtData.name || ''
+        const countyName = districtData.County?.name || ''
+        
+        let locationParts = []
+        if (countyName) locationParts.push(countyName)
+        if (districtName) locationParts.push(districtName)
+        
+        const descriptionLocation = CaseService.extractIncidentLocation(caseItem.description) || ''
+        
+        return {
+          district: locationParts.join(''),
+          address: descriptionLocation.replace(locationParts.join(''), '').trim()
+        }
       }
-    }
-    
-    return {
-      district: fullLocation,
-      address: ''
     }
   }
 
@@ -65,25 +64,37 @@ function CaseCardView({
   }
 
   // 取得承辦人員
+  // 🔧 修復：取得承辦人員（確保正確從 CaseMember 取得）
   const getHandlerName = (caseItem) => {
-    const inCharge = caseItem.InChargeCase || []
-    const validRecord = inCharge.find(record => 
-      record.member_id && record.Member
-    )
+    console.log('🔍 檢查承辦人員 - 案件ID:', caseItem.id)
     
-    if (validRecord) {
-      return validRecord.Member.name
+    if (!caseItem.CaseMember || !Array.isArray(caseItem.CaseMember)) {
+      console.log('⚠️ 沒有 CaseMember 資料或不是陣列:', caseItem.CaseMember)
+      return '-'
     }
-    return '尚未指派'
+    
+    console.log('CaseMember 資料:', caseItem.CaseMember)
+    
+    const handlerRecord = caseItem.CaseMember.find(cm => cm.role === 'handler')
+    console.log('找到的承辦人員記錄:', handlerRecord)
+    
+    if (handlerRecord && handlerRecord.Member && handlerRecord.Member.name) {
+      console.log('✅ 承辦人員:', handlerRecord.Member.name)
+      return handlerRecord.Member.name
+    }
+    
+    console.log('⚠️ 沒有找到有效的承辦人員')
+    return '-'
   }
 
   // 修正：格式化受理日期 - 直接使用資料庫的 start_date
   const formatReceivedDate = (caseItem) => {
-    // 優先使用 start_date（受理日期）
+  // 優先使用 start_date（受理日期）
     if (caseItem.start_date) {
       try {
         // 🔧 修正：直接從 ISO 字串中提取日期部分，避免時區轉換
-        return caseItem.start_date.split('T')[0] // 直接取 YYYY-MM-DD 部分
+        const dateStr = caseItem.start_date.split('T')[0] // 直接取 YYYY-MM-DD 部分
+        return dateStr
       } catch (error) {
         console.warn('解析受理日期失敗:', error)
       }
@@ -92,7 +103,8 @@ function CaseCardView({
     // 備用：使用建立日期
     if (caseItem.created_at) {
       try {
-        return caseItem.created_at.split('T')[0]
+        const dateStr = caseItem.created_at.split('T')[0]
+        return dateStr
       } catch (error) {
         console.warn('解析建立日期失敗:', error)
       }
@@ -100,6 +112,72 @@ function CaseCardView({
     
     return '-'
   }
+
+  // ✅ 新增：格式化受理時間函數
+  const formatReceivedTime = (caseItem) => {
+    // 優先使用 start_date（受理時間）
+    if (caseItem.start_date) {
+      try {
+        const datetime = new Date(caseItem.start_date)
+        if (!isNaN(datetime.getTime())) {
+          // 格式化為 HH:MM
+          return datetime.toTimeString().split(' ')[0].substring(0, 5)
+        }
+      } catch (error) {
+        console.warn('解析受理時間失敗:', error)
+      }
+    }
+    
+    return '-'
+  }
+
+  // ✅ 新增：格式化完整受理時間（日期 + 時間）
+  const formatReceivedDateTime = (caseItem) => {
+    const date = formatReceivedDate(caseItem)
+    const time = formatReceivedTime(caseItem)
+    
+    if (date === '-') return '-'
+    if (time === '-') return date
+    
+    return `${date} ${time}`
+  }
+
+  // ✅ 新增：取得受理人員姓名函數
+  const getReceiverName = (caseItem) => {
+    console.log('🔍 檢查受理人員 - 案件ID:', caseItem.id)
+    
+    if (!caseItem.CaseMember || !Array.isArray(caseItem.CaseMember)) {
+      console.log('⚠️ 沒有 CaseMember 資料或不是陣列:', caseItem.CaseMember)
+      return '-'
+    }
+    
+    console.log('CaseMember 資料:', caseItem.CaseMember)
+    
+    const receiverRecord = caseItem.CaseMember.find(cm => cm.role === 'receiver')
+    console.log('找到的受理人員記錄:', receiverRecord)
+    
+    if (receiverRecord && receiverRecord.Member && receiverRecord.Member.name) {
+      console.log('✅ 受理人員:', receiverRecord.Member.name)
+      return receiverRecord.Member.name
+    }
+    
+    console.log('⚠️ 沒有找到有效的受理人員')
+    return '-'
+  }
+
+  // 在表格標題行中新增受理人員和受理時間欄位
+  const tableHeaders = [
+    { key: 'caseNumber', label: '案件編號', width: '120px' },
+    { key: 'title', label: '案件標題', width: '200px' },
+    { key: 'contact', label: '聯絡人', width: '120px' },
+    { key: 'phone', label: '電話', width: '120px' },
+    { key: 'status', label: '狀態', width: '80px' },
+    { key: 'priority', label: '優先順序', width: '80px' },
+    { key: 'receiver', label: '受理人員', width: '100px' }, // ✅ 新增
+    { key: 'handler', label: '承辦人員', width: '100px' },
+    { key: 'receivedTime', label: '受理時間', width: '140px' }, // ✅ 新增
+    { key: 'actions', label: '操作', width: '120px' }
+  ]
 
   // 取得優先順序顯示
   const getPriorityDisplay = (priority) => {
@@ -138,6 +216,53 @@ function CaseCardView({
         <h3>沒有案件資料</h3>
         <p>目前沒有符合篩選條件的案件</p>
       </div>
+    )
+  }
+
+  // 在表格行渲染中使用這些函數
+  const renderTableRow = (caseItem, index) => {
+    return (
+      <tr key={caseItem.id || index} className="case-row">
+        <td className="case-number">{CaseService.extractCaseNumber(caseItem.description) || '-'}</td>
+        <td className="case-title" title={caseItem.title}>{caseItem.title || '-'}</td>
+        <td className="contact-name">{getContactName(caseItem)}</td>
+        <td className="contact-phone">{getContactPhone(caseItem)}</td>
+        <td className="case-status">
+          <span className={`status-badge ${getStatusDisplay(caseItem.status).class}`}>
+            {getStatusDisplay(caseItem.status).text}
+          </span>
+        </td>
+        <td className="case-priority">
+          <span className={`priority-badge ${getPriorityDisplay(caseItem.priority).class}`}>
+            {getPriorityDisplay(caseItem.priority).text}
+          </span>
+        </td>
+        <td className="receiver-name">{getReceiverName(caseItem)}</td> {/* ✅ 新增 */}
+        <td className="handler-name">{getHandlerName(caseItem)}</td>
+        <td className="received-time">{formatReceivedDateTime(caseItem)}</td> {/* ✅ 新增 */}
+        <td className="case-actions">
+          <div className="action-buttons">
+            {canEdit && (
+              <button 
+                className="edit-btn action-btn"
+                onClick={() => onEdit(caseItem)}
+                title="編輯案件"
+              >
+                編輯
+              </button>
+            )}
+            {canDelete && (
+              <button 
+                className="delete-btn action-btn"
+                onClick={() => onDelete(caseItem.id)}
+                title="刪除案件"
+              >
+                刪除
+              </button>
+            )}
+          </div>
+        </td>
+      </tr>
     )
   }
 

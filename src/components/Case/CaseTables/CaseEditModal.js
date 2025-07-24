@@ -260,23 +260,24 @@ const CaseEditModal = ({ isOpen, onClose, caseData, team, member, onCaseUpdated 
         }
       })
 
-      console.log('🔍 步驟 1: 提取案件編號和事發地點...')
-      // 從描述中提取案件編號和事發地點
+      // 🔧 修正：一次性處理所有變數，避免作用域問題
+      console.log('🔍 步驟 1: 處理所有基本資料...')
+      
+      // 基本資料
       const caseNumber = CaseService.extractCaseNumber(caseData.description) || ''
-      const incidentLocation = CaseService.extractIncidentLocation(caseData.description) || ''
+      const descriptionLocation = CaseService.extractIncidentLocation(caseData.description) || ''
       
       console.log('提取結果:', {
         caseNumber,
-        incidentLocation,
+        descriptionLocation,
         descriptionLength: caseData.description?.length || 0
       })
 
-      console.log('🔍 步驟 2: 處理案件類別...')
+      // 案件類別
       let category = ''
       if (caseData.CategoryCase && caseData.CategoryCase.length > 0) {
         const categoryData = caseData.CategoryCase[0].Category
         if (categoryData) {
-          // ✅ 修正：確保使用正確的類別 ID，並檢查是否為有效的 UUID
           category = categoryData.id
           console.log('找到類別:', {
             id: categoryData.id,
@@ -286,8 +287,7 @@ const CaseEditModal = ({ isOpen, onClose, caseData, team, member, onCaseUpdated 
         }
       }
 
-      console.log('🔍 步驟 3: 處理聯絡人資訊...')
-      // 獲取聯絡人資訊
+      // 聯絡人資訊
       let contact1Name = '', contact1Phone = '', contact2Name = '', contact2Phone = ''
       if (caseData.VoterCase && caseData.VoterCase.length > 0) {
         const voters = caseData.VoterCase
@@ -297,128 +297,75 @@ const CaseEditModal = ({ isOpen, onClose, caseData, team, member, onCaseUpdated 
           contact1Name = voters[0].Voter.name || ''
           contact1Phone = voters[0].Voter.phone || ''
           console.log('聯絡人1:', { name: contact1Name, phone: contact1Phone })
-        } else {
-          console.log('⚠️ 第一個聯絡人資料不完整')
         }
         
         if (voters[1] && voters[1].Voter) {
           contact2Name = voters[1].Voter.name || ''
           contact2Phone = voters[1].Voter.phone || ''
           console.log('聯絡人2:', { name: contact2Name, phone: contact2Phone })
-        } else {
-          console.log('⚠️ 沒有第二個聯絡人或資料不完整')
         }
       } else {
-        console.log('⚠️ 沒有 VoterCase 聯絡人資料')
+        console.log('⚠️ 沒有找到 VoterCase 資料')
       }
 
-      console.log('🔍 步驟 4: 處理受理人員 (使用 CaseMember)...')
-      // 從 CaseMember 中獲取受理人員 ID
-      let receiver = ''
-      if (caseData.CaseMember && Array.isArray(caseData.CaseMember)) {
+      // 人員指派
+      let receiver = '', handler = ''
+      if (caseData.CaseMember && caseData.CaseMember.length > 0) {
+        console.log(`找到 ${caseData.CaseMember.length} 筆 CaseMember 資料`)
+        
         const receiverRecord = caseData.CaseMember.find(cm => cm.role === 'receiver')
-        if (receiverRecord) {
-          receiver = receiverRecord.member_id || ''
-          if (receiverRecord.Member) {
-            console.log('受理人員:', { 
-              id: receiver, 
-              name: receiverRecord.Member.name,
-              role: receiverRecord.role 
-            })
-          } else {
-            console.log('受理人員 ID:', receiver, '但沒有 Member 詳細資料')
-          }
-        } else {
-          console.log('⚠️ 沒有找到角色為 receiver 的 CaseMember 記錄')
-        }
-      } else {
-        console.log('⚠️ 沒有 CaseMember 資料或格式錯誤')
-      }
-
-      console.log('🔍 步驟 5: 處理承辦人員 (使用 CaseMember)...')
-      // 從 CaseMember 中獲取承辦人員 ID
-      let handler = ''
-      if (caseData.CaseMember && Array.isArray(caseData.CaseMember)) {
         const handlerRecord = caseData.CaseMember.find(cm => cm.role === 'handler')
-        if (handlerRecord) {
-          handler = handlerRecord.member_id || ''
-          if (handlerRecord.Member) {
-            console.log('承辦人員:', { 
-              id: handler, 
-              name: handlerRecord.Member.name,
-              role: handlerRecord.role 
-            })
-          } else {
-            console.log('承辦人員 ID:', handler, '但沒有 Member 詳細資料')
-          }
-        } else {
-          console.log('⚠️ 沒有找到角色為 handler 的 CaseMember 記錄')
+        
+        if (receiverRecord && receiverRecord.Member) {
+          receiver = receiverRecord.member_id
+          console.log('找到受理人員:', receiverRecord.Member.name)
+        }
+        
+        if (handlerRecord && handlerRecord.Member) {
+          handler = handlerRecord.member_id
+          console.log('找到承辦人員:', handlerRecord.Member.name)
         }
       } else {
-        console.log('⚠️ 沒有 CaseMember 資料或格式錯誤')
+        console.log('⚠️ 沒有找到 CaseMember 資料')
       }
 
-      console.log('🔍 步驟 6: 處理時間資料...')
-      // 處理 timestamptz 欄位 - 起始時間和結案時間
+      // 時間資訊
       let receivedDate = '', receivedTime = '', closedDate = '', closedTime = ''
       
-      console.log('原始時間資料:', {
-        start_date: caseData.start_date,  // 資料庫實際欄位
-        end_date: caseData.end_date       // 資料庫實際欄位
-      })
-      
-      // 處理開始時間 (start_date -> receivedDate/receivedTime)
       if (caseData.start_date) {
         try {
-          // 🔧 修正：直接從 ISO 字串解析，避免時區問題
           const isoString = caseData.start_date
-          receivedDate = isoString.split('T')[0] // YYYY-MM-DD
-          
-          // 提取時間部分，避免時區轉換
+          receivedDate = isoString.split('T')[0]
           const timePart = isoString.split('T')[1]
           if (timePart) {
-            receivedTime = timePart.substring(0, 5) // HH:MM
+            receivedTime = timePart.substring(0, 5)
           }
-          
-          console.log('✅ 解析開始時間成功:', { 
-            original: caseData.start_date, 
-            date: receivedDate, 
-            time: receivedTime 
-          })
+          console.log('✅ 解析開始時間成功:', { date: receivedDate, time: receivedTime })
         } catch (error) {
           console.warn('❌ 解析開始時間失敗:', error)
         }
-      } else {
-        console.log('⚠️ 沒有 start_date 資料')
       }
 
-      // 處理結束時間 (end_date -> closedDate/closedTime)
       if (caseData.end_date) {
         try {
-          // 🔧 修正：直接從 ISO 字串解析，避免時區問題
           const isoString = caseData.end_date
-          closedDate = isoString.split('T')[0] // YYYY-MM-DD
-          
-          // 提取時間部分，避免時區轉換
+          closedDate = isoString.split('T')[0]
           const timePart = isoString.split('T')[1]
           if (timePart) {
-            closedTime = timePart.substring(0, 5) // HH:MM
+            closedTime = timePart.substring(0, 5)
           }
-          
-          console.log('✅ 解析結束時間成功:', { 
-            original: caseData.end_date, 
-            date: closedDate, 
-            time: closedTime 
-          })
+          console.log('✅ 解析結束時間成功:', { date: closedDate, time: closedTime })
         } catch (error) {
           console.warn('❌ 解析結束時間失敗:', error)
         }
-      } else {
-        console.log('⚠️ 沒有 end_date 資料')
       }
 
-      console.log('🔍 步驟 7: 處理事發地點...')
-      let incidentCounty = '', incidentDistrict = ''
+      // 🔧 修正：統一處理地點資訊，避免變數重複或作用域問題
+      console.log('🔍 步驟 2: 處理事發地點...')
+      let incidentCounty = ''
+      let incidentDistrict = ''
+      let incidentLocationFinal = descriptionLocation // 使用新的變數名稱
+      
       if (caseData.DistrictCase && caseData.DistrictCase.length > 0) {
         const districtData = caseData.DistrictCase[0].District
         if (districtData) {
@@ -426,16 +373,29 @@ const CaseEditModal = ({ isOpen, onClose, caseData, team, member, onCaseUpdated 
           if (districtData.County) {
             incidentCounty = districtData.County.id
           }
+          
           console.log('事發地點:', {
             district: districtData.name,
             districtId: districtData.id,
             county: districtData.County?.name,
             countyId: districtData.County?.id
           })
+          
+          // 如果從資料庫有更完整的地點資料，用來補充
+          if (districtData.name && (!incidentLocationFinal || incidentLocationFinal.length < 3)) {
+            const countyName = districtData.County?.name || ''
+            const districtName = districtData.name
+            incidentLocationFinal = (countyName + districtName).trim()
+            console.log('使用資料庫地點資料:', incidentLocationFinal)
+          }
+        } else {
+          console.warn('⚠️ DistrictCase 存在但 District 資料為空')
         }
+      } else {
+        console.log('ℹ️ 無 DistrictCase 資料')
       }
 
-      console.log('🔍 步驟 8: 組合最終表單資料...')
+      console.log('🔍 步驟 3: 組合最終表單資料...')
       const formData = {
         // 基本資訊
         id: caseData.id,
@@ -446,7 +406,7 @@ const CaseEditModal = ({ isOpen, onClose, caseData, team, member, onCaseUpdated 
         priority: caseData.priority || 'normal',
         status: caseData.status || 'pending',
         contactType: caseData.contact_type || 'phone',
-        incidentLocation: incidentLocation,
+        incidentLocation: incidentLocationFinal, // 使用最終處理的地點變數
         
         // 聯絡人資訊
         contact1Name: contact1Name,
@@ -465,9 +425,6 @@ const CaseEditModal = ({ isOpen, onClose, caseData, team, member, onCaseUpdated 
         closedTime: closedTime,
         
         // 地址資訊
-        // homeCounty: homeCounty,
-        // homeDistrict: homeDistrict,
-        // homeAddress: homeAddress,
         incidentCounty: incidentCounty,
         incidentDistrict: incidentDistrict,
         
@@ -475,15 +432,14 @@ const CaseEditModal = ({ isOpen, onClose, caseData, team, member, onCaseUpdated 
         file: caseData.file || null
       }
 
-      console.log('✅ convertCaseToFormData 完成 (CaseMember版本)，最終表單資料:', {
+      console.log('✅ convertCaseToFormData 完成，最終表單資料:', {
         基本資訊: {
           id: formData.id,
           caseNumber: formData.caseNumber,
           title: formData.title,
           category: formData.category,
           priority: formData.priority,
-          status: formData.status,
-          hasDescription: !!formData.description
+          status: formData.status
         },
         聯絡人: {
           contact1Name: formData.contact1Name,
@@ -502,10 +458,9 @@ const CaseEditModal = ({ isOpen, onClose, caseData, team, member, onCaseUpdated 
           closedTime: formData.closedTime
         },
         地址: {
-          homeCounty: formData.homeCounty,
-          homeDistrict: formData.homeDistrict,
           incidentCounty: formData.incidentCounty,
-          incidentDistrict: formData.incidentDistrict
+          incidentDistrict: formData.incidentDistrict,
+          incidentLocation: formData.incidentLocation
         }
       })
 

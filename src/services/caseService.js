@@ -407,7 +407,7 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
 
       // 執行查詢
       console.log('🔍 步驟 3: 執行最終查詢...')
-      const { data, error, count } = await query
+      const { data, error} = await query
 
       if (error) {
         console.error('❌ 完整查詢失敗:', error)
@@ -1695,6 +1695,8 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
         console.warn('解析結案時間失敗:', error)
       }
     }
+
+    
 
     const formData = {
       id: caseData.id,
@@ -3086,11 +3088,9 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
       console.log('新事發地點:', caseData.incidentDistrict)
       console.log('原事發地點:', originalData.incidentDistrict)
       
-      // ✅ 修正：正規化地點值
       const newDistrict = caseData.incidentDistrict?.toString().trim() || null
       const oldDistrict = originalData.incidentDistrict?.toString().trim() || null
       
-      // ✅ 修正：更嚴格的比較邏輯
       if (newDistrict === oldDistrict) {
         console.log('事發地點沒有變更，跳過更新')
         updateResults.push({ type: 'DistrictCase', success: true, message: '無變更' })
@@ -3117,43 +3117,59 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
       if (newDistrict) {
         console.log('建立新地點關聯:', newDistrict)
         
-        // ✅ 修正：驗證地點 ID 格式並建立關聯
+        // 驗證地點 ID 格式
         const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(newDistrict)
-        
         if (!isValidUUID) {
-          console.error('無效的地點 ID 格式:', newDistrict)
+          console.error('地點 ID 格式無效:', newDistrict)
           updateResults.push({ 
             type: 'DistrictCase', 
             success: false, 
-            error: `無效的地點 ID: ${newDistrict}` 
+            error: `地點 ID 格式無效: ${newDistrict}` 
           })
           return
         }
 
-        // 建立新的地點關聯
         const { error: insertError } = await supabase
           .from('DistrictCase')
-          .insert([{
+          .insert({
             case_id: caseData.id,
             district_id: newDistrict,
-            created_at: new Date().toISOString()
-          }])
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
 
         if (insertError) {
           console.error('建立新地點關聯失敗:', insertError)
-          updateResults.push({ type: 'DistrictCase', success: false, error: insertError.message })
-        } else {
-          console.log('建立新地點關聯成功')
-          updateResults.push({ type: 'DistrictCase', success: true, data: { districtId: newDistrict } })
+          updateResults.push({ 
+            type: 'DistrictCase', 
+            success: false, 
+            error: insertError.message 
+          })
+          return
         }
+
+        console.log('建立新地點關聯成功')
+        updateResults.push({ 
+          type: 'DistrictCase', 
+          success: true, 
+          message: '事發地點更新成功'
+        })
       } else {
-        console.log('新地點為空，僅清除舊關聯')
-        updateResults.push({ type: 'DistrictCase', success: true, message: '已清除地點關聯' })
+        console.log('清除事發地點')
+        updateResults.push({ 
+          type: 'DistrictCase', 
+          success: true, 
+          message: '已清除事發地點'
+        })
       }
 
     } catch (error) {
       console.error('更新事發地點失敗:', error)
-      updateResults.push({ type: 'DistrictCase', success: false, error: error.message })
+      updateResults.push({ 
+        type: 'DistrictCase', 
+        success: false, 
+        error: error.message 
+      })
     }
   }
 

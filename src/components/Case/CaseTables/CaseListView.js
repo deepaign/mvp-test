@@ -16,6 +16,29 @@ function CaseListView({
 
   // 提取事發地點
   const getIncidentLocation = (caseItem) => {
+    // 優先從 DistrictCase 關聯資料讀取
+    if (caseItem.DistrictCase && caseItem.DistrictCase.length > 0) {
+      const districtData = caseItem.DistrictCase[0].District
+      if (districtData) {
+        const districtName = districtData.name || ''
+        const countyName = districtData.County?.name || ''
+        
+        // 組合縣市 + 行政區名稱
+        let locationParts = []
+        if (countyName) locationParts.push(countyName)
+        if (districtName) locationParts.push(districtName)
+        
+        // 從描述中提取詳細地址（如果有的話）
+        const descriptionLocation = CaseService.extractIncidentLocation(caseItem.description) || ''
+        
+        return {
+          district: locationParts.join(''),  // 縣市+行政區
+          address: descriptionLocation.replace(locationParts.join(''), '').trim()  // 移除縣市行政區，保留詳細地址
+        }
+      }
+    }
+    
+    // 備用方案：如果 DistrictCase 沒有資料，則從描述解析（保持原有邏輯）
     const fullLocation = CaseService.extractIncidentLocation(caseItem.description) || ''
     const locationParts = fullLocation.split(' ')
     if (locationParts.length >= 2) {
@@ -25,7 +48,7 @@ function CaseListView({
       }
     }
     return {
-      district: fullLocation,
+      district: fullLocation || '未指定',
       address: ''
     }
   }
