@@ -1,5 +1,6 @@
 // src/services/caseService.js
 import { supabase } from '../supabase'
+import { TeamService } from './teamService'
 
 // 固定的案件類別對應表
 const FIXED_CATEGORIES = {
@@ -619,26 +620,26 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
    * @returns {boolean} 是否有效
    */
   static isValidCategoryId(categoryId) {
-    if (!categoryId || typeof categoryId !== 'string') {
-      return false;
-    }
-  
-  // 檢查是否在固定類別中
-  const isInFixedCategories = FIXED_CATEGORIES.hasOwnProperty(categoryId);
-  
-  // 檢查 UUID 格式
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  const isValidUUIDFormat = uuidRegex.test(categoryId);
-  
-  console.log('類別 ID 驗證:', {
-    categoryId,
-    isInFixedCategories,
-    isValidUUIDFormat,
-    result: isInFixedCategories && isValidUUIDFormat
-  });
-  
-  return isInFixedCategories && isValidUUIDFormat;
-}
+      if (!categoryId || typeof categoryId !== 'string') {
+        return false;
+      }
+    
+    // 檢查是否在固定類別中
+    const isInFixedCategories = FIXED_CATEGORIES.hasOwnProperty(categoryId);
+    
+    // 檢查 UUID 格式
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const isValidUUIDFormat = uuidRegex.test(categoryId);
+    
+    console.log('類別 ID 驗證:', {
+      categoryId,
+      isInFixedCategories,
+      isValidUUIDFormat,
+      result: isInFixedCategories && isValidUUIDFormat
+    });
+    
+    return isInFixedCategories && isValidUUIDFormat;
+  }
 
   /**
    * 根據類別 ID 取得類別名稱
@@ -2673,104 +2674,104 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
   }
 
   static async updateCaseWithRelations({ caseData, originalData, teamId, dropdownOptions = {} }) {
-  try {
-    console.log('=== CaseService.updateCaseWithRelations (CaseMember版本) ===')
-    console.log('更新資料:', caseData)
-    console.log('原始資料:', originalData)
+    try {
+      console.log('=== CaseService.updateCaseWithRelations (CaseMember版本) ===')
+      console.log('更新資料:', caseData)
+      console.log('原始資料:', originalData)
 
-    // 基本驗證
-    if (!caseData?.id) {
-      return { success: false, error: '案件 ID 遺失', data: null }
-    }
-    
-    if (!teamId) {
-      return { success: false, error: '團隊資訊遺失', data: null }
-    }
+      // 基本驗證
+      if (!caseData?.id) {
+        return { success: false, error: '案件 ID 遺失', data: null }
+      }
+      
+      if (!teamId) {
+        return { success: false, error: '團隊資訊遺失', data: null }
+      }
 
-    const updateResults = []
+      const updateResults = []
 
-    // 1. 更新基本案件資料
-    const updateData = {
-      title: caseData.title,
-      description: this.extractPureDescription(caseData.description), 
-      priority: caseData.priority || 'normal',
-      status: caseData.status || 'pending',
-      contact_type: caseData.contactType || 'phone',
-      updated_at: new Date().toISOString()
-    }
+      // 1. 更新基本案件資料
+      const updateData = {
+        title: caseData.title,
+        description: this.extractPureDescription(caseData.description), 
+        priority: caseData.priority || 'normal',
+        status: caseData.status || 'pending',
+        contact_type: caseData.contactType || 'phone',
+        updated_at: new Date().toISOString()
+      }
 
-    // 處理時間欄位
-    if (caseData.start_date) {
-      updateData.start_date = caseData.start_date
-    }
-    if (caseData.end_date) {
-      updateData.end_date = caseData.end_date
-    }
+      // 處理時間欄位
+      if (caseData.start_date) {
+        updateData.start_date = caseData.start_date
+      }
+      if (caseData.end_date) {
+        updateData.end_date = caseData.end_date
+      }
 
-    console.log('準備更新的基本案件資料:', updateData)
+      console.log('準備更新的基本案件資料:', updateData)
 
-    const { error: updateError } = await supabase
-      .from('Case')
-      .update(updateData)
-      .eq('id', caseData.id)
-      .eq('group_id', teamId)
+      const { error: updateError } = await supabase
+        .from('Case')
+        .update(updateData)
+        .eq('id', caseData.id)
+        .eq('group_id', teamId)
 
-    if (updateError) {
-      console.error('更新案件基本資料失敗:', updateError)
+      if (updateError) {
+        console.error('更新案件基本資料失敗:', updateError)
+        return {
+          success: false,
+          error: `更新案件失敗: ${updateError.message}`,
+          data: null
+        }
+      }
+
+      console.log('案件基本資料更新成功')
+      updateResults.push({ type: 'Case', success: true })
+
+      // 2. 更新受理人員 - 使用新的 CaseMember 方法
+      await this.updateCaseMemberReceiver(caseData, originalData, updateResults)
+
+      // 3. 更新承辦人員 - 使用新的 CaseMember 方法  
+      await this.updateCaseMemberHandler(caseData, originalData, updateResults)
+
+      // 4. 更新聯絡人資訊
+      await this.updateContactsSafely(caseData, originalData, updateResults, dropdownOptions)
+
+      // 5. 更新案件類別
+      await this.updateCaseCategorySafely(caseData, originalData, updateResults)
+
+      // 6. 更新事發地點
+      await this.updateIncidentLocationSafely(caseData, originalData, updateResults)
+
+      // 檢查更新結果
+      const hasErrors = updateResults.some(result => !result.success)
+      
+      if (hasErrors) {
+        const errors = updateResults.filter(result => !result.success)
+        console.warn('部分更新失敗:', errors)
+        return {
+          success: false,
+          error: `部分更新失敗: ${errors.map(e => e.error).join(', ')}`,
+          data: { updateResults }
+        }
+      }
+
+      console.log('所有更新操作成功完成')
+      return {
+        success: true,
+        data: { updateResults },
+        error: null
+      }
+
+    } catch (error) {
+      console.error('CaseService.updateCaseWithRelations 發生錯誤:', error)
       return {
         success: false,
-        error: `更新案件失敗: ${updateError.message}`,
+        error: error.message,
         data: null
       }
     }
-
-    console.log('案件基本資料更新成功')
-    updateResults.push({ type: 'Case', success: true })
-
-    // 2. 更新受理人員 - 使用新的 CaseMember 方法
-    await this.updateCaseMemberReceiver(caseData, originalData, updateResults)
-
-    // 3. 更新承辦人員 - 使用新的 CaseMember 方法  
-    await this.updateCaseMemberHandler(caseData, originalData, updateResults)
-
-    // 4. 更新聯絡人資訊
-    await this.updateContactsSafely(caseData, originalData, updateResults, dropdownOptions)
-
-    // 5. 更新案件類別
-    await this.updateCaseCategorySafely(caseData, originalData, updateResults)
-
-    // 6. 更新事發地點
-    await this.updateIncidentLocationSafely(caseData, originalData, updateResults)
-
-    // 檢查更新結果
-    const hasErrors = updateResults.some(result => !result.success)
-    
-    if (hasErrors) {
-      const errors = updateResults.filter(result => !result.success)
-      console.warn('部分更新失敗:', errors)
-      return {
-        success: false,
-        error: `部分更新失敗: ${errors.map(e => e.error).join(', ')}`,
-        data: { updateResults }
-      }
-    }
-
-    console.log('所有更新操作成功完成')
-    return {
-      success: true,
-      data: { updateResults },
-      error: null
-    }
-
-  } catch (error) {
-    console.error('CaseService.updateCaseWithRelations 發生錯誤:', error)
-    return {
-      success: false,
-      error: error.message,
-      data: null
-    }
   }
-}
 
   /**
  * 更新 VoterCase 關聯
@@ -3248,9 +3249,6 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
   /**
    * 更新聯絡人資訊
    */
-  /**
- * 更新聯絡人資訊
- */
   static async updateContacts(caseData, originalData, updateResults, dropdownOptions) {
     try {
       // 檢查聯絡人1是否有變更
@@ -3306,79 +3304,6 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
     return newData[nameField] !== originalData[nameField] || 
            newData[phoneField] !== originalData[phoneField]
   }
-
-  /**
-   * 建立案件類別關聯
-   * @param {string} caseId - 案件 ID
-   * @param {string} categoryId - 類別 ID
-   * @returns {Promise<Object>} 建立結果
-   */
-  // static async createCategoryCaseRelation(caseId, categoryId) {
-  //   try {
-  //     console.log('=== CaseService.createCategoryCaseRelation ===')
-  //     console.log('案件 ID:', caseId)
-  //     console.log('類別 ID:', categoryId)
-
-  //     if (!caseId || !categoryId) {
-  //       return {
-  //         success: false,
-  //         error: '案件 ID 和類別 ID 都是必填項目',
-  //         data: null
-  //       }
-  //     }
-
-  //     // 檢查是否已存在關聯
-  //     const { data: existingRelation } = await supabase
-  //       .from('CategoryCase')
-  //       .select('id')
-  //       .eq('case_id', caseId)
-  //       .eq('category_id', categoryId)
-  //       .single()
-
-  //     if (existingRelation) {
-  //       console.log('關聯已存在，跳過建立')
-  //       return {
-  //         success: true,
-  //         data: existingRelation,
-  //         message: '關聯已存在'
-  //       }
-  //     }
-
-  //     // 建立新的關聯
-  //     const { data: newRelation, error } = await supabase
-  //       .from('CategoryCase')
-  //       .insert([{
-  //         case_id: caseId,
-  //         category_id: categoryId
-  //       }])
-  //       .select()
-  //       .single()
-
-  //     if (error) {
-  //       console.error('建立案件類別關聯失敗:', error)
-  //       return {
-  //         success: false,
-  //         error: error.message,
-  //         data: null
-  //       }
-  //     }
-
-  //     console.log('✅ 案件類別關聯建立成功:', newRelation)
-  //     return {
-  //       success: true,
-  //       data: newRelation,
-  //       error: null
-  //     }
-
-  //   } catch (error) {
-  //     console.error('CaseService.createCategoryCaseRelation 發生錯誤:', error)
-  //     return {
-  //       success: false,
-  //       error: error.message,
-  //       data: null
-  //     }
-  //   }
-  // }
 
   /**
    * 更新案件類別關聯
@@ -3885,6 +3810,45 @@ static async createVoterDistrictRelation(voterId, districtId) {
         success: false,
         error: error.message,
         data: null
+      }
+    }
+  }
+
+  /**
+ * 取得團隊成員列表
+ * @param {string} teamId - 團隊 ID（可選，因為 RPC 函數會自動獲取當前用戶的團隊）
+ * @returns {Promise<Object>} 團隊成員列表
+ */
+  static async getTeamMembers(teamId = null) {
+    try {
+      console.log('=== CaseService.getTeamMembers ===')
+      console.log('團隊 ID:', teamId)
+
+      // 使用 TeamService 的 getTeamMembers 函數
+      const result = await TeamService.getTeamMembers()
+      
+      if (result.success) {
+        console.log(`✅ 成功載入 ${result.data.length} 位團隊成員`)
+        return {
+          success: true,
+          data: result.data,
+          error: null
+        }
+      } else {
+        console.error('❌ 載入團隊成員失敗:', result.error)
+        return {
+          success: false,
+          data: [],
+          error: result.error
+        }
+      }
+
+    } catch (error) {
+      console.error('💥 CaseService.getTeamMembers 發生錯誤:', error)
+      return {
+        success: false,
+        data: [],
+        error: error.message
       }
     }
   }

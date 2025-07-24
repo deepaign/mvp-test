@@ -393,11 +393,11 @@ function CaseManagement({ member, team }) {
     }
 
     // 🔧 承辦人員篩選 - 使用 CaseMember 表
-    if (filters.handler && filters.handler !== 'all') {
-      console.log('🔍 應用承辦人員篩選:', filters.handler)
+    if (filters.assignee && filters.assignee !== 'all') {
+      console.log('🔍 應用承辦人員篩選:', filters.assignee)
       const beforeFilter = filtered.length
       
-      if (filters.handler === 'unassigned') {
+      if (filters.assignee === 'unassigned') {
         // 篩選尚未指派承辦人員的案件
         filtered = filtered.filter(caseItem => {
           if (!caseItem || !caseItem.CaseMember) return true
@@ -417,7 +417,7 @@ function CaseManagement({ member, team }) {
           
           try {
             const handlerMembers = caseItem.CaseMember.filter(cm => cm.role === 'handler')
-            return handlerMembers.some(cm => cm.member_id === filters.handler)
+            return handlerMembers.some(cm => cm.member_id === filters.assignee)
           } catch (error) {
             console.warn('承辦人員篩選錯誤:', error, caseItem)
             return false
