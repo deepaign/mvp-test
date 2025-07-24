@@ -1,6 +1,30 @@
 // src/services/caseService.js
 import { supabase } from '../supabase'
 
+// 固定的案件類別對應表
+const FIXED_CATEGORIES = {
+  '3c39816e-31e7-440a-85e7-bf047e752907': '治安問題',
+  '78b565b8-4ee9-4292-96d6-18b09405a036': '民生服務',
+  '84b61b1f-2823-4ad8-9af2-e7ed3fd122ab': '環境問題',
+  'c274835f-29ec-4d75-b1ae-1fc941c829b1': '交通問題',
+  'c603a9fd-f508-4d45-87db-cac78ace9a68': '法律諮詢'
+};
+
+// 檢查 UUID 格式的輔助函數
+function validateUUID(uuid) {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(uuid);
+}
+
+// 檢查所有 UUID
+Object.keys(FIXED_CATEGORIES).forEach(uuid => {
+  if (!validateUUID(uuid)) {
+    console.error('無效的 UUID 格式:', uuid);
+  } else {
+    console.log('有效的 UUID:', uuid);
+  }
+});
+
 export class CaseService {
   /**
    * 取得縣市列表
@@ -539,18 +563,20 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
   }
 
   /**
-   * 取得案件類別列表
-   * @param {string} teamId - 團隊 ID
+   * 取得固定類別列表
    * @returns {Promise<Object>} 類別列表
    */
   static async getCategories(teamId = null) {
     try {
-      console.log('=== CaseService.getCategories (UUID修正版) ===')
+      console.log('=== CaseService.getCategories (固定類別版) ===')
 
-      // 從資料庫載入所有類別
+      // 從資料庫載入固定類別
+      const categoryIds = Object.keys(FIXED_CATEGORIES)
+      
       const { data: dbCategories, error } = await supabase
         .from('Category')
-        .select('id, name, description')
+        .select('id, name, description, created_at, updated_at')
+        .in('id', categoryIds)
         .order('name')
 
       if (error) {
@@ -562,38 +588,18 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
         }
       }
 
-      // 預設類別名稱列表
-      const defaultCategoryNames = ['交通問題', '環境問題', '治安問題', '民生服務', '法律諮詢']
-
-      // 標記哪些是預設類別
-      const allCategories = (dbCategories || []).map(cat => ({
+      // 標記為固定類別並確保順序
+      const fixedCategories = dbCategories.map(cat => ({
         ...cat,
-        isDefault: defaultCategoryNames.includes(cat.name)
+        isFixed: true,
+        displayName: FIXED_CATEGORIES[cat.id] || cat.name
       }))
 
-      // 檢查是否有缺失的預設類別，如果有則建立
-      const existingCategoryNames = allCategories.map(cat => cat.name)
-      const missingDefaultCategories = []
-
-      for (const defaultName of defaultCategoryNames) {
-        if (!existingCategoryNames.includes(defaultName)) {
-          console.log('發現缺失的預設類別:', defaultName)
-          
-          // 建立缺失的預設類別
-          const createResult = await this.ensureDefaultCategoryExists(null, defaultName)
-          if (createResult.success) {
-            missingDefaultCategories.push(createResult.data)
-          }
-        }
-      }
-
-      // 合併現有類別和新建的預設類別
-      const finalCategories = [...allCategories, ...missingDefaultCategories]
-
-      console.log(`載入類別成功，共 ${finalCategories.length} 筆`)
+      console.log(`載入固定類別成功，共 ${fixedCategories.length} 筆`)
+      
       return {
         success: true,
-        data: finalCategories,
+        data: fixedCategories,
         error: null
       }
 
@@ -605,6 +611,54 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
         data: []
       }
     }
+  }
+
+  /**
+   * 驗證類別 ID 是否有效
+   * @param {string} categoryId - 類別 ID
+   * @returns {boolean} 是否有效
+   */
+  static isValidCategoryId(categoryId) {
+    if (!categoryId || typeof categoryId !== 'string') {
+      return false;
+    }
+  
+  // 檢查是否在固定類別中
+  const isInFixedCategories = FIXED_CATEGORIES.hasOwnProperty(categoryId);
+  
+  // 檢查 UUID 格式
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const isValidUUIDFormat = uuidRegex.test(categoryId);
+  
+  console.log('類別 ID 驗證:', {
+    categoryId,
+    isInFixedCategories,
+    isValidUUIDFormat,
+    result: isInFixedCategories && isValidUUIDFormat
+  });
+  
+  return isInFixedCategories && isValidUUIDFormat;
+}
+
+  /**
+   * 根據類別 ID 取得類別名稱
+   * @param {string} categoryId - 類別 ID
+   * @returns {string} 類別名稱
+   */
+  static getCategoryNameById(categoryId) {
+    return FIXED_CATEGORIES[categoryId] || '未知類別'
+  }
+
+  /**
+   * 取得所有固定類別的 ID 和名稱
+   * @returns {Array} 類別列表
+   */
+  static getFixedCategoriesList() {
+    return Object.entries(FIXED_CATEGORIES).map(([id, name]) => ({
+      id,
+      name,
+      isFixed: true
+    }))
   }
 
   /**
@@ -678,66 +732,74 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
    * @param {Object} dropdownOptions - 下拉選單選項
    * @returns {Promise<Object>} 建立結果
    */
-  static async createCase(formData, dropdownOptions = {}) {
-    try {
-      console.log('=== CaseService.createCase (修復版本) ===')
+  // static async createCase(formData, dropdownOptions = {}) {
+  //   try {
+  //     console.log('=== CaseService.createCase (修復版本) ===')
 
-      // 準備案件基本資料 - 只使用存在的欄位
-      const caseData = {
-        title: formData.title,
-        description: formData.description, // 只保留用戶輸入的描述
-        priority: formData.priority || 'normal',
-        status: formData.status || 'pending', 
-        contact_type: formData.contactMethod || 'phone',
-        group_id: formData.teamId, // ✅ 使用 group_id
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }
+  //     // 準備案件基本資料 - 只使用存在的欄位
+  //     const caseData = {
+  //       title: formData.title,
+  //       description: formData.description, // 只保留用戶輸入的描述
+  //       priority: formData.priority || 'normal',
+  //       status: formData.status || 'pending', 
+  //       contact_type: formData.contactMethod || 'phone',
+  //       group_id: formData.teamId, // ✅ 使用 group_id
+  //       created_at: new Date().toISOString(),
+  //       updated_at: new Date().toISOString()
+  //     }
 
-      // ✅ 修復：使用正確的欄位對應
-      if (formData.receivedDate && formData.receivedTime) {
-        caseData.start_date = this.formatToTimetz(formData.receivedDate, formData.receivedTime)
-      }
+  //     // ✅ 修復：使用正確的欄位對應
+  //     if (formData.receivedDate && formData.receivedTime) {
+  //       caseData.start_date = this.formatToTimetz(formData.receivedDate, formData.receivedTime)
+  //     }
+
+  //     // 驗證類別 ID
+  //     if (!this.isValidCategoryId(formData.category)) {
+  //       throw new Error(`無效的類別 ID: ${formData.category}`)
+  //     }
       
-      if (formData.closedDate && formData.closedTime) {
-        caseData.end_date = this.formatToTimetz(formData.closedDate, formData.closedTime)
-      }
+  //     if (formData.closedDate && formData.closedTime) {
+  //       caseData.end_date = this.formatToTimetz(formData.closedDate, formData.closedTime)
+  //     }
 
-      console.log('準備建立的案件資料:', caseData)
+  //     console.log('準備建立的案件資料:', caseData)
 
-      // 建立案件
-      const { data: newCase, error: caseError } = await supabase
-        .from('Case')
-        .insert([caseData])
-        .select()
-        .single()
+  //     // 建立案件
+  //     const { data: newCase, error: caseError } = await supabase
+  //       .from('Case')
+  //       .insert([caseData])
+  //       .select()
+  //       .single()
 
-      if (caseError) {
-        console.error('建立案件失敗:', caseError)
-        return {
-          success: false,
-          error: caseError.message,
-          data: null
-        }
-      }
+  //     if (caseError) {
+  //       console.error('建立案件失敗:', caseError)
+  //       return {
+  //         success: false,
+  //         error: caseError.message,
+  //         data: null
+  //       }
+  //     }
 
-      console.log('案件建立成功:', newCase)
+  //     console.log('案件建立成功:', newCase)
 
-      return {
-        success: true,
-        data: newCase,
-        error: null
-      }
+  //     return {
+  //       success: true,
+  //       data: {
+  //         case: newCase,
+  //         results: results
+  //       },
+  //       error: null
+  //     }
 
-    } catch (error) {
-      console.error('createCase 發生錯誤:', error)
-      return {
-        success: false,
-        error: error.message,
-        data: null
-      }
-    }
-  }
+  //   } catch (error) {
+  //     console.error('createCase 發生錯誤:', error)
+  //     return {
+  //       success: false,
+  //       error: error.message,
+  //       data: null
+  //     }
+  //   }
+  // }
 
   /**
    * 時間格式化輔助方法
@@ -1112,157 +1174,90 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
   }
 
   // ==================== 關聯資料處理方法 ====================
-  /**
-   * 處理案件類別
-   * @param {string} categoryName - 類別名稱
-   * @returns {Promise<Object>} 處理結果
-   */
-  // CaseService.js 中修正案件類別處理的完整邏輯
+  
+
 
   /**
    * 處理案件類別 - 完全修正版：確保預設類別也有 UUID
    * @param {string} categoryValue - 類別值（可能是 ID 或名稱）
    * @returns {Promise<Object>} 處理結果
    */
-  static async handleCategory(categoryValue) {
+  static async handleCategory(categoryId) {
     try {
-      console.log('=== CaseService.handleCategory (UUID修正版) ===')
-      console.log('輸入類別值:', categoryValue, '類型:', typeof categoryValue)
+      console.log('=== CaseService.handleCategory (UUID修正版) ===');
+      console.log('輸入類別 ID:', categoryId, '類型:', typeof categoryId);
 
-      if (!categoryValue || categoryValue.toString().trim() === '') {
+      if (!categoryId || typeof categoryId !== 'string') {
         return {
           success: false,
-          error: '類別值必填',
+          error: '類別 ID 必填且必須為字串',
           data: null
-        }
+        };
       }
 
-      const normalizedValue = categoryValue.toString().trim()
+      const normalizedId = categoryId.toString().trim();
 
-      // 預設類別映射 - 需要確保這些類別在資料庫中存在
-      const defaultCategoryMap = {
-        'traffic': '交通問題',
-        'environment': '環境問題',
-        'security': '治安問題',
-        'public_service': '民生服務',
-        'legal_consultation': '法律諮詢'
+      // 檢查是否為有效的固定類別 ID
+      if (!FIXED_CATEGORIES[normalizedId]) {
+        console.error('無效的類別 ID:', normalizedId);
+        console.log('有效的類別 ID:', Object.keys(FIXED_CATEGORIES));
+        return {
+          success: false,
+          error: `無效的類別 ID: ${normalizedId}`,
+          data: null
+        };
       }
 
-      // 檢查是否為預設類別 ID
-      if (defaultCategoryMap[normalizedValue]) {
-        console.log('處理預設類別 ID:', normalizedValue)
-        const categoryName = defaultCategoryMap[normalizedValue]
-        
-        // 確保預設類別在資料庫中存在
-        return await this.ensureDefaultCategoryExists(normalizedValue, categoryName)
+      // 驗證 UUID 格式
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(normalizedId)) {
+        console.error('無效的 UUID 格式:', normalizedId);
+        return {
+          success: false,
+          error: `無效的 UUID 格式: ${normalizedId}`,
+          data: null
+        };
       }
 
-      // 檢查是否為預設類別名稱
-      const defaultCategoryEntry = Object.entries(defaultCategoryMap).find(
-        ([id, name]) => name === normalizedValue
-      )
-      
-      if (defaultCategoryEntry) {
-        console.log('處理預設類別名稱:', normalizedValue)
-        const [categoryId, categoryName] = defaultCategoryEntry
-        
-        // 確保預設類別在資料庫中存在
-        return await this.ensureDefaultCategoryExists(categoryId, categoryName)
-      }
-
-      // 檢查是否為有效的 UUID 格式
-      const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(normalizedValue)
-
-      if (isValidUUID) {
-        // 是 UUID，直接從資料庫查詢
-        const { data: existingCategory, error: searchError } = await supabase
-          .from('Category')
-          .select('id, name, description')
-          .eq('id', normalizedValue)
-          .single()
-
-        if (searchError && searchError.code !== 'PGRST116') {
-          console.error('根據 UUID 搜尋類別失敗:', searchError)
-          return {
-            success: false,
-            error: `搜尋類別失敗: ${searchError.message}`,
-            data: null
-          }
-        }
-
-        if (existingCategory) {
-          console.log('找到現有類別 (UUID):', existingCategory)
-          return {
-            success: true,
-            data: { ...existingCategory, isDefault: false },
-            error: null
-          }
-        }
-      }
-
-      // 不是 UUID，嘗試根據名稱查找或建立
-      const { data: existingCategory, error: searchError } = await supabase
+      // 從資料庫確認類別存在
+      const { data: categoryData, error } = await supabase
         .from('Category')
         .select('id, name, description')
-        .eq('name', normalizedValue)
-        .single()
+        .eq('id', normalizedId)
+        .single();
 
-      if (searchError && searchError.code !== 'PGRST116') {
-        console.error('根據名稱搜尋類別失敗:', searchError)
+      if (error) {
+        console.error('查詢類別失敗:', error);
         return {
           success: false,
-          error: `搜尋類別失敗: ${searchError.message}`,
+          error: `查詢類別失敗: ${error.message}`,
           data: null
-        }
+        };
       }
 
-      if (existingCategory) {
-        console.log('找到現有類別 (名稱):', existingCategory)
-        return {
-          success: true,
-          data: { ...existingCategory, isDefault: false },
-          error: null
-        }
-      }
-
-      // 建立新類別
-      console.log('建立新類別:', normalizedValue)
-      const newCategoryData = {
-        name: normalizedValue,
-        description: null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }
-
-      const { data: newCategory, error: createError } = await supabase
-        .from('Category')
-        .insert([newCategoryData])
-        .select('id, name, description')
-        .single()
-
-      if (createError) {
-        console.error('建立類別失敗:', createError)
+      if (!categoryData) {
+        console.error('類別不存在於資料庫:', normalizedId);
         return {
           success: false,
-          error: `建立類別失敗: ${createError.message}`,
+          error: `類別不存在: ${normalizedId}`,
           data: null
-        }
+        };
       }
 
-      console.log('建立類別成功:', newCategory)
+      console.log('✅ 類別驗證成功:', categoryData);
       return {
         success: true,
-        data: { ...newCategory, isDefault: false },
+        data: categoryData,
         error: null
-      }
+      };
 
     } catch (error) {
-      console.error('CaseService.handleCategory 發生錯誤:', error)
+      console.error('CaseService.handleCategory 發生錯誤:', error);
       return {
         success: false,
         error: error.message,
         data: null
-      }
+      };
     }
   }
 
@@ -2090,6 +2085,11 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
       console.log('步驟 3: 處理案件類別...')
       
       if (formData.category?.trim()) {
+        // 🔴 新增這行驗證
+        if (!this.isValidCategoryId(formData.category)) {
+          throw new Error(`無效的類別 ID: ${formData.category}`)
+        }
+
         try {
           const categoryResult = await this.handleCategory(formData.category)
           
@@ -3308,6 +3308,143 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
   }
 
   /**
+   * 建立案件類別關聯
+   * @param {string} caseId - 案件 ID
+   * @param {string} categoryId - 類別 ID
+   * @returns {Promise<Object>} 建立結果
+   */
+  // static async createCategoryCaseRelation(caseId, categoryId) {
+  //   try {
+  //     console.log('=== CaseService.createCategoryCaseRelation ===')
+  //     console.log('案件 ID:', caseId)
+  //     console.log('類別 ID:', categoryId)
+
+  //     if (!caseId || !categoryId) {
+  //       return {
+  //         success: false,
+  //         error: '案件 ID 和類別 ID 都是必填項目',
+  //         data: null
+  //       }
+  //     }
+
+  //     // 檢查是否已存在關聯
+  //     const { data: existingRelation } = await supabase
+  //       .from('CategoryCase')
+  //       .select('id')
+  //       .eq('case_id', caseId)
+  //       .eq('category_id', categoryId)
+  //       .single()
+
+  //     if (existingRelation) {
+  //       console.log('關聯已存在，跳過建立')
+  //       return {
+  //         success: true,
+  //         data: existingRelation,
+  //         message: '關聯已存在'
+  //       }
+  //     }
+
+  //     // 建立新的關聯
+  //     const { data: newRelation, error } = await supabase
+  //       .from('CategoryCase')
+  //       .insert([{
+  //         case_id: caseId,
+  //         category_id: categoryId
+  //       }])
+  //       .select()
+  //       .single()
+
+  //     if (error) {
+  //       console.error('建立案件類別關聯失敗:', error)
+  //       return {
+  //         success: false,
+  //         error: error.message,
+  //         data: null
+  //       }
+  //     }
+
+  //     console.log('✅ 案件類別關聯建立成功:', newRelation)
+  //     return {
+  //       success: true,
+  //       data: newRelation,
+  //       error: null
+  //     }
+
+  //   } catch (error) {
+  //     console.error('CaseService.createCategoryCaseRelation 發生錯誤:', error)
+  //     return {
+  //       success: false,
+  //       error: error.message,
+  //       data: null
+  //     }
+  //   }
+  // }
+
+  /**
+   * 更新案件類別關聯
+   * @param {string} caseId - 案件 ID
+   * @param {string} newCategoryId - 新的類別 ID
+   * @param {string} oldCategoryId - 舊的類別 ID（可選）
+   * @returns {Promise<Object>} 更新結果
+   */
+  static async updateCaseCategoryRelation(caseId, newCategoryId, oldCategoryId = null) {
+    try {
+      console.log('=== CaseService.updateCaseCategoryRelation ===')
+      console.log('案件 ID:', caseId)
+      console.log('新類別 ID:', newCategoryId)
+      console.log('舊類別 ID:', oldCategoryId)
+
+      if (!caseId || !newCategoryId) {
+        return {
+          success: false,
+          error: '案件 ID 和新類別 ID 都是必填項目',
+          data: null
+        }
+      }
+
+      // 先刪除該案件的所有類別關聯
+      const { error: deleteError } = await supabase
+        .from('CategoryCase')
+        .delete()
+        .eq('case_id', caseId)
+
+      if (deleteError) {
+        console.error('刪除舊類別關聯失敗:', deleteError)
+        return {
+          success: false,
+          error: deleteError.message,
+          data: null
+        }
+      }
+
+      console.log('✅ 舊類別關聯刪除成功')
+
+      // 建立新的關聯
+      const createResult = await this.createCaseCategoryRelation(caseId, newCategoryId)
+      
+      if (createResult.success) {
+        console.log('✅ 案件類別關聯更新成功')
+        return {
+          success: true,
+          data: createResult.data,
+          message: '類別關聯更新成功'
+        }
+      } else {
+        console.error('建立新類別關聯失敗:', createResult.error)
+        return createResult
+      }
+
+    } catch (error) {
+      console.error('CaseService.updateCaseCategoryRelation 發生錯誤:', error)
+      return {
+        success: false,
+        error: error.message,
+        data: null
+      }
+    }
+  }
+
+  /**
    * 更新案件類別
    */
   static async updateCaseCategory(caseData, originalData, updateResults) {
@@ -3326,7 +3463,7 @@ static async getCasesWithFilters(groupId, filters = {}, page = 0, limit = 50) {
           const categoryResult = await this.handleCategory(caseData.category)
           
           if (categoryResult.success) {
-            await this.createCategoryCaseRelation(caseData.id, categoryResult.data.id)
+            await this.createCaseCategoryRelation(caseData.id, categoryResult.data.id)
             updateResults.push({ type: 'CategoryCase', success: true, data: categoryResult.data })
           } else {
             updateResults.push({ type: 'CategoryCase', success: false, error: categoryResult.error })

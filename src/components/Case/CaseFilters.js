@@ -4,6 +4,14 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { CaseService } from '../../services/caseService'
 import '../../styles/CaseFilters.css'
 
+const FIXED_CATEGORIES = {
+  '3c39816e-31e7-440a-85e7-bf047e752907': '治安問題',
+  '78b565b8-4ee9-4292-96d6-18b09405a036': '民生服務',
+  '84b61b1f-2823-4ad8-9af2-e7ed3fd122ab': '環境問題',
+  'c274835f-29ec-4d75-b1ae-1fc941c829b1': '交通問題',
+  'c603a9fd-f508-4d45-87db-cac78ace9a68': '法律諮詢'
+};
+
 function CaseFilters({ team, onFiltersChange, onSearch, onReset }) {
   const [filters, setFilters] = useState({
     category: 'all',
@@ -33,7 +41,7 @@ function CaseFilters({ team, onFiltersChange, onSearch, onReset }) {
     setLoading(true)
     try {
       const [categoriesResult, membersResult] = await Promise.all([
-        CaseService.getCategories(team.id),
+        CaseService.getCategories(),
         CaseService.getTeamMembers(team.id)
       ])
 
